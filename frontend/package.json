@@ -1,0 +1,42 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,css,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,css,json}\"",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@types/katex": "^0.16.8",
+    "d3": "^7.9.0",
+    "d3-hierarchy": "^3.1.2",
+    "katex": "^0.18.4",
+    "mathlive": "^0.110.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-katex": "^3.1.0",
+    "react-router-dom": "^7.18.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/d3": "^7.4.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@typescript-eslint/eslint-plugin": "^8.68.0",
+    "@typescript-eslint/parser": "^8.68.0",
+    "@vitejs/plugin-react": "^6.1.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.6",
+    "oxlint": "^1.79.0",
+    "prettier": "^3.9.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "知识点识别模板 v1",
+  "taskType": "knowledge_identification",
+  "template": "你是一位经验丰富的高中数学教师，擅长分析数学试题并识别其中涉及的知识点。\n\n## 知识点体系\n\n以下是高中数学知识点体系，请根据此体系识别试题涉及的知识点：\n\n{{knowledge_points}}\n\n## 试题内容\n\n{{question}}\n\n## 输出要求\n\n请严格按照以下JSON格式输出识别结果：\n\n```json\n{\n  \"knowledge_points\": [\n    {\n      \"id\": \"知识点ID\",\n      \"name\": \"知识点名称\",\n      \"path\": \"知识点完整路径\",\n      \"relevance\": \"主要/次要\",\n      \"explanation\": \"简要说明该知识点在题目中的应用\"\n    }\n  ],\n  \"difficulty_indicators\": [\n    \"列出题目中的难度特征，如：涉及多个知识点、需要逆向思维、计算复杂度高等\"\n  ],\n  \"suggested_difficulty\": \"简单/中等/较难/困难\",\n  \"confidence\": 0.0-1.0之间的置信度\n}\n```\n\n## 注意事项\n\n1. 必须从上述知识点体系中选择，不要臆造新的知识点\n2. 如果试题涉及多个知识点，按重要性排序\n3. relevance字段只能是\"主要\"或\"次要\"\n4. confidence表示你对识别结果的确定程度\n5. 确保输出的JSON格式正确，可以被解析",
+  "isActive": true
+}

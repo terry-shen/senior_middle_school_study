@@ -1,0 +1,789 @@
+# 2026 年全国高考二卷数学卷真题含答案解析
+
+一、单项选择题(本题共 8小题，每小题5分，共40分。)1. $( 1 - 3 i ) ^ { 2 } =$   
+A. $- 8 + 6 \mathrm { i }$   
+B. $- 8 - 6 \mathrm { i }$   
+C. $8 + 6 \mathrm { i }$   
+D. $8 - 6 \mathrm { i }$   
+【答案】B
+
+【解析】本题考查复数的乘法运算.$( 1 - 3 i ) ^ { 2 } = 1 ^ { 2 } - 6 i + 9 i ^ { 2 } = - 8 - 6 i$ 故选B
+
+2.已知向量 $\cdot { \vec { a } } , { \vec { b } }$ 满足 $| \vec { a } + \vec { b } | = 1 , | \vec { a } - \vec { b } | = \sqrt { 3 }$ ,则 $\cdot \vec { b } = \left( \begin{array} { l }  \right) \end{array}$ A. $\frac { 1 } { 2 }$   
+B. $\frac 1 4$   
+C. $- { \frac { 1 } { 2 } }$   
+D. $- { \frac { 1 } { 4 } }$
+
+【答案】C
+
+【解析】本题考查平面向量的数量积和模的运算. $\therefore | \vec { a } + \vec { b } | = 1 , \therefore | \vec { a } + \vec { b } | ^ { 2 } = 1 , \therefore \vec { a } ^ { 2 } + 2 \vec { a } \cdot \vec { b } + \vec { b } ^ { 2 } = 1 \textcircled { 1 }$ 又 $| \vec { a } - \vec { b } | = \sqrt { 3 } , \therefore | \vec { a } - \vec { b } | ^ { 2 } = 3 , \therefore \vec { a } ^ { 2 } - 2 \vec { a } \cdot \vec { b } + \vec { b } ^ { 2 } = 3 \textcircled { 2 }$ ①-②得: $4 \vec { a } \cdot \vec { b } = - 2 , \therefore \vec { a } \cdot \vec { b } = - \frac { 1 } { 2 }$ 故选C
+
+3.已知集合 $\boldsymbol { A } = \{ 0 , 1 , 3 , 6 , 9 \} , \boldsymbol { B } = \{ x | \sqrt { x } = x \}$ ,则 $A \cap B =  \left( \begin{array} { l } { \right) } \end{array}$ A、  
+B、  
+C、  
+D、  
+【答案】A  
+【解析】本题考查交集.  
+$A = \{ 0 , 1 , 3 , 6 , 9 \} , B = \{ x | \sqrt { x } = x \} = \{ 0 , 1 \} , A \cap B = \{ 0 , 1 \}$
+
+故选 A
+
+4.双曲线 $\mathrm { c } ; \frac { x ^ { 2 } } { a ^ { 2 } } - \frac { y ^ { 2 } } { b ^ { 2 } } = 1 ( a > 0 , b > 0 ) _ { \overset { \cdot } { \downarrow } \overset { \cdot } { \downarrow } \overset { \cdot } { \downarrow } ( 1 , 0 ) \overset { \cdot } { \ast } \overset { \cdot } { \downarrow } ( 1 ^ { \frac { \sqrt { 5 } } { 2 } } , 3 ) }$ ,则其渐近线方程为 （ ）   
+A. $y = \pm 3 { \sqrt { 2 } } x$   
+B. $y = \pm 6 x$   
+C. $y = \pm { \frac { \sqrt { 3 } } { 2 } } x$   
+D. $y = \pm { \frac { \sqrt { 2 } } { 6 } } x$
+
+【答案】B
+
+【解析】本题考查双曲线的性质.
+
+由双曲线 $\underline { { { x } } } ^ { 2 } - \frac { y ^ { 2 } } { b ^ { 2 } } = 1 _ { \underline { { { \bar { x } } } } \underline { { { \sf { J } } } } _ { \mathrm { { \tiny ~ I } } } ^ { \underline { { { \sf { J } } } } } \mathrm { ( 1 , 0 ) } \bar { \jmath } \mathrm { ( } 1 } ( \frac { \sqrt { 5 } } { 2 } , 3 ) _ { \underline { { { \hat { \jmath } } } } _ { \mathrm { { \tiny ~ I } } } ^ { \underline { { { \mathrm { J } } } } } } \bigg )  \frac { \mathrm { \delta } _ { a } ^ { 2 } = 1 } { a ^ { 2 } } - \frac { 9 } { b ^ { 2 } } = 1 \ \Rightarrow \left\{ \begin{array} { l } { { a ^ { 2 } = 1 } } \\ { { b ^ { 2 } = 3 6 } } \end{array} \right.$   
+双曲线方程为 $\ x ^ { 2 } - { \frac { y ^ { 2 } } { 3 6 } } = 1$   
+渐近线方程为 $y ^ { 2 } = 3 6 x ^ { 2 } \mathtt { H } y y = \pm 6 x$   
+故选 B5.棱台上下底面均有一个内角 $6 0 ^ { \circ }$ 的菱形,且上下底面边长分别为2和3,该棱台的高为 ${ \sqrt { 3 } } .$ ,则该棱台体积为（ ）  
+A. $\frac { 1 9 } { 1 2 }$   
+B. $\frac { 1 9 } { 6 }$   
+C. $\frac { 1 9 } { 4 }$   
+D. $\frac { 1 9 } { 2 }$ 【解析】本题主要考查棱台的体积的计算及菱形的面积计算.$\because$ 棱台上底面是菱形且有一个角是 $6 0 ^ { \circ }$ ,边长是 2.  
+$\therefore$ 上底面面积: $S _ { \pm } = 2 { \times } \frac { 1 } { 2 } { \times } 2 { \times } 2 { \times } \sin 6 0 ^ { \circ } = 2 \sqrt { 3 }$   
+同理下底面面积: $S _ { \mathbb { { F } } } = 2 { \times } { \frac { 1 } { 2 } } { \times } 3 { \times } 3 { \times } \sin 6 0 ^ { \circ } = { \frac { 9 { \sqrt { 3 } } } { 2 } }$   
+又∵棱台高 $h = { \sqrt { 3 } } .$   
+$V _ { ☉ \Xi } = \frac { 1 } { 3 } ( S _ { \perp } + S _ { \mathbb { \uparrow } } + \sqrt { S _ { \perp } S _ { \mathbb { \uparrow } } } ) \cdot h$   
+$= { \frac { 1 } { 3 } } ( 2 { \sqrt { 3 } } + { \frac { 9 { \sqrt { 3 } } } { 2 } } + { \sqrt { 2 { \sqrt { 3 } } \times { \frac { 9 { \sqrt { 3 } } } { 2 } } } } ) \cdot { \sqrt { 3 } }$   
+$= { \frac { 1 } { 3 } } \times ( 2 { \sqrt { 3 } } + { \frac { 9 { \sqrt { 3 } } } { 2 } } + 3 { \sqrt { 3 } } ) \times { \sqrt { 3 } }$   
+$= \textstyle { \frac { 1 9 } { 2 } }$   
+故选 D  
+6.甲、乙、丙、丁等 8人分成A,B两技术小组,要求每组4人. 且甲乙必须在同  
+一组,丙丁不能在同一组,共有多少种分配方案（ ）  
+A.10  
+B.12
+
+D.24
+
+【答案】C
+
+【解析】本题考查排列、组合问题.
+
+丙丁中选一人且甲乙要在一组,然后从剩下4人中选一人组成一组即可.
+
+$$
+C _ { 2 } ^ { 1 } \cdot C _ { 4 } ^ { 1 } \cdot A _ { 2 } ^ { 2 } = 1 6
+$$
+
+故选 C
+
+7. 已知 为第二象限角,且 $\sin 2 \alpha \cos \alpha = 8 \sin \alpha \cos 2 \alpha$ ,则 $\frac { 1 + \sin \alpha } { | 2 - \cos \alpha } = ( )$ 3  
+A. $\overline { { 4 } }$ 3  
+B. $\overline { { 2 } }$   
+C. $\frac { 1 } { 2 }$   
+D. $\frac { 1 5 } { 8 }$
+
+【答案】C
+
+【解析】本题考查二倍角的正弦、余弦.$\therefore 3 \sin 2 \alpha \cdot \cos \alpha = 8 \sin \alpha \cos 2 \alpha$ $\therefore 3 \times 2 \sin \alpha \cos \alpha \cos \alpha = 8 \sin \alpha ( 2 \cos ^ { 2 } \alpha - 1 )$ $\therefore 6 \cos ^ { 2 } \alpha = 8 ( 2 \cos ^ { 2 } \alpha - 1 )$ $\therefore \cos ^ { 2 } \alpha = { \frac { 4 } { 5 } }$ 又 为第二象限角 $\therefore \cos \alpha = - { \frac { 2 { \sqrt { 5 } } } { 5 } } \sin \alpha = { \sqrt { 1 - \cos ^ { 2 } \alpha } } = { \sqrt { 1 - { \frac { 2 0 } { 2 5 } } } } = { \frac { \sqrt { 5 } } { 5 } }$ $\therefore { \frac { 1 + \sin \alpha } { 2 - \cos \alpha } } = { \frac { 1 + { \frac { \sqrt { 5 } } { 5 } } } { 2 + { \frac { 2 { \sqrt { 5 } } } { 5 } } } } = { \frac { 1 } { 2 } }$ 故选 C
+
+8.已 $\sharp \sharp f ( x ) .$ 为定义在 上的偶函数,且 $f ( x ) + f ( x - 2 ) = 0 , \mathrel { \stackrel { \scriptscriptstyle { \infty } } { = } } 1 ^ { x }  \in [ \frac { 3 } { 2 } , 3 ] _ { \mathbb { H } } ]$   
+$f ( x ) = x ^ { 2 } + a x + b , $ ,则 ( )   
+A. a = −2, b = −3   
+B. a = −2, b = 3   
+C. a = −4, b = −3   
+D. a = −4, b = 3
+
+【答案】D
+
+【解析】本题考查函数的奇偶性和周期性.已知 $f ( x ) { \big / } { \mathfrak { y } }$ 定义在 上的偶函数, $\therefore f ( x ) = f ( - x ) , \therefore f ( x - 2 ) = f ( 2 - x )$ $\because f ( x ) + f ( 2 - x ) = 0 , \therefore f ( x ) _ { \cdot { \hat { \mathcal { K } } } } \subset \ O ( 1 , 0 )$ 对称,偶函数关于 轴对称 $\therefore f ( x + 2 ) = - f ( x )$ $\therefore f ( x + 4 ) = - f ( x + 2 ) = f ( x )$ $\therefore T = 4$ $f ( 2 ) = 0 , f ( 3 ) = 0$ ,即 $\left\{ \begin{array} { l l } { 4 + 2 a + b = 0 } \\ { 9 + 3 a + b = 0 } \end{array} \right.$ 解得 ,故选 D
+
+## 二、多项选择题（本题共 3 小题，每小题 6 分，共 18 分。全部选对的得 6 分，部分选对的得部分分，有选错的得 0 分。）
+
+9. 已知 $\mathfrak { q } \odot O : x ^ { 2 } + y ^ { 2 } = 1 , \odot A : x ^ { 2 } + y ^ { 2 } - 6 x - 8 y + k = 0$ ,则 ( )  
+A. 点 A 的坐标为 $( - 3 , - 4 )$   
+B. 时, $\odot A$ 与 x 轴相切  
+C. 当 时, $\odot A$ 与 $\odot O$ 相切  
+D. 当 $_ { \odot }$ 与 相交时,两交点所在直线的方程是 $6 x + 8 y - k - 2 = 0$   
+【答案】BC
+
+【解析】本题考查圆的标准方程,圆与圆的位置关系.
+
+$: ( x - 3 ) ^ { 2 } + ( y - 4 ) ^ { 2 } = 2 5 - k ,$
+
+圆 $| \therefore A ( 3 , 4 )$ ,故 A 不正确;
+
+当 $\left| k = 9 \mathbb { H } \right\} , ( x - 3 ) ^ { 2 } + ( y - 4 ) ^ { 2 } = 1 6 ,$
+
+圆 $\therefore \dot { \bf \zeta } ( 3 , 4 )$ 半径为 4,
+
+圆心到x轴距离等于半径 4,故 $\odot A$ 与x轴相切,故B正确;
+
+当 $k = - 1 1$ 时, $( x - 3 ) ^ { 2 } + ( y - 4 ) ^ { 2 } = 3 6$
+
+圆 ${ \dot { \operatorname { \mathbb { L } } } } ^ { A ( 3 , 4 ) }$ 半径为 6,
+
+圆 $\iota \dot { \mathrm { \Pi } } , O ( 0 , 0 )$ 半径为 1,
+
+$| O A | = 5 = 6 - 1$ ,所以两圆内切,故C正确;
+
+当 $\odot O \varXi \odot A$ 相交时,
+
+$$
+\left\{ \begin{array} { l } { { x ^ { 2 } + y ^ { 2 } - 6 x - 8 y + k = 0 \left( \Phi \right) } } \\ { { x ^ { 2 } + y ^ { 2 } = 1 \left( 2 \right) } } \end{array} \right.
+$$
+
+①-② $\not \exists \exists \mathrm { - } 6 x - 8 y + k + 1 = 0 \not \sqcup \mathrm { ] } 6 x + 8 y - k - 1 = 0 ,$
+
+故公共弦所在直线方程为 $6 x + 8 y - k - 1 = 0$ ,故D不正确;
+
+故选 BC
+
+10.等比数列 $\{ a _ { n } \}$ 的公比 $q \neq 1 , a _ { 1 } > 0 , 2 a _ { 3 } = a _ { 2 } + a _ { 1 } ,$ ,记前 项和为 $S _ { n }$ ,则 ( ) A. $q = - \frac { 1 } { 2 }$   
+B. $S _ { n } > \frac { 2 a _ { 1 } } { 3 }$   
+C. $2 S _ { n + 2 } = S _ { n + 1 } + S _ { n }$   
+D. $\sum _ { k = 1 } ^ { n } S _ { k } > { \frac { 2 n a _ { 1 } } { 3 } }$
+
+【答案】AD
+
+【解析】本题考查等比数列的通项公式及前 n项和公式
+
+$$
+\because 2 a _ { 3 } = a _ { 2 } + a _ { 1 }
+$$
+
+$$
+\therefore 2 a _ { 1 } q ^ { 2 } = a _ { 1 } q + a _ { 1 }
+$$
+
+$$
+\therefore 2 q ^ { 2 } - q - 1 = 0
+$$
+
+$$
+\therefore q = - \frac { 1 } { 2 } \textcircled { \sharp } q = 1 ( \bigoplus _ { \sharp } )
+$$
+
+故 A 正确;
+
+$$
+S _ { n } = \frac { a _ { 1 } ( 1 - q ^ { n } ) } { 1 - q } = \frac { a _ { 1 } [ 1 - ( - \frac { 1 } { 2 } ) ^ { n } ] } { 1 + \frac { 1 } { 2 } } = \frac { 2 a _ { 1 } } { 3 } [ 1 - ( - \frac { 1 } { 2 } ) ^ { n } ] < \frac { 2 a _ { 1 } } { 3 }
+$$
+
+故 B 不正确;
+
+$$
+S _ { n + 1 } = { \frac { a _ { 1 } ( 1 - q ^ { n + 1 } ) } { 1 - q } } = { \frac { a _ { 1 } [ 1 - ( - { \frac { 1 } { 2 } } ) ^ { n + 1 } ] } { 1 + { \frac { 1 } { 2 } } } } = { \frac { 2 a _ { 1 } } { 3 } } [ 1 - ( - { \frac { 1 } { 2 } } ) ^ { n + 1 } ]
+$$
+
+$$
+S _ { n + 2 } = { \frac { a _ { 1 } ( 1 - q ^ { n + 2 } ) } { 1 - q } } = { \frac { a _ { 1 } [ 1 - ( - { \frac { 1 } { 2 } } ) ^ { n + 2 } ] } { 1 + { \frac { 1 } { 2 } } } } = { \frac { 2 a _ { 1 } } { 3 } } [ 1 - ( - { \frac { 1 } { 2 } } ) ^ { n + 2 } ]
+$$
+
+$\therefore 2 S _ { n + 2 } \neq S _ { n } + S _ { n + 1 }$ 故 C 不正确
+
+$$
+\sum _ { i = 1 } ^ { n } S _ { k } = S _ { 1 } + S _ { 2 } + \cdots + S _ { n }
+$$
+
+$$
+= ( \frac { 2 a _ { 1 } } { 3 } - \frac { 2 a _ { 1 } } { 3 } ( - \frac { 1 } { 2 } ) ^ { 1 } ) + ( \frac { 2 a _ { 1 } } { 3 } - \frac { 2 a _ { 1 } } { 3 } ( - \frac { 1 } { 2 } ) ^ { 2 } ) + \cdot \cdot \cdot + ( \frac { 2 a _ { 1 } } { 3 } - \frac { 2 a _ { 1 } } { 3 } ( - \frac { 1 } { 2 } ) ^ { n } )
+$$
+
+$$
+= \frac { 2 n a _ { 1 } } { 3 } - \frac { 2 a _ { 1 } } { 3 } [ ( - \frac { 1 } { 2 } ) ^ { 1 } + ( - \frac { 1 } { 2 } ) ^ { 2 } + \cdot \cdot \cdot + ( - \frac { 1 } { 2 } ) ^ { n } ]
+$$
+
+$$
+= \frac { 2 n a _ { 1 } } { 3 } - \frac { 2 a _ { 1 } } { 3 } \times \frac { ( - \frac { 1 } { 2 } ) [ 1 - ( - \frac { 1 } { 2 } ) ^ { n } ] } { 1 + \frac { 1 } { 2 } }
+$$
+
+$$
+= \frac { 2 n a _ { 1 } } { 3 } + \frac { 2 a _ { 1 } } { 9 } [ 1 - ( - \frac { 1 } { 2 } ) ^ { n } ] > \frac { 2 n a _ { 1 } } { 3 }
+$$
+
+故 D 正确
+
+故选 AD
+
+11.已知抛物线 $E : y ^ { 2 } = 8 x$ ,斜率 $k ( k > 0 )$ 的直线 过 $\sharp _ { \boldsymbol { \cdot } } ( 1 , 0 ) _ { , \triangle A B C }$ 为等边三角  
+形, 在 轴上, $B , C \notin l \bot \bot$ ,则 ( )  
+A. 抛物线准线方程为 $\left[ x = - 2 \right.$   
+B. 与 轴交点为 $\boldsymbol { \mathbf { \rho } } _ { \boldsymbol { \mathbf { \rho } } } ( 0 , - k )$   
+C. 若 与 相交于唯一点 ,则抛物线焦点在直线 上
+
+D. 时, $\triangle A B C$ 面积最小值为 $\frac { \sqrt { 3 } } { 2 }$ 【答案】AB
+
+【解析】本题考查了抛物线与直线的位置关系,抛物线的性质、等边三角形的性质解析面值最值求解,难度较高
+
+$y ^ { 2 } = 8 x \div 2 p = 8 , p = 4$ , 准线方程 $x = - { \frac { p } { 2 } } = - 2 ,$ , 故 A 正确
+
+$$
+k = 0 , \therefore l : y = k ( x - 1 ) ,
+$$
+
+令 $x = 0 , y = - k , \therefore l $ 轴的交点为 , 故B正确
+
+$$
+y = k ( x - 1 ) ⨏ \ y ^ { 2 } = 8 x
+$$
+
+$$
+\therefore k ^ { 2 } ( x - 1 ) ^ { 2 } = 8 x \Rightarrow k ^ { 2 } x ^ { 2 } - ( 2 k ^ { 2 } + 8 ) x + k ^ { 2 } = 0 \Delta = 0
+$$
+
+$\therefore ( 2 k ^ { 2 } + 8 ) ^ { 2 } - 4 k ^ { 2 } = 0 , \therefore 3 2 k ^ { 2 } + 6 4 = 0 ,$ 无解,故相交于唯一点不成立.故C错误
+
+$$
+k = 2 , \therefore L : y = 2 ( x - 1 )
+$$
+
+$$
+\left\{ \begin{array} { l l } { y = 2 ( x - 1 ) } \\ { y ^ { 2 } = 8 x } \end{array} \right.
+$$
+
+$$
+; x ^ { 2 } - 4 x + 1 = 0 \therefore x _ { 1 } + x _ { 2 } = 4 , x _ { 1 } x _ { 2 } = 1
+$$
+
+$$
+\therefore B C = { \sqrt { 5 } } \ | x _ { 1 } - x _ { 2 } | = { \sqrt { 5 } } \cdot { \sqrt { ( x _ { 1 } + x _ { 2 } ) ^ { 2 } - 4 x _ { 1 } x _ { 2 } } } = 2 { \sqrt { 1 5 } }
+$$
+
+则 BC 的中垂线与 y 轴相交于点 A.
+
+$\therefore B C$ 中垂线为 $y - 2 = - \frac { 1 } { 2 } ( x - 2 ) ,$ ,令 $x = 0 , \therefore t = 3 .$
+
+$$
+\therefore A ( 0 , 3 ) ,
+$$
+
+$$
+L : y = 2 ( x - 1 )
+$$
+
+$d = { \frac { 5 } { \sqrt { 5 } } } = { \sqrt { 5 } }$ 为 $\triangle A B C$ 的高,
+
+而 ${ \frac { \sqrt { 3 } } { 2 } } | B C | = { \frac { \sqrt { 3 } } { 2 } } \times 2 { \sqrt { 1 5 } } = { \sqrt { 4 5 } } \neq d ,$
+
+$$
+\therefore \triangle A B C
+$$
+
+故选 AB.
+
+## 三、填空题（本题共 3小题，每小题5分，共 15分。）
+
+12. $S _ { n }$ 为等差数列 $\{ a _ { n } \}$ 前 项和. 若 $a _ { 1 } = - 1 , a _ { 4 } = 5$ ,则 $S _ { 6 } =$
+
+【答案】24
+
+【解析】本题考查等差数列的前 项和.
+
+$$
+\because a _ { 4 } = a _ { 1 } + 3 d
+$$
+
+$$
+\therefore 5 = - 1 + 3 d
+$$
+
+$$
+\therefore d = 2
+$$
+
+$$
+\therefore S _ { 6 } = 6 a _ { 1 } + \frac { 6 \times 5 } { 2 } d = 6 \times ( - 1 ) + \frac { 6 \times 5 } { 2 } \times 2 = 2 4
+$$
+
+故答案为 24
+
+13.若函数 $f ( x ) = 2 ^ { x } + 2 ^ { - x } - m .$ 有两个零点,则 的取值范围是
+
+【答案】 $m > 2$
+
+【解析】本题考查函数的零点问题.
+
+${ \underset { \smile } { \wedge } } f ( x ) = 0 _ { \pmod { 2 } }$ , 则 $m = 2 ^ { x } + 2 ^ { - x } = 2 ^ { x } + { \frac { 1 } { 2 ^ { x } } } \geq 2 \quad$ ,当有两个零点时, $m > 2$ 故答案为 $m > 2$
+
+14.球 的体积为 $4 \sqrt { 3 } \pi , A , B , C , D$ 四点均在球 的球面上, $\triangle A B C$ 为等边三角形, $D A = D B = D C = { \sqrt { 2 } } .$ ,则 $\triangle A B C$ 的面积为
+
+【答案】 $\frac { 5 { \sqrt { 3 } } } { 4 }$
+
+【解析】本题考查球的体积以及外接球.
+
+$$
+V = { \frac { 4 } { 3 } } \pi R ^ { 3 } = 4 { \sqrt { 3 } } \pi \Rightarrow R ^ { 3 } = 3 { \sqrt { 3 } } \Rightarrow R = { \sqrt { 3 } }
+$$
+
+$\because D A = D B = D C = { \sqrt { 2 } } ,$ ,故D在底面ABC的投影为 $\triangle A B C \boxplus \iota \dot { \mathsf { L } } _ { \mathsf { l } } O _ { 1 }$
+
+设 $O _ { 1 }$ 到顶点距离为 ,则 $D O _ { 1 } = { \sqrt { D A ^ { 2 } - r ^ { 2 } } } = { \sqrt { 2 - r ^ { 2 } } }$
+
+球 $\therefore \dot { C } O \sharp$ 王 $D O _ { 1 } \bot$ , $\mathrm { i } \underset { \mathbb { X } } { \underbrace { n } } O O _ { 1 } = \left| \sqrt { 3 } - D O _ { 1 } \right| .$
+
+故 $O A ^ { 2 } = O O _ { 1 } ^ { 2 } + r ^ { 2 } \Rightarrow 3 = ( \sqrt { 3 } - \sqrt { 2 - r ^ { 2 } } ) ^ { 2 }$
+
+$$
+\therefore r = { \frac { \sqrt { 1 5 } } { 3 } }
+$$
+
+设等边 $\triangle A B C$ 边长为 ,则 $r = { \frac { \sqrt { 3 } } { 3 } } a$
+
+故 $a ^ { 2 } = 5$
+
+$$
+\therefore S _ { \triangle A B C } = \frac { \sqrt { 3 } } { 4 } a ^ { 2 } = \frac { 5 \sqrt { 3 } } { 4 }
+$$
+
+故答案为 $\frac { 5 { \sqrt { 3 } } } { 4 }$
+
+四、解答题（本大题共 5小题，共77分。解答应写出文字说明、证明过程或演算步骤。）
+
+15.某工厂抽取一批电子元件检测,记录第一次出现故障的时间（天）,绘制成如下的频率分布直方图:
+
+![](images/0010b31bd519d5ea6e438e075f6a7b8f2bb903a15a5012bb3acfc1f45e9abf2d.jpg)
+
+(1) 求第一四分位数和中位数;
+
+(2) 为首次故障时间小于 365 天的概率估计值.
+
+(i) 求 ${ \hat { p } } ;$
+
+(ii) 工厂向某用户销售 100 件电子元件, 为这 100 件产品首次出现故障小于 365 天的件数,则 $X \sim B ( 1 0 0 , \hat { p } )$ ,求 $E ( X ) , D ( X )$
+
+【答案】第一四分位数 362.5,中位数 377
+
+(2)(i) $\hat { p } = 0 . 3$
+
+(ii) $E ( X ) = 3 0$
+
+$$
+D ( X ) = 2 1
+$$
+
+【解析】本题考查了频率分布直方图中求四分位数、中位数,用频率估计概率及二项分布的数字特征.
+
+(i) 累计到 [345, 355) 的频率 $1 0 \times 0 . 0 1 ~ { = } 0 . 1 ~ { < } 0 . 2 5$
+
+累计到 [355, 365) 的频率 $0 . \ 1 \ + 1 0 \times 0 . \ 0 2 \ = 0 . \ 3 \ > 0 . \ 2 5$ ,因此第一四分位数 $Q _ { 1 }$ 在 [355, 365) 内,
+
+因此第一四分位数 $Q _ { 1 } = 3 5 5 + 1 0 \times { \frac { 0 . 2 5 - 0 . 1 0 } { 0 . 3 0 - 0 . 1 0 } } = 3 5 5 + 1 0 \times 0 . 7 5 = 3 6 2 . 5$
+
+累计到 [365, 375) 的频率为 $0 . ~ 3 ~ + 1 0 \times 0 . ~ 0 1 5 ~ = 0 . ~ 4 5 ~ < 0 . ~ 5$
+
+累计到 [375, 385) 的频率为 $0 . ~ 4 5 ~ + 1 0 \times 0 . ~ 0 2 5 ~ = 0 . 7 ~ > 0 . 5$
+
+$$
+\mathbf { = } 3 7 5 \ + 1 0 \times { \frac { 0 . 5 - 0 . 4 5 } { 0 . 2 5 } } = 3 7 7
+$$
+
+因此中位数在 [375, 385) 内:中位数
+
+(2)(i) 首次故障时间小于 365 天的频率为前两组频率之和$\hat { p } = 0 . 1 + 0 . 2 = 0 . 3$
+
+(ii) 已知 , 根据二项分布的期望和方差公式
+
+$$
+E ( X ) = n p = 1 0 0 \times 0 . 3 = 3 0
+$$
+
+$$
+D ( X ) = n p ( 1 - p ) = 1 0 0 \times 0 . 3 \times 0 . 7 = 2 1
+$$
+
+16.三棱锥 中, 在 上, $A E \bot C E , A E \bot D E , C D \bot A D .$
+
+![](images/755f729c408391213c24707005831f0914642c2a7623364374669b6b27f66ce2.jpg)
+
+(1) 证明: $C D \perp A B$
+
+(2) 若 $D E = 2 , B E = 1 , A E = \sqrt { 2 } , C D = 2 \sqrt { 3 } .$ , 求 与平面 所成角的正弦值.
+
+【答案】(1) 证明见解析
+
+(2) $\frac { \sqrt { 6 } } { 3 }$
+
+【解析】本题考查了线面垂直的判定与性质及线面角的正弦值计算(空间向量求线面角)
+
+![](images/f6a90935213f34e9cf2dd0e33fc514c94871c07bc72b1f685ec62d53afa904ed.jpg)
+
+![](images/44d58f9c80744d16298e1978c7e4f671dfe77fa3056d24414da50eee38449f5a.jpg)
+
+(1) 如图: $A E \bot C E , A E \bot D E$ CE∩ DE = E.   
+CE⊂面BCD   
+DE⊂面BCD   
+∴AE⊥面BCD   
+CD⊂面BCD   
+∴AE⊥CD   
+又CD⊥AD   
+AE∩AD = A   
+AE ⊂面ABD   
+AD⊂面ABD   
+∴CD⊥面ABD   
+AB⊂面ABD   
+∴CD⊥AB   
+(2) 由(1)知.   
+AE⊥面 BCD.   
+CD⊥面 ABD.   
+过 E 作 EH∥CD.   
+∴EH⊥面 ABD   
+∴EH, ED, EA 两两垂直.
+
+如图以E为原点, 建立空间直角坐标系.
+
+$$
+D E = 2 , B E = 1 , A E = \sqrt { 2 } , C D = 2 \sqrt { 3 }
+$$
+
+$$
+\therefore E ( 0 , 0 , 0 ) , B ( 0 , - 1 , 0 ) ,
+$$
+
+${ \cal D } ( 0 , 2 , 0 ) , { \cal A } ( 0 , 0 , \sqrt { 2 } ) ,$   
+$C ( 2 { \sqrt { 3 } } , 2 , 0 )$   
+$\therefore \overrightarrow { A D } = ( 0 , 2 , - \sqrt { 2 } )$   
+$\overrightarrow { A B } = ( 0 , - 1 , - \sqrt { 2 } )$   
+$\overrightarrow { A C } = ( 2 \sqrt { 3 } , 2 , - \sqrt { 2 } )$   
+设 平面 .  
+$\vec { n } = ( x , y , z )$   
+$\therefore { \left\{ \begin{array} { l l } { { \vec { n } } \cdot { \overrightarrow { A B } } = - y - { \sqrt { 2 } } z = 0 } \\ { { \vec { n } } \cdot { \overrightarrow { A C } } = 2 { \sqrt { 3 } } x + 2 y - { \sqrt { 2 } } z = 0 } \end{array} \right. }$   
+$\mathfrak { F } z = 1 , \ y = - \sqrt { 2 } , \ \therefore x = \frac { \sqrt { 6 } } { 2 }$   
+$\therefore \overrightarrow { n } = ( \frac { \sqrt { 2 } } { 2 } , - \sqrt { 2 } , 1 )$   
+设AD与平面 ABC所成角为  
+$\therefore \sin \theta = | \cos \langle { \overrightarrow { A D } } , { \overrightarrow { n } } \rangle |$   
+$= { \frac { | { \overrightarrow { A D } } \cdot { \overrightarrow { n } } | } { | { \overrightarrow { A D } } | | { \overrightarrow { n } } | } }$ 0×+2×(−)+(−√2)×1√02+2+(√2)2√() +(−-√2)2+12|-3√2|√6×322√63
+
+$\therefore \mathrm { A D }$ 在平面 ABC所成角正弦值 $\cdot ^ { \sqrt { 6 } }$
+
+17. 在 $\triangle A B C$ 中,已知 $\cos B = { \frac { 3 } { 4 } } , \cos ^ { 2 } ( A + C ) + \sin A \sin C = 1 .$
+
+(1) 证明: $\triangle A B C$ 为钝角三角形;
+
+(2) 若 $\triangle A B C$ 面积为 $\frac { { \sqrt { 7 } } } { \mathrm { ~ 2 ~ 4 ~ } } ,$ ,求 $\triangle A B C$ 周长.
+
+【答案】（1）证明见解析
+
+（2）周长 $\mathbb { y } ^ { 3 + \sqrt { 2 } }$
+
+【解析】本题主要考查解三角形核心知识点,正余弦定理的灵活应用及其二倍角公式,两角和与差的余弦公式及同角三角函数基本关系.
+
+(1) 在 $\triangle A B C \sharp , A + B + C = \pi$
+
+$$
+\therefore A + C = \pi - B
+$$
+
+$$
+\cos ( A + C ) = \cos ( \pi - B ) = - \cos B
+$$
+
+由已知 $\cos ^ { 2 } ( A + C ) + \sin A \sin C = 1$
+
+$$
+\therefore \cos ^ { 2 } B + \sin A \sin C = 1
+$$
+
+又 $\because \cos B = { \frac { 3 } { 4 } }$
+
+$$
+\therefore ( { \frac { 3 } { 4 } } ) ^ { 2 } + \sin A \sin C = 1
+$$
+
+$$
+\therefore \sin A \sin C = 1 - { \frac { 9 } { 1 6 } } = { \frac { 7 } { 1 6 } } \textcircled { 1 }
+$$
+
+又 $\cos B = - \cos ( A + C )$
+
+即 ${ \frac { 3 } { 4 } } = \sin A \sin C - \cos A \cos C _ { \bigotimes }$
+
+由①②可得 $\cos A \cos C = { \frac { 7 } { 1 6 } } - { \frac { 3 } { 4 } } = - { \frac { 5 } { 1 6 } } < 0$
+
+$$
+0 < A _ { \setminus } \ C < \pi
+$$
+
+或 为钝角
+
+$\therefore \triangle A B C$ 为钝角三角形.
+
+(2) $\because 0 < B < \pi$
+
+$$
+\cos B = { \frac { 3 } { 4 } }
+$$
+
+$$
+\therefore \sin B = { \sqrt { 1 - \cos ^ { 2 } B } } = { \frac { \sqrt { 7 } } { 4 } }
+$$
+
+$$
+\therefore S _ { \Delta A B C } = { \frac { 1 } { 2 } } a c \sin B = { \frac { \sqrt { 7 } } { 4 } }
+$$
+
+$$
+\therefore { \frac { 1 } { 2 } } a c \cdot { \frac { \sqrt { 7 } } { 4 } } = { \frac { \sqrt { 7 } } { 4 } }
+$$
+
+$$
+\therefore a c = 2 \textcircled { 1 }
+$$
+
+又由 (1) $\sin A \sin C = { \frac { 7 } { 1 6 } }$ ②
+
+由正弦定理,
+
+$$
+a = 2 R \sin A , \enspace c = 2 R \sin C \odot
+$$
+
+由①、②、③
+
+$$
+\therefore a c = 4 R ^ { 2 } \sin A \sin C
+$$
+
+$$
+\therefore 2 = 4 R ^ { 2 } \times \frac { 7 } { 1 6 }
+$$
+
+$$
+\therefore R = { \frac { 2 { \sqrt { 1 4 } } } { 7 } }
+$$
+
+$$
+b = 2 R \cdot \sin B = 2 \times { \frac { 2 { \sqrt { 1 4 } } } { 7 } } \times { \frac { \sqrt { 7 } } { 4 } } = { \sqrt { 2 } }
+$$
+
+由余弦定理
+
+$$
+b ^ { 2 } = a ^ { 2 } + c ^ { 2 } - 2 a c \cos B
+$$
+
+$$
+2 = a ^ { 2 } + c ^ { 2 } - 2 \times 2 \times \frac { 3 } { 4 }
+$$
+
+$$
+\therefore a ^ { 2 } + c ^ { 2 } = 5
+$$
+
+$$
+\therefore a ^ { 2 } + c ^ { 2 } + 2 a c = ( a + c ) ^ { 2 } = 9
+$$
+
+$$
+\therefore a + c = 3
+$$
+
+$\therefore \triangle A B C$ 周长是 $\cdot a + b + c = 3 + { \sqrt { 2 } }$
+
+18. 椭圆 $E : { \frac { x ^ { 2 } } { a ^ { 2 } } } + y ^ { 2 } = 1 ( a > 1 ) \quad \quad$ ,过右焦点垂直于 轴的直线被 所截线段长为${ \sqrt { 2 } } .$
+
+(1) 求 的离心率;
+
+(2) 为坐标原点,给定点 $G ( t _ { 0 } , 0 ) ( t _ { 0 } \neq 0 ) ; A ( x _ { 0 } , y _ { 0 } ) ( y _ { 0 } \neq 0 )$ 在 上,过点 作轴的垂线,交 于点 , 与 交于点 . 当 在 上运动时, 的轨迹为.
+
+(i) 求 的方程;
+
+(ii) 是否有中心点？当 为何值时, 有中心点？当 有中心点时,平移到 $M ^ { \prime }$ ,使 为 $M ^ { \prime }$ 的中心点,说明 $M ^ { \prime }$ 为何形状？
+
+【答案】 (1) $\frac { \sqrt { 2 } } { 2 }$
+
+(2) (i) $( t _ { 0 } ^ { 2 } - 2 ) x ^ { 2 } + 4 t _ { 0 } x + 2 t _ { 0 } ^ { 2 } y ^ { 2 } - 2 t _ { 0 } ^ { 2 } = 0$
+
+(ii) 当 $x _ { 0 } \neq { \sqrt { 2 } } |$ 时,M 有中心点;平移后 $M ^ { \prime }$ 为椭圆或双曲线$\# 0 < | t _ { 0 } | < \sqrt { 2 }$ 为双曲线,若 $\left| t _ { 0 } \right| > \sqrt { 2 }$ 为椭圆
+
+【解析】(1) 椭圆 $\frac { x ^ { 2 } } { \ l a ^ { 2 } } + y ^ { 2 } = 1 ( a > 1 )$
+
+设过右焦 $\underset { \cdots } { \scriptscriptstyle \mathrm { H } } F _ { 2 } ( c , 0 )$ 的直线与椭圆交于 $R , S$ 两点,   
+$R ( c , y _ { 1 } )$   
+$\therefore { \frac { c ^ { 2 } } { a ^ { 2 } } } + y _ { 1 } ^ { 2 } = 1$   
+$\therefore y _ { 1 } ^ { 2 } = 1 - { \frac { b ^ { 2 } } { a ^ { 2 } } } = { \frac { b ^ { 2 } } { a ^ { 2 } } } = { \frac { 1 } { a ^ { 2 } } }$   
+$\therefore y _ { 1 } = \pm { \frac { 1 } { a } }$   
+$\therefore { \frac { 2 } { a } } = { \sqrt { 2 } }$   
+$\therefore a = { \sqrt { 2 } } .$   
+$c ^ { 2 } = a ^ { 2 } - b ^ { 2 } = 2 - 1 = 1$   
+离心率 $\displaystyle { e = \frac { c } { a } = \frac { 1 } { \sqrt { 2 } } = \frac { \sqrt { 2 } } { 2 } }$
+
+(2) (i) 解：由 (1) 知椭圆 方程为 ${ \frac { x ^ { 2 } } { 2 } } + y ^ { 2 } = 1 \Rightarrow x ^ { 2 } + 2 y ^ { 2 } = 2$ .已知$A ( x _ { 0 } , y _ { 0 } )$ ,因为 是 在 轴上的垂足,所以 $B ( 0 , y _ { 0 } ) _ { \cdot }$ .直线 的方程为：$y = { \frac { y _ { 0 } } { x _ { 0 } } } x \Rightarrow y _ { 0 } x - x _ { 0 } y = 0$ 直线 $G B \Upsilon \Psi ^ { G ( t _ { 0 } , 0 ) \trianglerighteq B ( 0 , y _ { 0 } ) } ,$ ,方程为： $\frac { x } { t _ { 0 } } + \frac { y _ { 0 } } { b } = 1 \Rightarrow y _ { 0 } x + t _ { 0 } y = t _ { 0 } y _ { 0 }$ 设交点为 $P ( x , y )$ .由 得 $x _ { 0 } = { \frac { y _ { 0 } x } { y } }$ .将其代入 方程：
+
+$$
+y _ { 0 } ( t _ { 0 } - x ) = t _ { 0 } y \Rightarrow y _ { 0 } = { \frac { t _ { 0 } y } { t _ { 0 } - x } } _ { , \mathrm { ~ } \mathrm { ~ } \mathrm { ~ } \mathrm { ~ } \mathrm { ~ } \mathrm { ~ } \mathrm { ~ x ~ } _ { 0 } } = { \frac { t _ { 0 } x } { t _ { 0 } - x } }
+$$
+
+因为 $A ( x _ { 0 } , y _ { 0 } ) _ { \mathrm { \ell \ell } }$ 椭圆上,所以满足 $x _ { 0 } ^ { 2 } + 2 y _ { 0 } ^ { 2 } = 2$ .代入可得：
+
+$$
+\left( \frac { t _ { 0 } x } { t _ { 0 } - x } \right) ^ { 2 } + 2 \left( \frac { t _ { 0 } y } { t _ { 0 } - x } \right) ^ { 2 } = 2 \Longrightarrow t _ { 0 } ^ { 2 } x ^ { 2 } + 2 t _ { 0 } ^ { 2 } y ^ { 2 } = 2 \left( t _ { 0 } - x \right) ^ { 2 }
+$$
+
+展开整理,即得 的方程为： $( t _ { 0 } ^ { 2 } - 2 ) x ^ { 2 } + 4 t _ { 0 } x + 2 t _ { 0 } ^ { 2 } y ^ { 2 } - 2 t _ { 0 } ^ { 2 } = 0$
+
+(ii) 解：对 的方程进行配方： $( t _ { 0 } ^ { 2 } - 2 ) ( x + \frac { 2 t _ { 0 } } { t _ { 0 } ^ { 2 } - 2 } ) ^ { 2 } + 2 t _ { 0 } ^ { 2 } y ^ { 2 } = \frac { 2 t _ { 0 } ^ { 4 } } { t _ { 0 } ^ { 2 } - 2 } ( t _ { 0 } ^ { 2 } \neq 2 )$ $\# \# \# 2 - 2 = 0 \Longrightarrow t _ { 0 } = \pm \sqrt { 2 } ,$ ,方程为抛物线,无中心点； $\ddagger { t 0 } \neq \pm \sqrt { 2 } _ { \sharp \cdot } \}$ , 存在唯一的中心点,其坐标为 $( - \frac { 2 t _ { 0 } } { t _ { 0 } ^ { 2 } - 2 } , 0 )$
+
+$\natural { t _ { 0 } } \neq \pm \sqrt { 2 } _ { \sharp \cdot } \}$ ,将 平移至中心在原点处的 $M ^ { \prime }$ ,其方程形式为：
+
+$$
+( t _ { 0 } ^ { 2 } - 2 ) X ^ { 2 } + 2 t _ { 0 } ^ { 2 } Y ^ { 2 } = { \frac { 2 t _ { 0 } ^ { 4 } } { t _ { 0 } ^ { 2 } - 2 } }
+$$
+
+分析其几何形状：1. $\# \# \dot { t } _ { 0 } ^ { 2 } - 2 > 0 \Longrightarrow | t _ { 0 } | > \sqrt { 2 }$ $X ^ { 2 } { \underline { {  } } } Y ^ { 2 }$ 项的系数均大于 0,且右端项大于 0,此时 $M ^ { \prime }$ 为椭圆；2. 若 $\cdot t _ { 0 } ^ { 2 } - 2 < 0 \Longrightarrow 0 < | t _ { 0 } | < \sqrt { 2 }$ $X ^ { 2 }$ 项系数小于 $0 , Y ^ { 2 }$ 项系数大于 0,且右端项小于 0,此时方程变形为
+
+$( 2 - t _ { 0 } ^ { 2 } ) X ^ { 2 } - 2 t _ { 0 } ^ { 2 } Y ^ { 2 } = \frac { 2 t _ { 0 } ^ { 4 } } { 2 - t _ { 0 } ^ { 2 } }$ ,此时 $M ^ { \prime }$ 为双曲线.
+
+19. 已知函数 $f ( x ) = x e ^ { x } + a x + b _ { , }$ , 曲线 $y = f ( x ) _ { \mathrm { \overline { { \downarrow } } \underline { { \cdot } } \underline { { \cdot } } \mathrm { \scriptsize { E } } } } ( 0 , f ( 0 ) )$ 处的切线方程为$y = - 2 x + 1 .$
+
+(1) 求 ;
+
+(2) 当 时, $f ( x + m ) - f ( x ) > m$ , 求 的取值范围;
+
+(3) 当 时, $f ( x + k ) + f ( k - x ) > 2 f ( k ) ,$ , 求 的最小值.
+
+【答案】（1） $a = - 3 , ~ b = 1$ （2） $[ 2 \ln 2 , + \infty )$ （3）-2
+
+【解析】本题考查了利用导数切线求参数的值.考查导数不等式问题. 端点效应,难度大.
+
+(1). $f ( x ) = x e ^ { x } + a x + b .$
+
+$$
+f ^ { \prime } ( x ) = e ^ { x } ( x + 1 ) + a .
+$$
+
+$$
+f ^ { \prime } ( 0 ) = e ^ { 0 } ( 0 + 1 ) + a = a + 1 = - 2 \cdot a = - 3 .
+$$
+
+而 $f ( 0 ) = b .$
+
+$\because ( 0 , f ( 0 ) ) = ( 0 , b ) _ { \mathcal { \left[ \pm \right] } }$ 切线上
+
+$$
+\therefore b = 2 \times 0 + 1 \therefore b = 1
+$$
+
+$$
+\therefore a = - 3 , b = 1
+$$
+
+(2). 原不等式: $f ( x + m ) - ( x - m ) > f ( x ) - x$
+
+令 $\begin{array} { r } { { \bf \nabla } \cdot g ( x ) = f ( x ) - x } \end{array}$ ,则原条件可转化为当 $x > 0$ 时, $g ( x + m ) > g ( x )$ 恒成立.(※)
+
+$$
+g ( x ) = x e ^ { x } - 4 x + 1
+$$
+
+$$
+g ^ { \prime } ( x ) = ( x + 1 ) \cdot e ^ { x } - 4
+$$
+
+$$
+g ^ { \prime } ( 0 ) = - 3 < 0
+$$
+
+$$
+g ^ { \prime } ( 1 ) = 2 e - 4 > 0
+$$
+
+且 $g ^ { \prime } ( x ) \not \equiv \left( 0 , + \infty \right)$ 内单调递增.
+
+由此, 存在 $\boldsymbol { x } _ { 0 } \in ( 0 , 1 )$ , 使得 $g ^ { \prime } ( x _ { 0 } ) = 0$
+
+$\therefore \ Y \ d { } x \in ( 0 , x _ { 0 } )$ 时, $g ^ { \prime } ( x ) < 0 , g ( x )$ 单调递减,
+
+当 $x \in ( x _ { 0 } , + \infty )$ 时, $g ^ { \prime } ( x ) > 0 , g ( x )$ 单调递增,
+
+由已知, 显然 $m \neq 0$
+
+$$
+\begin{array} { r } { \mathbb { H } ^ { g ( 0 ) } = g ( 2 \ln 2 ) = 1 _ { \mathbb { H } ^ { 2 } } \ln 2 > 1 > x _ { 0 } . } \end{array}
+$$
+
+将 的取值分以下情形讨论.
+
+①. 若 $m < 0 ,$ ,则 $\sharp \chi ^ { \chi } = x _ { 0 } - m > x _ { 0 } > 0$
+
+代入（※）式,得 $g ( x _ { 0 } ) > g ( x _ { 0 } - m ) _ { . }$
+
+这与 $g ( x ) _ { \mathcal { \vec { \pm } } } ( x _ { 0 } , + \infty ) _ { \mathcal { \vec { \ominus } } }$ 单调递增矛盾,故 $m < 0 ,$ 不合题意;
+
+②. 若 $0 < m < 2 \ln { 2 }$ ,则 $\boxplus ^ { g ( x ) }$ 为连续函数可知:
+
+当 且 充分接近 时, $g ( x )$ 无限接近 , $g ( x + m )$ 无限接近 $g ( m )$
+
+$$
+\begin{array} { r } { \overrightarrow { \Pi } \overrightarrow { g } ( m ) < g ( 2 \ln 2 ) = 1 , \therefore { \mathcal { Y } } , \overleftarrow { g } ( x + m ) < g ( x ) . } \end{array}
+$$
+
+故 不合题意.
+
+③. 若 $m \geq 2 \ln 2 \mathrm { { H } \mathrm { { J } } }$ ,当 $x \in ( 0 , x _ { 0 } ] \mathrm { { H } \cdot f , \it { \Delta } x + m > 2 \ln 2 } .$
+
+$$
+g ( x + m ) > g ( 2 \ln 2 ) = 1 > g ( x ) ,
+$$
+
+$\forall x \in ( x _ { 0 } , + \infty )$ 时,由 $x + m > x$ ,则有 $g ( x + m ) > g ( x )$
+
+$\therefore m \geq 2 \ln { 2 }$ 符合题意.
+
+综上, 的取值范围是 $[ 2 \ln 2 , + \infty )$
+
+（3）① 当 时,原不等式 $f ( - 2 + x ) + f ( - 2 - x ) > 2 f ( - 2 )$
+
+下证:当 时,上述不等式成立,从而说明 符合条件.
+
+令 $\cdot h ( x ) = f ( - 2 + x ) + f ( - 2 - x ) - 2 f ( - 2 )$ ,则 ,
+
+$$
+h ^ { \prime } ( x ) = f ^ { \prime } ( - 2 + x ) - f ^ { \prime } ( - 2 - x )
+$$
+
+$$
+h ^ { \prime \prime } ( x ) = f ^ { \prime \prime } ( - 2 + x ) + f ^ { \prime \prime } ( - 2 - x ) = x \left( e ^ { - 2 + x } - e ^ { - 2 - x } \right)
+$$
+
+当 $x > 0$ 时, $e ^ { - 2 + x } - e ^ { - 2 - x } > 0 , h ^ { \prime \prime } ( x ) > 0 , h ^ { \prime } ( x ) \uparrow \pounds ( 0 , + \infty )$ 单调递增;
+
+由此,当 时, $h ^ { \prime } ( x ) > h ^ { \prime } ( 0 ) = 0$ ,从而 在 上单增.
+
+$\therefore \ Y _ { x } > 0$ 时, $h ( x ) > h ( 0 ) = 0$ ,不等式得证.
+
+②其次,若 ,则取 $x = - 2 - k > 0$
+
+则 $f ( - 2 ) + f ( 2 x + 2 ) > 2 f ( k )$
+
+整理得, $( k + 1 ) \cdot e ^ { 2 ( k + 1 ) } - k \cdot e ^ { k } - e ^ { - 2 } > 0$
+
+下证. 此不等式对任意 均不成立, 从而说明 不符合条件,令
+
+$$
+P ( x ) = ( x + 1 ) \cdot e ^ { 2 ( x + 1 ) } - x \cdot e ^ { x } - e ^ { - 2 } , x \in ( - \infty , - 2 ] , \| \ P ( - 2 ) = 0 ,
+$$
+
+$$
+P ^ { \prime } ( x ) = ( 2 x + 3 ) \cdot e ^ { 2 ( x + 1 ) } - ( x + 1 ) \cdot e ^ { x }
+$$
+
+$$
+= e ^ { x } ( x + 1 ) ( \frac { 2 x + 3 } { x + 1 } \cdot e ^ { x + 2 } - 1 )
+$$
+
+$$
+{ \underset { \curlyeq } { \circleddash } } \varphi ( x ) = { \frac { 2 x + 3 } { x + 1 } } \cdot e ^ { x + 2 } - 1
+$$
+
+$$
+\varphi ^ { \prime } ( x ) = { \frac { ( 2 x + 1 ) ( x + 2 ) } { ( x + 1 ) ^ { 2 } } } e ^ { x + 2 }
+$$
+
+当 $x \in ( - \infty , - 2 ) { \not \sqcup } \Sigma , \varphi ^ { \prime } ( x ) > 0 , \varphi ( x )$ 单增, $\varphi ( x ) < \varphi ( - 2 ) = 0$
+
+当 $x \in ( - \infty , - 2 ) \not \Join \} , x + 1 < 0 , \varphi ( x ) < 0 , p ^ { \prime } ( x ) > 0 .$
+
+$p ( x ) _ { \mathcal { J } _ { \pm } ^ { \pm } } \ ( - \infty , - 2 ) _ { \mathcal { P } }$ 单增.
+
+由此, 对任意 $k < - 2 ,$ , 均有 $p ( k ) < p ( - 2 ) = 0$
+
+即原不等式不成立.
+
+综上由①②可知,k的最小值为-2.

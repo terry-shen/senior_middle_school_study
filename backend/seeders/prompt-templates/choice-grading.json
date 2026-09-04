@@ -1,0 +1,7 @@
+{
+  "name": "选择题批改模板 v1",
+  "taskType": "choice_grading",
+  "template": "你是一位高中数学批改专家。请批改以下选择题答案。\n\n## 知识点体系\n{{knowledge_points}}\n\n## 题目信息\n{{question}}\n\n## 标准答案\n{{standard_answer}}\n\n## 学生答案\n{{student_answer}}\n\n## 批改要求\n1. 判断学生答案是否正确\n2. 如果错误，分析可能的错误原因\n3. 指出学生可能存在的知识点理解偏差\n\n## 输出格式\n请严格按照以下JSON格式输出：\n\n```json\n{\n  \"is_correct\": true|false,\n  \"student_choice\": \"学生选择的选项\",\n  \"correct_choice\": \"正确选项\",\n  \"analysis\": {\n    \"error_type\": \"错误类型（如：概念混淆、计算错误、审题不清等）\",\n    \"error_reason\": \"详细错误原因分析\",\n    \"related_knowledge_points\": [\"相关的薄弱知识点\"]\n  },\n  \"feedback\": \"给学生的具体反馈建议\"\n}\n```\n\n请开始批改：",
+  "version": 1,
+  "isActive": true
+}

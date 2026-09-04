@@ -1,0 +1,598 @@
+{
+  "success": true,
+  "file_info": {
+    "filename": "2026年全国高考二卷数学卷真题及答案解析.pdf",
+    "file_type": "PDF",
+    "file_size_mb": 0.64
+  },
+  "extraction_summary": {
+    "total_questions": 10,
+    "mathematical_questions": 0,
+    "visual_content_questions": 0,
+    "complete_questions": 1,
+    "questions_with_answers": 0,
+    "question_type_distribution": {
+      "standard": 10
+    }
+  },
+  "document_analysis": {
+    "has_mathematical_content": true,
+    "has_visual_content": false,
+    "mathematical_elements": {
+      "symbols_found": 0,
+      "equations_found": 8,
+      "formulas_found": 0,
+      "math_patterns": []
+    },
+    "visual_elements": {
+      "table_references": 0,
+      "chart_references": 0,
+      "image_references": 0,
+      "extracted_tables": 0
+    }
+  },
+  "mcqs": [
+    {
+      "question_number": 1,
+      "question": "A.",
+      "options": {
+        "D": "【答案】B"
+      },
+      "correct_answer": null,
+      "extraction_issues": [
+        "missing_options"
+      ],
+      "missing_options": [
+        "C",
+        "B",
+        "A"
+      ],
+      "content_analysis": {
+        "mathematics": {
+          "has_math": false,
+          "math_symbols": [],
+          "equations": [],
+          "formulas": [],
+          "mathematical_expressions": [],
+          "math_patterns": []
+        },
+        "visual_elements": {
+          "has_visual_content": false,
+          "table_references": [],
+          "chart_references": [],
+          "image_references": [],
+          "diagram_references": [],
+          "visual_patterns": [],
+          "extracted_tables": []
+        }
+      },
+      "math_content": {
+        "has_math": false,
+        "math_symbols": [],
+        "equations": [],
+        "formulas": [],
+        "mathematical_expressions": [],
+        "math_patterns": []
+      },
+      "has_math_content": false,
+      "visual_content": {
+        "has_visual_content": false,
+        "table_references": [],
+        "chart_references": [],
+        "image_references": [],
+        "diagram_references": [],
+        "visual_patterns": [],
+        "extracted_tables": []
+      },
+      "has_visual_content": false,
+      "question_type": "standard"
+    },
+    {
+      "question_number": 2,
+      "question": "已知向量",
+      "options": {
+        "D": "【答案】C"
+      },
+      "correct_answer": null,
+      "extraction_issues": [
+        "missing_options"
+      ],
+      "missing_options": [
+        "C",
+        "B",
+        "A"
+      ],
+      "content_analysis": {
+        "mathematics": {
+          "has_math": false,
+          "math_symbols": [],
+          "equations": [],
+          "formulas": [],
+          "mathematical_expressions": [],
+          "math_patterns": []
+        },
+        "visual_elements": {
+          "has_visual_content": false,
+          "table_references": [],
+          "chart_references": [],
+          "image_references": [],
+          "diagram_references": [],
+          "visual_patterns": [],
+          "extracted_tables": []
+        }
+      },
+      "math_content": {
+        "has_math": false,
+        "math_symbols": [],
+        "equations": [],
+        "formulas": [],
+        "mathematical_expressions": [],
+        "math_patterns": []
+      },
+      "has_math_content": false,
+      "visual_content": {
+        "has_visual_content": false,
+        "table_references": [],
+        "chart_references": [],
+        "image_references": [],
+        "diagram_references": [],
+        "visual_patterns": [],
+        "extracted_tables": []
+      },
+      "has_visual_content": false,
+      "question_type": "standard"
+    },
+    {
+      "question_number": 4,
+      "question": "双曲线 C:",
+      "options": {
+        "D": "【答案】B"
+      },
+      "correct_answer": null,
+      "extraction_issues": [
+        "missing_options"
+      ],
+      "missing_options": [
+        "C",
+        "B",
+        "A"
+      ],
+      "content_analysis": {
+        "mathematics": {
+          "has_math": false,
+          "math_symbols": [],
+          "equations": [],
+          "formulas": [],
+          "mathematical_expressions": [],
+          "math_patterns": []
+        },
+        "visual_elements": {
+          "has_visual_content": false,
+          "table_references": [],
+          "chart_references": [],
+          "image_references": [],
+          "diagram_references": [],
+          "visual_patterns": [],
+          "extracted_tables": []
+        }
+      },
+      "math_content": {
+        "has_math": false,
+        "math_symbols": [],
+        "equations": [],
+        "formulas": [],
+        "mathematical_expressions": [],
+        "math_patterns": []
+      },
+      "has_math_content": false,
+      "visual_content": {
+        "has_visual_content": false,
+        "table_references": [],
+        "chart_references": [],
+        "image_references": [],
+        "diagram_references": [],
+        "visual_patterns": [],
+        "extracted_tables": []
+      },
+      "has_visual_content": false,
+      "question_type": "standard"
+    },
+    {
+      "question_number": 5,
+      "question": "棱台上下底面均有一个内角60°的菱形,且上下底面边长分别为2和3,该棱台",
+      "options": {
+        "D": "【答案】D"
+      },
+      "correct_answer": null,
+      "extraction_issues": [
+        "missing_options"
+      ],
+      "missing_options": [
+        "C",
+        "B",
+        "A"
+      ],
+      "content_analysis": {
+        "mathematics": {
+          "has_math": false,
+          "math_symbols": [],
+          "equations": [],
+          "formulas": [],
+          "mathematical_expressions": [],
+          "math_patterns": []
+        },
+        "visual_elements": {
+          "has_visual_content": false,
+          "table_references": [],
+          "chart_references": [],
+          "image_references": [],
+          "diagram_references": [],
+          "visual_patterns": [],
+          "extracted_tables": []
+        }
+      },
+      "math_content": {
+        "has_math": false,
+        "math_symbols": [],
+        "equations": [],
+        "formulas": [],
+        "mathematical_expressions": [],
+        "math_patterns": []
+      },
+      "has_math_content": false,
+      "visual_content": {
+        "has_visual_content": false,
+        "table_references": [],
+        "chart_references": [],
+        "image_references": [],
+        "diagram_references": [],
+        "visual_patterns": [],
+        "extracted_tables": []
+      },
+      "has_visual_content": false,
+      "question_type": "standard"
+    },
+    {
+      "question_number": 6,
+      "question": "甲、乙、丙、丁等8 人分成A,B 两技术小组,要求每组4 人. 且甲乙必须在同",
+      "options": {
+        "A": "10",
+        "B": "12"
+      },
+      "correct_answer": null,
+      "extraction_issues": [
+        "missing_options"
+      ],
+      "missing_options": [
+        "C",
+        "D"
+      ],
+      "content_analysis": {
+        "mathematics": {
+          "has_math": false,
+          "math_symbols": [],
+          "equations": [],
+          "formulas": [],
+          "mathematical_expressions": [],
+          "math_patterns": []
+        },
+        "visual_elements": {
+          "has_visual_content": false,
+          "table_references": [],
+          "chart_references": [],
+          "image_references": [],
+          "diagram_references": [],
+          "visual_patterns": [],
+          "extracted_tables": []
+        }
+      },
+      "math_content": {
+        "has_math": false,
+        "math_symbols": [],
+        "equations": [],
+        "formulas": [],
+        "mathematical_expressions": [],
+        "math_patterns": []
+      },
+      "has_math_content": false,
+      "visual_content": {
+        "has_visual_content": false,
+        "table_references": [],
+        "chart_references": [],
+        "image_references": [],
+        "diagram_references": [],
+        "visual_patterns": [],
+        "extracted_tables": []
+      },
+      "has_visual_content": false,
+      "question_type": "standard"
+    },
+    {
+      "question_number": 7,
+      "question": "已知为第二象限角,且",
+      "options": {
+        "D": "【答案】C"
+      },
+      "correct_answer": null,
+      "extraction_issues": [
+        "missing_options"
+      ],
+      "missing_options": [
+        "C",
+        "B",
+        "A"
+      ],
+      "content_analysis": {
+        "mathematics": {
+          "has_math": false,
+          "math_symbols": [],
+          "equations": [],
+          "formulas": [],
+          "mathematical_expressions": [],
+          "math_patterns": []
+        },
+        "visual_elements": {
+          "has_visual_content": false,
+          "table_references": [],
+          "chart_references": [],
+          "image_references": [],
+          "diagram_references": [],
+          "visual_patterns": [],
+          "extracted_tables": []
+        }
+      },
+      "math_content": {
+        "has_math": false,
+        "math_symbols": [],
+        "equations": [],
+        "formulas": [],
+        "mathematical_expressions": [],
+        "math_patterns": []
+      },
+      "has_math_content": false,
+      "visual_content": {
+        "has_visual_content": false,
+        "table_references": [],
+        "chart_references": [],
+        "image_references": [],
+        "diagram_references": [],
+        "visual_patterns": [],
+        "extracted_tables": []
+      },
+      "has_visual_content": false,
+      "question_type": "standard"
+    },
+    {
+      "question_number": 8,
+      "question": "已知",
+      "options": {
+        "D": "【答案】D"
+      },
+      "correct_answer": null,
+      "extraction_issues": [
+        "missing_options"
+      ],
+      "missing_options": [
+        "C",
+        "B",
+        "A"
+      ],
+      "content_analysis": {
+        "mathematics": {
+          "has_math": false,
+          "math_symbols": [],
+          "equations": [],
+          "formulas": [],
+          "mathematical_expressions": [],
+          "math_patterns": []
+        },
+        "visual_elements": {
+          "has_visual_content": false,
+          "table_references": [],
+          "chart_references": [],
+          "image_references": [],
+          "diagram_references": [],
+          "visual_patterns": [],
+          "extracted_tables": []
+        }
+      },
+      "math_content": {
+        "has_math": false,
+        "math_symbols": [],
+        "equations": [],
+        "formulas": [],
+        "mathematical_expressions": [],
+        "math_patterns": []
+      },
+      "has_math_content": false,
+      "visual_content": {
+        "has_visual_content": false,
+        "table_references": [],
+        "chart_references": [],
+        "image_references": [],
+        "diagram_references": [],
+        "visual_patterns": [],
+        "extracted_tables": []
+      },
+      "has_visual_content": false,
+      "question_type": "standard"
+    },
+    {
+      "question_number": 9,
+      "question": "已知",
+      "options": {
+        "A": "点 A 的坐标为",
+        "B": "时,"
+      },
+      "correct_answer": null,
+      "extraction_issues": [
+        "missing_options"
+      ],
+      "missing_options": [
+        "C",
+        "D"
+      ],
+      "content_analysis": {
+        "mathematics": {
+          "has_math": false,
+          "math_symbols": [],
+          "equations": [],
+          "formulas": [],
+          "mathematical_expressions": [],
+          "math_patterns": []
+        },
+        "visual_elements": {
+          "has_visual_content": false,
+          "table_references": [],
+          "chart_references": [],
+          "image_references": [],
+          "diagram_references": [],
+          "visual_patterns": [],
+          "extracted_tables": []
+        }
+      },
+      "math_content": {
+        "has_math": false,
+        "math_symbols": [],
+        "equations": [],
+        "formulas": [],
+        "mathematical_expressions": [],
+        "math_patterns": []
+      },
+      "has_math_content": false,
+      "visual_content": {
+        "has_visual_content": false,
+        "table_references": [],
+        "chart_references": [],
+        "image_references": [],
+        "diagram_references": [],
+        "visual_patterns": [],
+        "extracted_tables": []
+      },
+      "has_visual_content": false,
+      "question_type": "standard"
+    },
+    {
+      "question_number": 10,
+      "question": "等比数列",
+      "options": {
+        "D": "【答案】AD"
+      },
+      "correct_answer": null,
+      "extraction_issues": [
+        "missing_options"
+      ],
+      "missing_options": [
+        "C",
+        "B",
+        "A"
+      ],
+      "content_analysis": {
+        "mathematics": {
+          "has_math": false,
+          "math_symbols": [],
+          "equations": [],
+          "formulas": [],
+          "mathematical_expressions": [],
+          "math_patterns": []
+        },
+        "visual_elements": {
+          "has_visual_content": false,
+          "table_references": [],
+          "chart_references": [],
+          "image_references": [],
+          "diagram_references": [],
+          "visual_patterns": [],
+          "extracted_tables": []
+        }
+      },
+      "math_content": {
+        "has_math": false,
+        "math_symbols": [],
+        "equations": [],
+        "formulas": [],
+        "mathematical_expressions": [],
+        "math_patterns": []
+      },
+      "has_math_content": false,
+      "visual_content": {
+        "has_visual_content": false,
+        "table_references": [],
+        "chart_references": [],
+        "image_references": [],
+        "diagram_references": [],
+        "visual_patterns": [],
+        "extracted_tables": []
+      },
+      "has_visual_content": false,
+      "question_type": "standard"
+    },
+    {
+      "question_number": 11,
+      "question": "已知抛物线",
+      "options": {
+        "A": "抛物线准线方程为",
+        "B": "与轴交点为",
+        "C": "若与"
+      },
+      "correct_answer": null,
+      "extraction_issues": [
+        "missing_options"
+      ],
+      "missing_options": [
+        "D"
+      ],
+      "content_analysis": {
+        "mathematics": {
+          "has_math": false,
+          "math_symbols": [],
+          "equations": [],
+          "formulas": [],
+          "mathematical_expressions": [],
+          "math_patterns": []
+        },
+        "visual_elements": {
+          "has_visual_content": false,
+          "table_references": [],
+          "chart_references": [],
+          "image_references": [],
+          "diagram_references": [],
+          "visual_patterns": [],
+          "extracted_tables": []
+        }
+      },
+      "math_content": {
+        "has_math": false,
+        "math_symbols": [],
+        "equations": [],
+        "formulas": [],
+        "mathematical_expressions": [],
+        "math_patterns": []
+      },
+      "has_math_content": false,
+      "visual_content": {
+        "has_visual_content": false,
+        "table_references": [],
+        "chart_references": [],
+        "image_references": [],
+        "diagram_references": [],
+        "visual_patterns": [],
+        "extracted_tables": []
+      },
+      "has_visual_content": false,
+      "question_type": "standard"
+    }
+  ],
+  "processing_notes": [
+    "✅ Successfully extracted 10 questions",
+    "⚠️ 10 questions have incomplete options",
+    "❓ 10 questions are missing answers"
+  ],
+  "enhanced_features": {
+    "mathematical_notation_support": true,
+    "visual_content_detection": true,
+    "table_extraction": true,
+    "equation_parsing": true,
+    "content_type_classification": true
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "填空题批改模板 v1",
+  "taskType": "fill_grading",
+  "template": "你是一位高中数学批改专家。请批改以下填空题答案。\n\n## 知识点体系\n{{knowledge_points}}\n\n## 题目信息\n{{question}}\n\n## 标准答案\n{{standard_answer}}\n\n## 学生答案\n{{student_answer}}\n\n## 批改要求\n1. 判断学生答案是否正确（支持等价答案识别）\n2. 数学表达式需判断等价性：\n   - 代数表达式：如 x²-1 和 (x-1)(x+1) 等价\n   - 分数形式：如 1/2 和 0.5 等价\n   - 函数表达式：如 y=x+1 和 y=1+x 等价\n   - 根式形式：如 √4 和 2 等价\n   - 特殊值：如 sin(π/2) 和 1 等价\n3. 如果答案等价但形式不同，视为正确\n4. 如果错误，分析错误原因和薄弱知识点\n\n## 输出格式\n请严格按照以下JSON格式输出：\n\n```json\n{\n  \"is_correct\": true|false,\n  \"is_equivalent\": true|false,\n  \"student_answer_normalized\": \"学生答案的标准化形式\",\n  \"standard_answer_normalized\": \"标准答案的标准化形式\",\n  \"equivalence_reason\": \"等价判断的理由（如适用）\",\n  \"analysis\": {\n    \"error_type\": \"错误类型（如：计算错误、概念理解偏差、公式记忆错误等）\",\n    \"error_details\": \"详细错误分析\",\n    \"related_knowledge_points\": [\"相关的薄弱知识点\"]\n  },\n  \"partial_credit\": {\n    \"awarded\": true|false,\n    \"reason\": \"部分得分理由（如：思路正确但计算错误）\",\n    \"suggested_score\": \"建议得分（满分100）\"\n  },\n  \"feedback\": \"给学生的具体反馈建议\"\n}\n```\n\n请开始批改：",
+  "version": 1,
+  "isActive": true
+}

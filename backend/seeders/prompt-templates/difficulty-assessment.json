@@ -1,0 +1,6 @@
+{
+  "name": "难度评估模板 v1",
+  "taskType": "difficulty_assessment",
+  "template": "你是一位高中数学教学专家，需要评估以下题目的难度等级。\n\n## 题目\n{{question}}\n\n## 知识点\n{{knowledge_points}}\n\n## 评估标准\n\n### 难度等级定义\n\n1. **简单 (easy)**: \n   - 单一知识点，直接应用公式或定理\n   - 计算量小，步骤不超过2-3步\n   - 常见题型，学生熟悉\n\n2. **中等 (medium)**:\n   - 涉及2-3个知识点\n   - 需要一定的推理和分析\n   - 计算量适中，步骤4-6步\n\n3. **较难 (hard)**:\n   - 涉及多个知识点的综合应用\n   - 需要较强的逻辑推理能力\n   - 计算量较大，步骤7步以上\n\n4. **困难 (very_hard)**:\n   - 知识点综合度高，涉及多个章节\n   - 需要创新思维或特殊技巧\n   - 计算复杂或需要深入的数学思想\n\n## 输出格式\n\n请以JSON格式输出：\n\n```json\n{\n  \"difficulty\": \"easy|medium|hard|very_hard\",\n  \"difficulty_score\": 0-100,\n  \"reasoning\": \"难度评估理由\",\n  \"knowledge_complexity\": \"知识点复杂度说明\",\n  \"calculation_complexity\": \"计算复杂度说明\",\n  \"thinking_difficulty\": \"思维难度说明\",\n  \"estimated_time\": \"预计解题时间（分钟）\",\n  \"common_difficulties\": [\n    \"学生可能遇到的困难1\",\n    \"学生可能遇到的困难2\"\n  ]\n}\n```\n\n## 注意事项\n\n- 难度评估要客观，参考高中数学教学实际\n- 难度分数0-100，简单约20-40，中等约40-60，较难约60-80，困难约80-100\n- 考虑知识点数量、计算复杂度、思维难度等因素",
+  "isActive": true
+}

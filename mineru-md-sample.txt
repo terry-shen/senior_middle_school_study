@@ -1,0 +1,87 @@
+$$
+\therefore { \frac { 1 } { 2 } } a c \cdot { \frac { \sqrt { 7 } } { 4 } } = { \frac { \sqrt { 7 } } { 4 } }
+$$
+
+$$
+\therefore a c = 2 \textcircled { 1 }
+$$
+
+又由 (1) $\sin A \sin C = { \frac { 7 } { 1 6 } }$ ②
+
+由正弦定理,
+
+$$
+a = 2 R \sin A , \enspace c = 2 R \sin C \odot
+$$
+
+由①、②、③
+
+$$
+\therefore a c = 4 R ^ { 2 } \sin A \sin C
+$$
+
+$$
+\therefore 2 = 4 R ^ { 2 } \times \frac { 7 } { 1 6 }
+$$
+
+$$
+\therefore R = { \frac { 2 { \sqrt { 1 4 } } } { 7 } }
+$$
+
+$$
+b = 2 R \cdot \sin B = 2 \times { \frac { 2 { \sqrt { 1 4 } } } { 7 } } \times { \frac { \sqrt { 7 } } { 4 } } = { \sqrt { 2 } }
+$$
+
+由余弦定理
+
+$$
+b ^ { 2 } = a ^ { 2 } + c ^ { 2 } - 2 a c \cos B
+$$
+
+$$
+2 = a ^ { 2 } + c ^ { 2 } - 2 \times 2 \times \frac { 3 } { 4 }
+$$
+
+$$
+\therefore a ^ { 2 } + c ^ { 2 } = 5
+$$
+
+$$
+\therefore a ^ { 2 } + c ^ { 2 } + 2 a c = ( a + c ) ^ { 2 } = 9
+$$
+
+$$
+\therefore a + c = 3
+$$
+
+$\therefore \triangle A B C$ 周长是 $\cdot a + b + c = 3 + { \sqrt { 2 } }$
+
+18. 椭圆 $E : { \frac { x ^ { 2 } } { a ^ { 2 } } } + y ^ { 2 } = 1 ( a > 1 ) \quad \quad$ ,过右焦点垂直于 轴的直线被 所截线段长为${ \sqrt { 2 } } .$
+
+(1) 求 的离心率;
+
+(2) 为坐标原点,给定点 $G ( t _ { 0 } , 0 ) ( t _ { 0 } \neq 0 ) ; A ( x _ { 0 } , y _ { 0 } ) ( y _ { 0 } \neq 0 )$ 在 上,过点 作轴的垂线,交 于点 , 与 交于点 . 当 在 上运动时, 的轨迹为.
+
+(i) 求 的方程;
+
+(ii) 是否有中心点？当 为何值时, 有中心点？当 有中心点时,平移到 $M ^ { \prime }$ ,使 为 $M ^ { \prime }$ 的中心点,说明 $M ^ { \prime }$ 为何形状？
+
+【答案】 (1) $\frac { \sqrt { 2 } } { 2 }$
+
+(2) (i) $( t _ { 0 } ^ { 2 } - 2 ) x ^ { 2 } + 4 t _ { 0 } x + 2 t _ { 0 } ^ { 2 } y ^ { 2 } - 2 t _ { 0 } ^ { 2 } = 0$
+
+(ii) 当 $x _ { 0 } \neq { \sqrt { 2 } } |$ 时,M 有中心点;平移后 $M ^ { \prime }$ 为椭圆或双曲线$\# 0 < | t _ { 0 } | < \sqrt { 2 }$ 为双曲线,若 $\left| t _ { 0 } \right| > \sqrt { 2 }$ 为椭圆
+
+【解析】(1) 椭圆 $\frac { x ^ { 2 } } { \ l a ^ { 2 } } + y ^ { 2 } = 1 ( a > 1 )$
+
+设过右焦 $\underset { \cdots } { \scriptscriptstyle \mathrm { H } } F _ { 2 } ( c , 0 )$ 的直线与椭圆交于 $R , S$ 两点,   
+$R ( c , y _ { 1 } )$   
+$\therefore { \frac { c ^ { 2 } } { a ^ { 2 } } } + y _ { 1 } ^ { 2 } = 1$   
+$\therefore y _ { 1 } ^ { 2 } = 1 - { \frac { b ^ { 2 } } { a ^ { 2 } } } = { \frac { b ^ { 2 } } { a ^ { 2 } } } = { \frac { 1 } { a ^ { 2 } } }$   
+$\therefore y _ { 1 } = \pm { \frac { 1 } { a } }$   
+$\therefore { \frac { 2 } { a } } = { \sqrt { 2 } }$   
+$\therefore a = { \sqrt { 2 } } .$   
+$c ^ { 2 } = a ^ { 2 } - b ^ { 2 } = 2 - 1 = 1$   
+离心率 $\displaystyle { e = \frac { c } { a } = \frac { 1 } { \sqrt { 2 } } = \frac { \sqrt { 2 } } { 2 } }$
+
+(2) (i) 解：由 (1) 知椭圆 方程为 ${ \frac { x ^ { 2 } } { 2 } } + y ^ { 2 } = 1 \Rightarrow x ^ { 2 } + 2 y ^ { 2 } = 2$ .已知$A ( x _ { 0 } , y _ { 0 } )$ ,因为 是 在 轴上的垂足,所以 $B ( 0 , y _ { 0 } ) _ { \cdot }$ .直线 的方程为：$y = { \frac { y _ { 0 } } { x _ { 0 } } } x \Rightarrow y _ { 0 } x - x _ { 0 } y = 0$ 直线 $G B \Upsilon \Psi ^ { G ( t _ { 0 } , 0 ) \trianglerighteq B ( 0 , y _ { 0 } ) } ,$ ,方程为： $\frac { x } { t _ { 0 } } + \frac { y _ { 0 } } { b } = 1 \Rightarrow y _ { 0 } x + t _ { 0 } y = t _ { 0 } y _ { 0 }$ 设交点为 $P ( x , y )$ .由 得 $x _ { 0 } = { \frac { y _ { 0 } x } { y } }$ .将其代入 方程：

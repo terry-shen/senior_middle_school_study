@@ -1,0 +1,6 @@
+{
+  "name": "答案生成模板 v1",
+  "taskType": "answer_generation",
+  "template": "你是一位高中数学教师，需要为以下题目生成标准答案。\n\n## 题目\n{{question}}\n\n## 知识点\n{{knowledge_points}}\n\n## 难度\n{{difficulty}}\n\n## 要求\n\n1. **答案格式**: 根据题型生成合适格式的答案\n   - 选择题：给出正确选项字母（A/B/C/D）\n   - 填空题：给出具体的数值或表达式\n   - 解答题：给出完整的解题过程和最终答案\n\n2. **准确性**: 答案必须准确无误\n\n3. **规范性**: 数学符号和表达式要符合标准\n\n## 输出格式\n\n请以JSON格式输出：\n\n```json\n{\n  \"answer_type\": \"choice|fill|essay\",\n  \"answer\": \"最终答案\",\n  \"choice_answer\": \"选项字母（选择题时）\",\n  \"steps\": [\n    {\n      \"step\": \"解题步骤（解答题时）\"\n    }\n  ],\n  \"final_result\": \"最终结果\",\n  \"confidence\": 0.95\n}\n```\n\n## 注意事项\n\n- 选择题只需给出选项字母\n- 填空题要检查答案的单位和精度\n- 解答题要给出完整的解题步骤\n- 如果题目有多个小问，按顺序分别作答",
+  "isActive": true
+}

@@ -1,0 +1,548 @@
+/* Question List Styles */
+
+.question-list-container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.question-list-container h1 {
+  margin-bottom: 24px;
+  color: #333;
+}
+
+.filters {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.filters select {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.questions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 16px;
+}
+
+.question-card {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.question-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.question-number {
+  font-weight: 600;
+  color: #333;
+}
+
+.question-type {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.type-choice {
+  background: #d4edda;
+  color: #155724;
+}
+
+.type-fill {
+  background: #cce5ff;
+  color: #004085;
+}
+
+.type-essay {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.type-unknown {
+  background: #e2e3e5;
+  color: #383d41;
+}
+
+.question-score {
+  margin-left: auto;
+  font-weight: 600;
+  color: #666;
+}
+
+.question-source {
+  margin-left: 10px;
+  font-size: 12px;
+  color: #888;
+  background: #f0f0f0;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.question-content {
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.8;
+  font-size: 15px;
+  text-align: left;
+}
+
+/* Question block layout: 题目/答案/解析 as independent blocks */
+.question-block {
+  margin-bottom: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #e0e0e0;
+  text-align: left;
+}
+
+.question-block .block-label {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: #666;
+  text-align: left;
+}
+
+.question-block .block-body {
+  padding: 12px;
+  line-height: 1.8;
+  font-size: 15px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  text-align: left;
+}
+
+.question-block-content .block-label { background: #2196f3; }
+.question-block-content .block-body { background: #f8f9fa; }
+
+.question-block-answer .block-label { background: #4caf50; }
+.question-block-answer .block-body { background: #f1f8e9; }
+
+.question-block-analysis .block-label { background: #ff9800; }
+.question-block-analysis .block-body { background: #fff8e1; }
+
+/* Images inside MathText */
+.math-text-image {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block !important;
+  margin: 8px 0 !important;
+  border-radius: 4px !important;
+  border: 1px solid #e0e0e0 !important;
+}
+
+.question-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.meta-item .label {
+  color: #666;
+  margin-right: 4px;
+}
+
+.question-actions {
+  text-align: right;
+}
+
+.btn-edit {
+  padding: 6px 16px;
+  background: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-edit:hover {
+  background: #357abd;
+}
+
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.edit-form textarea,
+.edit-form input,
+.edit-form select {
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.edit-form textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.btn-save {
+  padding: 6px 16px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-save:hover {
+  background: #218838;
+}
+
+.btn-cancel {
+  padding: 6px 16px;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-cancel:hover {
+  background: #5a6268;
+}
+
+.loading {
+  text-align: center;
+  padding: 48px;
+  color: #666;
+}
+
+.empty {
+  text-align: center;
+  padding: 48px;
+  color: #999;
+  font-size: 18px;
+}
+
+/* Batch delete toolbar (admin only) */
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.select-all-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #555;
+  cursor: pointer;
+}
+
+.select-all-label input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.selected-count {
+  font-size: 13px;
+  color: #666;
+  background: #f0f0f0;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.btn-batch-delete {
+  padding: 6px 16px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-batch-delete:hover:not(:disabled) {
+  background: #c82333;
+}
+
+.btn-batch-delete:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.btn-clear-selection {
+  padding: 6px 12px;
+  background: transparent;
+  color: #666;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.btn-clear-selection:hover {
+  background: #f5f5f5;
+}
+
+/* Per-card checkbox */
+.question-checkbox {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+/* Single delete button */
+.btn-delete-single {
+  padding: 6px 16px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-left: 8px;
+}
+
+.btn-delete-single:hover {
+  background: #c82333;
+}
+
+/* Confirm / result modal */
+.confirm-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.confirm-modal {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 520px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+.confirm-modal h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  color: #333;
+}
+
+.confirm-modal p {
+  color: #555;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.btn-confirm-delete {
+  padding: 8px 20px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-confirm-delete:hover {
+  background: #c82333;
+}
+
+/* Result modal content */
+.result-success {
+  color: #28a745;
+  font-weight: 500;
+}
+
+.result-blocked {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.blocked-title {
+  color: #856404;
+  font-weight: 500;
+}
+
+.blocked-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.blocked-list li {
+  padding: 8px 12px;
+  background: #fff3cd;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.blocked-exam-names {
+  color: #856404;
+  font-size: 12px;
+}
+
+.blocked-hint {
+  color: #6c757d;
+  font-size: 12px;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .questions-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .filters {
+    flex-direction: column;
+  }
+}
+
+/* Page Images Viewer - shows original PDF pages with math formulas + charts */
+.page-images-viewer {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+.page-images-viewer h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.page-images-scroll {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.page-image-item {
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.page-image-item img {
+  max-height: 500px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.page-image-item .page-num {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  color: #666;
+}
+
+/* Toggle button for page images */
+.toggle-page-images {
+  padding: 6px 14px;
+  background: #e8f4fd;
+  border: 1px solid #2196f3;
+  color: #2196f3;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.toggle-page-images:hover {
+  background: #2196f3;
+  color: #fff;
+}
+
+.toggle-page-images.active {
+  background: #2196f3;
+  color: #fff;
+}
+
+/* Math Reconstruct button */
+.btn-reconstruct {
+  padding: 4px 12px;
+  background: #fff3e0;
+  border: 1px solid #ff9800;
+  color: #e65100;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.btn-reconstruct:hover:not(:disabled) {
+  background: #ff9800;
+  color: #fff;
+}
+
+.btn-reconstruct:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Reconstruct message */
+.reconstruct-message {
+  padding: 10px 16px;
+  background: #e8f5e9;
+  border: 1px solid #4caf50;
+  border-radius: 4px;
+  color: #2e7d32;
+  font-size: 14px;
+  margin-bottom: 16px;
+}

@@ -1,0 +1,84 @@
+.kp-import {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.kp-import-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.kp-import-header h2 {
+  margin: 0;
+}
+
+.upload-zone {
+  border: 2px dashed #cbd5e0;
+  border-radius: 8px;
+  padding: 32px;
+  text-align: center;
+  background: #fafafa;
+}
+
+.upload-tip {
+  color: #666;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.file-input {
+  margin: 16px 0;
+}
+
+.file-info {
+  margin: 12px 0;
+  color: #2d3748;
+  font-size: 14px;
+}
+
+.file-size {
+  color: #888;
+  margin-left: 8px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-primary {
+  background: #3182ce;
+  color: white;
+}
+
+.btn-primary:disabled {
+  background: #a0aec0;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #e2e8f0;
+  color: #2d3748;
+}
+
+.error-message {
+  margin-top: 16px;
+  padding: 12px;
+  background: #fed7d7;
+  color: #c53030;
+  border-radius: 4px;
+}
+
+.success-message {
+  margin-top: 16px;
+  padding: 12px;
+  background: #c6f6d5;
+  color: #2f855a;
+  border-radius: 4px;
+}

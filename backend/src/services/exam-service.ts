@@ -1,0 +1,382 @@
+/**
+ * Exam Service
+ * Handles online exam creation, publishing, and management
+ */
+
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+export interface CreateExamData {
+  title: string;
+  description?: string;
+  questionIds: number[];
+  totalScore: number;
+  duration?: number;
+  startTime?: Date;
+  endTime?: Date;
+  creatorId: number;
+}
+
+export interface PublishExamData {
+  classIds?: number[];
+  studentIds?: number[];
+}
+
+/**
+ * Create a new exam
+ */
+export async function createExam(data: CreateExamData) {
+  const exam = await prisma.exam.create({
+    data: {
+      title: data.title,
+      description: data.description,
+      questionIds: JSON.stringify(data.questionIds),
+      totalScore: data.totalScore,
+      duration: data.duration,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      creatorId: data.creatorId,
+    },
+  });
+  
+  return {
+    ...exam,
+    questionIds: JSON.parse(exam.questionIds),
+  };
+}
+
+/**
+ * Get exam by ID
+ */
+export async function getExamById(id: number) {
+  const exam = await prisma.exam.findUnique({
+    where: { id },
+    include: {
+      creator: {
+        select: { id: true, studentId: true, name: true },
+      },
+      assignments: {
+        include: {
+          class: true,
+          student: {
+            select: { id: true, studentId: true, name: true },
+          },
+        },
+      },
+    },
+  });
+  
+  if (!exam) return null;
+  
+  return {
+    ...exam,
+    questionIds: JSON.parse(exam.questionIds),
+  };
+}
+
+/**
+ * List exams with filters
+ */
+export async function listExams(filters: {
+  creatorId?: number;
+  status?: string;
+  studentId?: number;
+}) {
+  const where: any = {};
+  
+  if (filters.creatorId) {
+    where.creatorId = filters.creatorId;
+  }
+  
+  if (filters.status) {
+    where.status = filters.status;
+  }
+  
+  if (filters.studentId) {
+    // Get exams assigned to the student
+    where.OR = [
+      {
+        assignments: {
+          some: { studentId: filters.studentId },
+        },
+      },
+      {
+        assignments: {
+          some: {
+            class: {
+              students: {
+                some: { id: filters.studentId },
+              },
+            },
+          },
+        },
+      },
+    ];
+  }
+  
+  const exams = await prisma.exam.findMany({
+    where,
+    include: {
+      creator: {
+        select: { id: true, studentId: true, name: true },
+      },
+      _count: {
+        select: { assignments: true, records: true },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  
+  return exams.map((exam) => ({
+    ...exam,
+    questionIds: JSON.parse(exam.questionIds),
+  }));
+}
+
+/**
+ * Publish exam to students/classes
+ */
+export async function publishExam(examId: number, data: PublishExamData) {
+  // Create assignments
+  const assignments: { examId: number; classId?: number; studentId?: number }[] = [];
+  
+  if (data.classIds) {
+    for (const classId of data.classIds) {
+      assignments.push({ examId, classId });
+    }
+  }
+  
+  if (data.studentIds) {
+    for (const studentId of data.studentIds) {
+      // Check if assignment already exists
+      const existing = await prisma.examAssignment.findFirst({
+        where: { examId, studentId },
+      });
+      if (!existing) {
+        await prisma.examAssignment.create({
+          data: { examId, studentId },
+        });
+      }
+    }
+  }
+  
+  // Update status
+  await prisma.exam.update({
+    where: { id: examId },
+    data: { status: 'published' },
+  });
+  
+  return getExamById(examId);
+}
+
+/**
+ * Get questions for an exam
+ */
+export async function getExamQuestions(examId: number) {
+  const exam = await prisma.exam.findUnique({
+    where: { id: examId },
+  });
+  
+  if (!exam) return null;
+  
+  const questionIds: number[] = JSON.parse(exam.questionIds);
+  
+  const questions = await prisma.question.findMany({
+    where: {
+      id: { in: questionIds },
+    },
+  });
+  
+  // Sort by order in questionIds
+  const questionMap = new Map(questions.map((q) => [q.id, q]));
+  return questionIds.map((id) => questionMap.get(id)).filter(Boolean);
+}
+
+/**
+ * Start exam for a student
+ */
+export async function startExam(examId: number, studentId: number) {
+  // Check if exam is accessible
+  const exam = await prisma.exam.findUnique({
+    where: { id: examId },
+    include: {
+      assignments: true,
+    },
+  });
+  
+  if (!exam) {
+    throw new Error('Exam not found');
+  }
+  
+  if (exam.status !== 'published') {
+    throw new Error('Exam is not published');
+  }
+  
+  // Check if student is assigned
+  const isAssigned = exam.assignments.some((a) => {
+    if (a.studentId === studentId) return true;
+    // Check if student is in assigned class
+    return false; // TODO: Check class membership
+  });
+  
+  // Check if already started
+  const existingRecord = await prisma.examRecord.findUnique({
+    where: {
+      examId_studentId: { examId, studentId },
+    },
+  });
+  
+  if (existingRecord) {
+    return existingRecord;
+  }
+  
+  // Create new exam record
+  const record = await prisma.examRecord.create({
+    data: {
+      examId,
+      studentId,
+      status: 'in_progress',
+    },
+  });
+  
+  // Create answer records for each question
+  const questionIds: number[] = JSON.parse(exam.questionIds);
+  await prisma.answerRecord.createMany({
+    data: questionIds.map((questionId) => ({
+      recordId: record.id,
+      questionId,
+    })),
+  });
+  
+  return record;
+}
+
+/**
+ * Save answer for a question
+ */
+export async function saveAnswer(
+  recordId: number,
+  questionId: number,
+  answer: string,
+  timeSpent?: number
+) {
+  return prisma.answerRecord.update({
+    where: {
+      recordId_questionId: { recordId, questionId },
+    },
+    data: {
+      answer,
+      timeSpent,
+    },
+  });
+}
+
+/**
+ * Upload image answer
+ */
+export async function uploadImageAnswer(
+  recordId: number,
+  questionId: number,
+  imageUrl: string,
+  timeSpent?: number
+) {
+  return prisma.answerRecord.update({
+    where: {
+      recordId_questionId: { recordId, questionId },
+    },
+    data: {
+      imageUrl,
+      timeSpent,
+    },
+  });
+}
+
+/**
+ * Submit exam
+ */
+export async function submitExam(recordId: number) {
+  const record = await prisma.examRecord.findUnique({
+    where: { id: recordId },
+    include: {
+      answers: true,
+      exam: true,
+    },
+  });
+  
+  if (!record) {
+    throw new Error('Record not found');
+  }
+  
+  if (record.status !== 'in_progress') {
+    throw new Error('Exam already submitted');
+  }
+  
+  // Calculate total time
+  const timeSpent = Math.floor(
+    (new Date().getTime() - record.startTime.getTime()) / 1000
+  );
+  
+  // Update record status
+  return prisma.examRecord.update({
+    where: { id: recordId },
+    data: {
+      submitTime: new Date(),
+      timeSpent,
+      status: 'submitted',
+    },
+  });
+}
+
+/**
+ * Get exam record for a student
+ */
+export async function getExamRecord(examId: number, studentId: number) {
+  return prisma.examRecord.findUnique({
+    where: {
+      examId_studentId: { examId, studentId },
+    },
+    include: {
+      answers: {
+        include: {
+          question: true,
+        },
+      },
+    },
+  });
+}
+
+/**
+ * List exam records
+ */
+export async function listExamRecords(filters: {
+  examId?: number;
+  studentId?: number;
+  status?: string;
+}) {
+  const where: any = {};
+  
+  if (filters.examId) where.examId = filters.examId;
+  if (filters.studentId) where.studentId = filters.studentId;
+  if (filters.status) where.status = filters.status;
+  
+  return prisma.examRecord.findMany({
+    where,
+    include: {
+      exam: true,
+      student: {
+        select: { id: true, studentId: true, name: true },
+      },
+    },
+    orderBy: { startTime: 'desc' },
+  });
+}
+
+/**
+ * Delete exam
+ */
+export async function deleteExam(id: number) {
+  return prisma.exam.delete({
+    where: { id },
+  });
+}

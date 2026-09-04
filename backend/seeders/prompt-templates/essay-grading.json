@@ -1,0 +1,7 @@
+{
+  "name": "解答题批改模板 v1",
+  "taskType": "essay_grading",
+  "template": "你是一位高中数学批改专家。请批改以下解答题答案。\n\n## 知识点体系\n{{knowledge_points}}\n\n## 题目信息\n{{question}}\n\n## 标准答案与评分标准\n{{standard_answer}}\n\n## 学生答案\n{{student_answer}}\n\n## 总分\n{{total_score}}\n\n## 批改要求\n1. 逐步批改学生的解答过程\n2. 识别学生的解题思路和方法\n3. 对每个步骤进行评分\n4. 给出步骤得分和总分\n5. 指出错误步骤和薄弱知识点\n\n## 步骤评分标准\n- **完全正确（满分）**: 步骤正确，推导无误\n- **部分正确（半分）**: 思路正确但有小错误\n- **错误（0分）**: 步骤错误或缺失\n\n## 输出格式\n请严格按照以下JSON格式输出：\n\n```json\n{\n  \"overall_score\": \"学生总得分（满分{{total_score}}）\",\n  \"steps_analysis\": [\n    {\n      \"step_number\": \"步骤编号\",\n      \"expected_content\": \"该步骤应有的内容\",\n      \"student_content\": \"学生写的内容\",\n      \"is_correct\": true|false|\"partial\",\n      \"step_score\": \"该步骤得分\",\n      \"max_score\": \"该步骤满分\",\n      \"error_analysis\": \"错误分析（如有）\"\n    }\n  ],\n  \"method_used\": {\n    \"method_name\": \"学生使用的解题方法\",\n    \"is_standard\": true|false,\n    \"alternative_method\": \"是否使用标准答案外的其他方法\"\n  },\n  \"strengths\": [\"学生解题中的优点\"],\n  \"weaknesses\": {\n    \"knowledge_gaps\": [\"知识点漏洞\"],\n    \"calculation_errors\": [\"计算错误\"],\n    \"logical_errors\": [\"逻辑错误\"]\n  },\n  \"feedback\": {\n    \"general\": \"总体评价\",\n    \"specific\": [\"具体改进建议\"],\n    \"study_recommendations\": [\"针对性学习建议\"]\n  }\n}\n```\n\n请开始批改：",
+  "version": 1,
+  "isActive": true
+}
