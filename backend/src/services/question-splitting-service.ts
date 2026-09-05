@@ -27,7 +27,7 @@ export interface SplitResult {
 /**
  * Detect question type from content
  */
-function detectQuestionType(content: string): 'choice' | 'fill' | 'essay' | 'unknown' {
+export function detectQuestionType(content: string): 'choice' | 'fill' | 'essay' | 'unknown' {
   // Choice questions have options (A, B, C, D)
   const hasOptions = /（\s*[A-D]\s*[）)]|[（(]\s*[A-D]\s*[）)]/g.test(content);
   if (hasOptions) {
@@ -76,7 +76,7 @@ function extractScore(content: string): number | undefined {
 /**
  * Extract options from choice question content
  */
-function extractOptions(content: string): string[] | undefined {
+export function extractOptions(content: string): string[] | undefined {
   const options: string[] = [];
   
   // Match option patterns like "A. xxx" or "A、xxx" or "（A）xxx"
@@ -728,7 +728,58 @@ export function autoTagQuestions(markdown: string): string {
   }
 
   // Remove markdown headers (# title) and section headers (一、选择题...)
-  let cleanMd = markdown.replace(/^#[^\n]*\n/gm, '');
+  // BUT keep header lines that carry a 【编号】 question tag (e.g. "## 【131】(2018·天津...)")
+  let cleanMd = markdown.replace(/^#{1,6}\s+(?!【\s*\d)[^\n]*\n/gm, '');
+
+  // === Question-bank book mode (题库书) ===
+  // Format: lines starting with 【编号】 e.g. "【116】(2013·重庆·理·3·★★)已知..."
+  // Question numbers are typically > 30 and continuous across the whole book.
+  // Detect this BEFORE the numbered-list mode below, otherwise lines like
+  // "1." in solution-summary paragraphs get mis-tagged as questions.
+  const bookRegex = /^\s*#{0,6}\s*【\s*(\d{1,4})\s*】/gm;
+  const bookStarts: { num: number; pos: number }[] = [];
+  let bm: RegExpExecArray | null;
+  while ((bm = bookRegex.exec(cleanMd)) !== null) {
+    const bNum = parseInt(bm[1]);
+    if (bNum >= 1) {
+      // Position the START tag right before the 【 character (after any heading markers)
+      bookStarts.push({ num: bNum, pos: bm.index + bm[0].indexOf('【') });
+    }
+  }
+  if (bookStarts.length >= 2) {
+    // Deduplicate: keep first occurrence of each question number
+    const bookSeen = new Set<number>();
+    const uniqueBookStarts = bookStarts.filter(s => {
+      if (bookSeen.has(s.num)) return false;
+      bookSeen.add(s.num);
+      return true;
+    });
+
+    const insertions: { pos: number; tag: string; isStart: boolean }[] = [];
+    for (let i = 0; i < uniqueBookStarts.length; i++) {
+      const qNum = uniqueBookStarts[i].num;
+      const startPos = uniqueBookStarts[i].pos;
+      insertions.push({ pos: startPos, tag: `<!--Q${qNum}_START-->`, isStart: true });
+
+      let endPos = cleanMd.length;
+      if (i < uniqueBookStarts.length - 1) {
+        endPos = uniqueBookStarts[i + 1].pos;
+      }
+      insertions.push({ pos: endPos, tag: `<!--Q${qNum}_END-->`, isStart: false });
+    }
+    insertions.sort((a, b) => {
+      if (b.pos !== a.pos) return b.pos - a.pos;
+      if (a.isStart && !b.isStart) return -1;
+      if (!a.isStart && b.isStart) return 1;
+      return 0;
+    });
+
+    let taggedMarkdown = cleanMd;
+    for (const ins of insertions) {
+      taggedMarkdown = taggedMarkdown.substring(0, ins.pos) + ins.tag + taggedMarkdown.substring(ins.pos);
+    }
+    return taggedMarkdown;
+  }
 
   // Preprocess: add newline before question numbers that follow section headers, Chinese periods, or answer letters
   // e.g., "...共40分。)1. $(1-3i)^2=$" → "...共40分。)\n1. $(1-3i)^2=$"
@@ -892,11 +943,14 @@ export function splitQuestionsByTags(markdown: string): SplitResult {
 
 /**
  * Split questions by tags and save to database (used by confirm-import endpoint)
- * Updates existing questions by sourcePaperId + sourceQuestionNumber match
+ * Updates existing questions by sourcePaperId + sourceQuestionNumber match.
+ * Optional `overrides` map applies AI cleaning results (questionNumber -> cleaned content)
+ * before persisting. Only content/options are overridden; answer/analysis/type come from the split.
  */
 export async function splitQuestionsByTagsAndSave(
   paperId: number,
-  markdown: string
+  markdown: string,
+  overrides?: Map<number, { content: string; options?: string[] }>
 ): Promise<{ success: boolean; created: number; updated: number; error?: string }> {
   const splitResult = splitQuestionsByTags(markdown);
   if (!splitResult.success) {
@@ -907,6 +961,13 @@ export async function splitQuestionsByTagsAndSave(
   let updated = 0;
 
   for (const q of splitResult.questions) {
+    // Apply accepted AI cleaning proposal (if any) — overrides only content/options
+    const override = overrides?.get(q.questionNumber);
+    const content = override && override.content ? override.content : q.content;
+    const options = override && override.content
+      ? (override.options ?? extractOptions(override.content))
+      : q.options;
+
     // Check if question with same sourcePaperId + sourceQuestionNumber exists
     const existing = await prisma.question.findFirst({
       where: {
@@ -920,9 +981,9 @@ export async function splitQuestionsByTagsAndSave(
       await prisma.question.update({
         where: { id: existing.id },
         data: {
-          content: q.content,
+          content,
           questionType: q.questionType,
-          options: q.options ? JSON.stringify(q.options) : null,
+          options: options ? JSON.stringify(options) : null,
           answer: q.correctAnswer || null,
           analysis: q.analysis || null,
           imageUrl: q.imageUrl || null,
@@ -936,9 +997,9 @@ export async function splitQuestionsByTagsAndSave(
         data: {
           paperId,
           questionNumber: q.questionNumber,
-          content: q.content,
+          content,
           questionType: q.questionType,
-          options: q.options ? JSON.stringify(q.options) : null,
+          options: options ? JSON.stringify(options) : null,
           answer: q.correctAnswer || null,
           analysis: q.analysis || null,
           imageUrl: q.imageUrl || null,
