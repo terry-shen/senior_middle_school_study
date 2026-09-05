@@ -13,6 +13,13 @@ import { renderAllPages, savePageImage } from '../services/mcq-extractor-service
 import { parseWithMinerU, checkMinerUAvailable } from '../services/mineru-service';
 import { recognizeTextFromImage } from '../services/ocr-service';
 import { splitQuestionsFromPaper, splitQuestionsFromMarkdown, autoTagQuestions, splitQuestionsByTags, splitQuestionsByTagsAndSave } from '../services/question-splitting-service';
+import {
+  enrichPaper,
+  getEnrichmentStatus,
+  setProposalStatus,
+  getAcceptedProposals,
+  clearProposals,
+} from '../services/enricher-service';
 import { requireAuth, requireAdmin } from '../middleware/permission';
 import {
   validateAllQuestions,
@@ -347,7 +354,9 @@ router.post('/:id/split-preview', requireAdmin, async (req: Request, res: Respon
 
 /**
  * POST /api/papers/:id/confirm-import
- * Confirm import: split questions and create DB records
+ * Confirm import: split questions and create DB records.
+ * Applies accepted AI cleaning proposals (EnrichmentProposal status=accepted) to
+ * override content/options by questionNumber, then clears consumed proposals.
  */
 router.post('/:id/confirm-import', requireAdmin, async (req: Request, res: Response) => {
   try {
@@ -363,12 +372,92 @@ router.post('/:id/confirm-import', requireAdmin, async (req: Request, res: Respo
     if (!markdown || markdown.length < 10) {
       return res.status(400).json({ error: 'No markdown content to split' });
     }
+
+    // Build overrides from accepted AI cleaning proposals (content only; answer/analysis untouched)
+    const accepted = await getAcceptedProposals(id);
+    const overrides = new Map<number, { content: string }>();
+    for (const p of accepted) {
+      overrides.set(p.questionNumber, { content: p.cleanedText });
+    }
+    if (overrides.size > 0) {
+      console.log(`[confirm-import] Applying ${overrides.size} accepted cleaning proposals for paper ${id}`);
+    }
+
     // Use tag-based splitting and save (updates existing by sourceQuestionNumber match)
-    const result = await splitQuestionsByTagsAndSave(id, markdown);
+    const result = await splitQuestionsByTagsAndSave(id, markdown, overrides);
     if (!result.success) {
       return res.status(400).json({ error: result.error });
     }
-    res.json({ success: true, created: result.created, updated: result.updated, total: result.created + result.updated });
+
+    // Clean up consumed proposals so re-running import won't double-apply
+    if (overrides.size > 0) {
+      await clearProposals(id);
+    }
+
+    res.json({
+      success: true,
+      created: result.created,
+      updated: result.updated,
+      total: result.created + result.updated,
+      appliedCleanings: overrides.size,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/papers/:id/enrich
+ * Run AI faithful-restoration cleaning on split questions (sync; may take minutes).
+ * Results are stored as EnrichmentProposal (status=pending) and never auto-persist to Question.
+ */
+router.post('/:id/enrich', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid paper ID' });
+    }
+    const summary = await enrichPaper(id);
+    res.json({ success: true, summary });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/papers/:id/enrich/status
+ * Get enrichment proposals + statistics for a paper
+ */
+router.get('/:id/enrich/status', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid paper ID' });
+    }
+    const status = await getEnrichmentStatus(id);
+    res.json({ success: true, ...status });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PATCH /api/papers/:id/enrich/proposals/:questionNumber
+ * Accept or reject a single AI cleaning proposal (human review decision)
+ */
+router.patch('/:id/enrich/proposals/:questionNumber', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string);
+    const questionNumber = parseInt(req.params.questionNumber as string);
+    if (isNaN(id) || isNaN(questionNumber)) {
+      return res.status(400).json({ error: 'Invalid paper ID or question number' });
+    }
+    const { status } = req.body;
+    if (status !== 'accepted' && status !== 'rejected') {
+      return res.status(400).json({ error: 'status must be "accepted" or "rejected"' });
+    }
+    await setProposalStatus(id, questionNumber, status);
+    res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
