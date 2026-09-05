@@ -76,3 +76,6 @@ desktop.ini
 *.tmp
 *.bak
 *.cache
+
+# Python virtualenv
+.venv-py312/
