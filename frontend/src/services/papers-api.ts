@@ -334,13 +334,98 @@ export async function splitPreview(token: string, paperId: number): Promise<{ su
 /**
  * Confirm import: split questions and create DB records
  */
-export async function confirmImport(token: string, paperId: number): Promise<{ success: boolean; questionsCreated?: number; error?: string }> {
+export async function confirmImport(token: string, paperId: number): Promise<{ success: boolean; questionsCreated?: number; appliedCleanings?: number; error?: string }> {
   const response = await fetch(`${API_BASE}/papers/${paperId}/confirm-import`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
   });
   const data = await response.json().catch(() => ({ success: false, error: `确认导入失败 (${response.status})` }));
   return data;
+}
+
+// ============ AI 忠实还原清洗 (paper-enrichment) ============
+
+export interface EnrichmentSummary {
+  total: number;
+  changed: number;
+  failed: number;
+  unchanged: number;
+}
+
+export interface EnrichmentProposal {
+  questionNumber: number;
+  originalText: string;
+  cleanedText: string;
+  changes: string[];
+  confidence: number;
+  status: 'pending' | 'accepted' | 'rejected';
+}
+
+export interface EnrichmentStatus {
+  total: number;
+  changed: number;
+  accepted: number;
+  rejected: number;
+  pending: number;
+  needsReview: number;
+  proposals: EnrichmentProposal[];
+}
+
+/**
+ * Run AI faithful-restoration cleaning on split questions.
+ * NOTE: synchronous long-running call (~10-60 min for large papers) — do not set a client timeout.
+ */
+export async function enrichPaper(token: string, paperId: number): Promise<{ success: boolean; summary?: EnrichmentSummary; error?: string }> {
+  const response = await fetch(`${API_BASE}/papers/${paperId}/enrich`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await response.json().catch(() => ({ success: false, error: `AI 清洗失败 (${response.status})` }));
+  return data;
+}
+
+/**
+ * Get enrichment proposals + statistics for a paper
+ */
+export async function getEnrichmentStatus(token: string, paperId: number): Promise<EnrichmentStatus> {
+  const response = await fetch(`${API_BASE}/papers/${paperId}/enrich/status`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    throw new Error(`获取清洗状态失败 (${response.status})`);
+  }
+  const data = await response.json();
+  return {
+    total: data.total || 0,
+    changed: data.changed || 0,
+    accepted: data.accepted || 0,
+    rejected: data.rejected || 0,
+    pending: data.pending || 0,
+    needsReview: data.needsReview || 0,
+    proposals: Array.isArray(data.proposals) ? data.proposals : [],
+  };
+}
+
+/**
+ * Accept or reject a single AI cleaning proposal
+ */
+export async function setEnrichmentProposalStatus(
+  token: string,
+  paperId: number,
+  questionNumber: number,
+  status: 'accepted' | 'rejected'
+): Promise<{ success: boolean }> {
+  const response = await fetch(`${API_BASE}/papers/${paperId}/enrich/proposals/${questionNumber}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ status }),
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`更新清洗提议失败 (${response.status}): ${text.substring(0, 200)}`);
+  }
+  return response.json();
 }
 
 export interface MultiImportResult {
