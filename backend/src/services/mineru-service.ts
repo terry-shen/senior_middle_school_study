@@ -11,7 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawn, execFile } from 'child_process';
 
-const PARSE_TIMEOUT = 600000; // 10 minutes
+const PARSE_TIMEOUT = 1200000; // 20 minutes — 31MB scanned PDFs take up to ~15 min (measured 906s on 蔡德锦 2000题)
 
 export interface MinerUParseResult {
   success: boolean;
