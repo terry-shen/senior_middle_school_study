@@ -397,6 +397,7 @@ model ExamPaper {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   questions   Question[]
+  enrichmentProposals EnrichmentProposal[]
 
   @@index([year])
   @@index([region])
@@ -404,6 +405,28 @@ model ExamPaper {
   @@index([status])
   @@index([sourceFormat])
   @@map("exam_papers")
+}
+
+// AI 题目清洗提议（忠实还原审核）
+// 拆分预览阶段生成，人工逐题接受/驳回后才随 confirm-import 写入 Question
+model EnrichmentProposal {
+  id             Int      @id @default(autoincrement())
+  paperId        Int      @map("paper_id")
+  questionNumber Int      @map("question_number") // 对应 Question.questionNumber
+  originalText   String   @map("original_text") // 清洗前题目全文（含选项）
+  cleanedText    String   @map("cleaned_text") // 清洗后题目全文
+  changes        String   @default("[]") @map("changes") // JSON 数组：逐条修改理由
+  confidence     Float    @default(0) // 0-1，低于阈值标"需复核"
+  status         String   @default("pending") // pending / accepted / rejected
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  paper          ExamPaper @relation(fields: [paperId], references: [id], onDelete: Cascade)
+
+  @@unique([paperId, questionNumber])
+  @@index([paperId])
+  @@index([status])
+  @@map("enrichment_proposals")
 }
 
 model Question {
