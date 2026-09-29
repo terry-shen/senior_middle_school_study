@@ -14,6 +14,7 @@ export interface OnlineExam {
   endTime: Date | null;
   status: 'draft' | 'published' | 'ongoing' | 'ended';
   createdAt: Date;
+  paper?: { id: number; pdfUrl?: string; purpose?: string; title?: string };
 }
 
 export interface ExamRecord {
@@ -41,7 +42,7 @@ export interface AnswerRecord {
 export interface ExamQuestion {
   id: number;
   content: string;
-  questionType: 'choice' | 'fill' | 'essay';
+  questionType: 'single_choice' | 'multiple_choice' | 'choice' | 'fill' | 'essay';
   score: number;
   options?: string[];
 }
@@ -53,6 +54,7 @@ export async function createExam(
     questionIds: number[];
     totalScore: number;
     duration: number;
+    paperId?: number;
   },
   token: string
 ): Promise<{ exam?: OnlineExam; error?: string }> {

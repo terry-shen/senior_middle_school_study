@@ -248,4 +248,16 @@
 
 .btn-create:hover {
   background: #4338ca;
+}.whole-paper-banner {
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: #795548;
 }
+.whole-paper-banner strong {
+  color: #f57f17;
+}
+
