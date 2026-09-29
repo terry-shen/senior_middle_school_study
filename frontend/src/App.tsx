@@ -14,7 +14,8 @@ const ModelManagement = lazy(() => import('./components/ModelManagement'));
 const StudentManagement = lazy(() => import('./pages/StudentManagement'));
 const KnowledgePointManagement = lazy(() => import('./pages/KnowledgePointManagement'));
 const KnowledgePointImport = lazy(() => import('./pages/KnowledgePointImport'));
-const PaperImport = lazy(() => import('./pages/PaperImport'));
+const PaperLibrary = lazy(() => import('./pages/PaperLibrary'));
+const QuestionBank = lazy(() => import('./pages/QuestionBank'));
 const PaperEdit = lazy(() => import('./pages/PaperEdit'));
 const SplitPreview = lazy(() => import('./pages/SplitPreview'));
 const QuestionList = lazy(() => import('./pages/QuestionList'));
@@ -27,13 +28,16 @@ const GradingReview = lazy(() => import('./pages/GradingReview'));
 const WrongQuestionBook = lazy(() => import('./pages/WrongQuestionBook'));
 const MockExamPage = lazy(() => import('./pages/MockExam'));
 const LearningIncentive = lazy(() => import('./pages/LearningIncentive'));
+const AnswerSheetsList = lazy(() => import('./pages/AnswerSheetsList'));
+const AnswerSheetDetail = lazy(() => import('./pages/AnswerSheetDetail'));
 
 function Home() {
   const { user, logout } = useAuth();
 
   const adminFeatures = [
     { icon: '📚', title: '学生管理', desc: '管理学生账号和班级', link: '/students' },
-    { icon: '📥', title: '试卷导入', desc: 'PDF/图片导入试题', link: '/papers' },
+    { icon: '📚', title: '试卷库', desc: '整卷导入/分类/发布考试', link: '/paper-library' },
+    { icon: '✂️', title: '题库管理', desc: '拆分导入/编辑校准/入库', link: '/question-bank' },
     { icon: '📊', title: '难度管理', desc: 'AI驱动的难度评估', link: '/difficulty' },
     { icon: '📝', title: '自动出卷', desc: '智能组卷生成试卷', link: '/exams' },
     { icon: '🎯', title: '模拟考试', desc: '限时模拟考试场景', link: '/mock-exams' },
@@ -167,12 +171,28 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/papers"
+        path="/paper-library"
         element={
-          <ProtectedRoute requireAdmin>
-            <PaperImport />
+          <ProtectedRoute>
+            <PaperLibrary />
           </ProtectedRoute>
         }
+      />
+      <Route
+        path="/question-bank"
+        element={
+          <ProtectedRoute requireAdmin>
+            <QuestionBank />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/papers"
+        element={<Navigate to="/question-bank" replace />}
+      />
+      <Route
+        path="/papers/import-whole"
+        element={<Navigate to="/paper-library" replace />}
       />
       <Route
         path="/papers/:id/edit"
@@ -217,7 +237,7 @@ function AppRoutes() {
       <Route
         path="/online-exams"
         element={
-          <ProtectedRoute requireAdmin>
+          <ProtectedRoute>
             <OnlineExamManagement />
           </ProtectedRoute>
         }
@@ -235,6 +255,22 @@ function AppRoutes() {
         element={
           <ProtectedRoute requireAdmin>
             <GradingReview />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/answer-sheets"
+        element={
+          <ProtectedRoute>
+            <AnswerSheetsList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/answer-sheets/:id"
+        element={
+          <ProtectedRoute>
+            <AnswerSheetDetail />
           </ProtectedRoute>
         }
       />
@@ -274,12 +310,14 @@ function AppContent() {
 
   const adminLinks = [
     { to: '/students', label: '学生管理' },
-    { to: '/papers', label: '试卷导入' },
+    { to: '/paper-library', label: '试卷库' },
+    { to: '/question-bank', label: '题库管理' },
     { to: '/difficulty', label: '难度管理' },
     { to: '/exams', label: '自动出卷' },
     { to: '/mock-exams', label: '模拟考试' },
     { to: '/online-exams', label: '在线测验' },
     { to: '/grading', label: 'AI批改' },
+    { to: '/answer-sheets', label: '答题纸阅卷' },
     { to: '/models', label: '模型管理' },
   ];
 
@@ -287,6 +325,7 @@ function AppContent() {
     { to: '/online-exams', label: '在线测验' },
     { to: '/wrong-questions', label: '错题本' },
     { to: '/mock-exams', label: '模拟考试' },
+    { to: '/answer-sheets', label: '我的答题纸' },
     { to: '/incentive', label: '学习激励' },
   ];
 
