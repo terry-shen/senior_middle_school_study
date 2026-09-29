@@ -10,7 +10,7 @@ import path from 'path';
 import fs from 'fs';
 import { extractTextFromPDF, extractTextFromPDFEnhanced } from '../services/pdf-service';
 import { renderAllPages, savePageImage } from '../services/mcq-extractor-service';
-import { parseWithMinerU, checkMinerUAvailable } from '../services/mineru-service';
+import { parseWithMinerU, checkMinerUAvailable, convertWordToPdf } from '../services/mineru-service';
 import { recognizeTextFromImage } from '../services/ocr-service';
 import { splitQuestionsFromPaper, splitQuestionsFromMarkdown, autoTagQuestions, splitQuestionsByTags, splitQuestionsByTagsAndSave } from '../services/question-splitting-service';
 import {
@@ -30,6 +30,7 @@ import { generateExamPDF, generateExamWord, ExportQuestion } from '../services/e
 import { convertImage, ensureQuestionImagesDir, resizeImage } from '../services/question-image-service';
 import { parseDocx, parseDocLegacy, getWordFormat, parseDocxEnhanced } from '../services/word-service';
 import { parseText } from '../services/text-service';
+import { autoExtractMetadata } from '../services/paper-metadata-service';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -106,6 +107,132 @@ const upload = multer({
   limits: {
     fileSize: 50 * 1024 * 1024, // 50MB limit
   },
+});
+
+/**
+ * POST /api/papers/import-whole
+ * Import a whole exam paper (PDF/Word) as raw file WITHOUT MinerU parsing or question splitting.
+ * Stores the original file + metadata and creates ExamPaper(purpose='whole_paper').
+ */
+router.post('/import-whole', requireAuth, requireAdmin, upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: '未选择文件' });
+    }
+
+    // Parse metadata from form fields (user-provided values take priority)
+    const originalFileName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+
+    // Auto-extract metadata from filename (whole-paper import has no Markdown)
+    const autoMeta = autoExtractMetadata({
+      filename: originalFileName,
+      markdown: null,
+      userProvided: {
+        ...(req.body.title ? { title: req.body.title as string } : {}),
+        ...(req.body.year ? { year: parseInt(req.body.year) } : {}),
+        ...(req.body.region ? { region: req.body.region as string } : {}),
+        ...(req.body.examType ? { examType: req.body.examType as string } : {}),
+        ...(req.body.totalScore ? { totalScore: parseInt(req.body.totalScore) } : {}),
+        ...(req.body.duration ? { duration: parseInt(req.body.duration) } : {}),
+        ...(req.body.subject ? { subject: req.body.subject as string } : {}),
+        ...(req.body.school ? { school: req.body.school as string } : {}),
+      },
+    });
+
+    const paper = await prisma.examPaper.create({
+      data: {
+        title: autoMeta.title || req.body.title || originalFileName.replace(/\.[^.]+$/, ''),
+        year: autoMeta.year,
+        region: autoMeta.region,
+        examType: autoMeta.examType,
+        totalScore: autoMeta.totalScore,
+        duration: autoMeta.duration,
+        subject: autoMeta.subject,
+        school: req.body.school as string | undefined,
+        sourceFormat: req.file.mimetype.includes('pdf') ? 'pdf' : 'word',
+        purpose: 'whole_paper',
+        pdfUrl: `/uploads/papers/${req.file.filename}`,
+        status: 'uploaded',
+      },
+    });
+
+    res.status(201).json({ success: true, paper });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/papers/import-whole-multiple
+ * Import MULTIPLE exam papers (folder import) as whole papers:
+ * stores each original file + auto-extracted metadata, NO MinerU parse / question splitting.
+ * Creates an ExamPaper(purpose='whole_paper') per file.
+ */
+const wholeMultiUpload = upload.array('files', 50);
+
+router.post('/import-whole-multiple', requireAuth, requireAdmin, (req: Request, res: Response) => {
+  wholeMultiUpload(req, res, async (err: any) => {
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+
+    const results: any[] = [];
+    for (const file of files) {
+      try {
+        const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+        // Auto-extract metadata from filename (whole-paper has no parsed markdown)
+        const autoMeta = autoExtractMetadata({
+          filename: originalName,
+          markdown: null,
+          userProvided: {
+            ...(req.body.title ? { title: req.body.title as string } : {}),
+            ...(req.body.year ? { year: parseInt(req.body.year) } : {}),
+            ...(req.body.region ? { region: req.body.region as string } : {}),
+            ...(req.body.examType ? { examType: req.body.examType as string } : {}),
+            ...(req.body.subject ? { subject: req.body.subject as string } : {}),
+            ...(req.body.school ? { school: req.body.school as string } : {}),
+          },
+        });
+
+        const paper = await prisma.examPaper.create({
+          data: {
+            title: autoMeta.title || originalName.replace(/\.[^.]+$/, ''),
+            year: autoMeta.year,
+            region: autoMeta.region,
+            examType: autoMeta.examType,
+            totalScore: autoMeta.totalScore,
+            duration: autoMeta.duration,
+            subject: autoMeta.subject,
+            school: req.body.school as string | undefined,
+            sourceFormat: file.mimetype.includes('pdf') ? 'pdf' : (file.mimetype.includes('word') || file.originalname.toLowerCase().endsWith('.docx') || file.originalname.toLowerCase().endsWith('.doc')) ? 'word' : 'image',
+            purpose: 'whole_paper',
+            pdfUrl: `/uploads/papers/${file.filename}`,
+            status: 'uploaded',
+          },
+        });
+
+        results.push({
+          fileName: originalName,
+          success: true,
+          paperId: paper.id,
+          title: paper.title,
+          sourceFormat: paper.sourceFormat,
+          purpose: 'whole_paper',
+          contentLength: 0,
+          hasMathContent: false,
+        });
+      } catch (fileErr: any) {
+        const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+        results.push({ fileName: originalName, success: false, error: fileErr.message });
+      }
+    }
+
+    res.status(201).json({ success: true, results });
+  });
 });
 
 /**
@@ -211,36 +338,71 @@ router.post('/import', requireAuth, upload.single('file'), async (req: Request, 
     } else if (ext === '.docx' || ext === '.doc') {
       sourceFormat = 'word';
 
-      // Try MinerU first for Word documents too
-      const mineruAvailable = await checkMinerUAvailable();
-      if (mineruAvailable) {
-        console.log('[papers-import] Using MinerU for Word parsing...');
-        const mineruResult = await parseWithMinerU(filePath);
-        if (mineruResult.success && mineruResult.markdown) {
-          parsedMarkdown = mineruResult.markdown;
-          rawContent = mineruResult.markdown;
-          hasMathContent = (mineruResult.latexFormulas?.length || 0) > 0;
-          extractionFallback = false;
-          parserUsed = 'mineru';
-        }
+      // Convert Word → PDF first (MS Word COM) so MinerU's vision pipeline can
+      // recognize formulas as LaTeX. MinerU cannot process .docx directly —
+      // without LibreOffice it exports embedded WMF formula objects as images
+      // instead of LaTeX. If conversion fails, fall back to direct MinerU
+      // (works in LibreOffice-equipped environments) then mammoth extraction.
+      let parseTarget = filePath;
+      let tempPdf: string | null = null;
+      try {
+        tempPdf = await convertWordToPdf(filePath);
+        parseTarget = tempPdf;
+        console.log('[papers-import] Word→PDF conversion OK, parsing converted PDF with MinerU...');
+      } catch (convErr) {
+        console.warn(`[papers-import] Word→PDF conversion failed (${(convErr as Error).message}), trying direct MinerU...`);
       }
 
-      // Fallback to enhanced Word extraction
-      if (parserUsed === 'unknown') {
-        const enhancedResult = await parseDocxEnhanced(filePath);
-        hasMathContent = enhancedResult.hasMathContent;
-        extractionFallback = enhancedResult.fallback;
-        parserUsed = enhancedResult.fallback ? 'pdfjs' : 'mcq-extractor';
-        if (enhancedResult.items && enhancedResult.items.length > 0) {
-          rawContent = JSON.stringify({
-            __type: 'mcq_extractor',
-            items: enhancedResult.items,
-            rawText: enhancedResult.rawText,
-            hasMathContent: enhancedResult.hasMathContent,
-            fallback: enhancedResult.fallback,
-          });
-        } else {
-          rawContent = enhancedResult.rawText || '';
+      try {
+        // Try MinerU (on the converted PDF when available)
+        const mineruAvailable = await checkMinerUAvailable();
+        if (mineruAvailable) {
+          console.log('[papers-import] Using MinerU for Word parsing...');
+          const mineruResult = await parseWithMinerU(parseTarget);
+          if (mineruResult.success && mineruResult.markdown) {
+            parsedMarkdown = mineruResult.markdown;
+            rawContent = mineruResult.markdown; // Store markdown as rawContent for splitting
+            hasMathContent = (mineruResult.latexFormulas?.length || 0) > 0;
+            extractionFallback = false;
+            parserUsed = 'mineru';
+            console.log(`[papers-import] MinerU success: ${mineruResult.markdown.length} chars, ${mineruResult.latexFormulas?.length || 0} LaTeX formulas, ${mineruResult.processingTime}s`);
+            // Auto-tag questions in the markdown for later tag-based splitting
+            try {
+              const tagged = autoTagQuestions(mineruResult.markdown);
+              if (tagged !== mineruResult.markdown) {
+                editedMarkdown = tagged;
+                console.log(`[papers-import] Auto-tagged questions in markdown`);
+              }
+            } catch (tagErr) {
+              console.warn(`[papers-import] Auto-tagging failed:`, (tagErr as Error).message);
+            }
+          } else {
+            console.warn(`[papers-import] MinerU failed: ${mineruResult.error}, falling back to enhanced extraction`);
+          }
+        }
+
+        // Fallback to enhanced Word extraction (always on the original .docx)
+        if (parserUsed === 'unknown') {
+          const enhancedResult = await parseDocxEnhanced(filePath);
+          hasMathContent = enhancedResult.hasMathContent;
+          extractionFallback = enhancedResult.fallback;
+          parserUsed = enhancedResult.fallback ? 'pdfjs' : 'mcq-extractor';
+          if (enhancedResult.items && enhancedResult.items.length > 0) {
+            rawContent = JSON.stringify({
+              __type: 'mcq_extractor',
+              items: enhancedResult.items,
+              rawText: enhancedResult.rawText,
+              hasMathContent: enhancedResult.hasMathContent,
+              fallback: enhancedResult.fallback,
+            });
+          } else {
+            rawContent = enhancedResult.rawText || '';
+          }
+        }
+      } finally {
+        // Clean up the temporary converted PDF
+        if (tempPdf) {
+          try { fs.unlinkSync(tempPdf); } catch { /* non-fatal */ }
         }
       }
     } else if (ext === '.txt') {
@@ -258,14 +420,27 @@ router.post('/import', requireAuth, upload.single('file'), async (req: Request, 
       }
     }
 
-    // Create paper record
+    // Create paper record (auto-extract metadata from filename + parsed markdown)
+    const autoMeta = autoExtractMetadata({
+      filename: originalName,
+      markdown: parsedMarkdown || rawContent,
+      userProvided: {
+        ...(title ? { title: title as string } : {}),
+        ...(year ? { year: parseInt(year) } : {}),
+        ...(region ? { region: region as string } : {}),
+        ...(examType ? { examType: examType as string } : {}),
+        ...(totalScore ? { totalScore: parseInt(totalScore) } : {}),
+        ...(duration ? { duration: parseInt(duration) } : {}),
+      },
+    });
+
     const paper = await prisma.examPaper.create({
       data: {
-        title: title || path.basename(originalName, ext),
+        title: autoMeta.title || path.basename(originalName, ext),
         source: source || 'Unknown',
-        year: year ? parseInt(year) : new Date().getFullYear(),
-        region: region || 'Unknown',
-        examType: examType || 'practice',
+        year: autoMeta.year,
+        region: autoMeta.region,
+        examType: autoMeta.examType,
         rawContent,
         imageUrl,
         pdfUrl,
@@ -274,8 +449,8 @@ router.post('/import', requireAuth, upload.single('file'), async (req: Request, 
         parsedMarkdown,
         editedMarkdown,
         status: 'uploaded',
-        totalScore: totalScore ? parseInt(totalScore) : null,
-        duration: duration ? parseInt(duration) : null,
+        totalScore: autoMeta.totalScore,
+        duration: autoMeta.duration,
       },
     });
 
@@ -373,6 +548,12 @@ router.post('/:id/confirm-import', requireAdmin, async (req: Request, res: Respo
       return res.status(400).json({ error: 'No markdown content to split' });
     }
 
+    // Front-end calibrated questions (authoritative if provided): the user may have
+    // edited content/options/answer/analysis in the split-preview calibration UI.
+    const userEdited = Array.isArray(req.body?.questions) && req.body.questions.length > 0
+      ? req.body.questions
+      : undefined;
+
     // Build overrides from accepted AI cleaning proposals (content only; answer/analysis untouched)
     const accepted = await getAcceptedProposals(id);
     const overrides = new Map<number, { content: string }>();
@@ -383,8 +564,9 @@ router.post('/:id/confirm-import', requireAdmin, async (req: Request, res: Respo
       console.log(`[confirm-import] Applying ${overrides.size} accepted cleaning proposals for paper ${id}`);
     }
 
-    // Use tag-based splitting and save (updates existing by sourceQuestionNumber match)
-    const result = await splitQuestionsByTagsAndSave(id, markdown, overrides);
+    // Use tag-based splitting and save (updates existing by sourceQuestionNumber match).
+    // If user edited the split preview, their data wins over markdown re-split.
+    const result = await splitQuestionsByTagsAndSave(id, markdown, overrides, userEdited);
     if (!result.success) {
       return res.status(400).json({ error: result.error });
     }
@@ -469,7 +651,7 @@ router.patch('/:id/enrich/proposals/:questionNumber', requireAdmin, async (req: 
  * Returns an array of import results (success/failure per file).
  * Does NOT auto-redirect to editor — user stays on import page.
  */
-const multiUpload = upload.array('files', 10);
+const multiUpload = upload.array('files', 50);
 
 router.post('/import-multiple', requireAuth, (req: Request, res: Response) => {
   multiUpload(req, res, async (err: any) => {
@@ -525,23 +707,43 @@ router.post('/import-multiple', requireAuth, (req: Request, res: Response) => {
           }
         } else if (ext === '.docx' || ext === '.doc') {
           sourceFormat = 'word';
-          const mineruAvailable = await checkMinerUAvailable();
-          if (mineruAvailable) {
-            const mineruResult = await parseWithMinerU(filePath);
-            if (mineruResult.success && mineruResult.markdown) {
-              parsedMarkdown = mineruResult.markdown;
-              rawContent = mineruResult.markdown;
-              hasMathContent = (mineruResult.latexFormulas?.length || 0) > 0;
-              parserUsed = 'mineru';
-              try {
-                editedMarkdown = autoTagQuestions(mineruResult.markdown);
-              } catch { /* non-fatal */ }
-            }
+
+          // Convert Word → PDF first (MS Word COM) so MinerU recognizes
+          // formulas as LaTeX instead of exporting them as WMF images.
+          let parseTarget = filePath;
+          let tempPdf: string | null = null;
+          try {
+            tempPdf = await convertWordToPdf(filePath);
+            parseTarget = tempPdf;
+            console.log(`[import-multiple] Word→PDF conversion OK: ${originalName}`);
+          } catch (convErr) {
+            console.warn(`[import-multiple] Word→PDF conversion failed (${(convErr as Error).message}): ${originalName}`);
           }
-          if (parserUsed === 'unknown') {
-            const enhancedResult = await parseDocxEnhanced(filePath);
-            rawContent = enhancedResult.rawText || '';
-            parserUsed = 'word';
+
+          try {
+            const mineruAvailable = await checkMinerUAvailable();
+            if (mineruAvailable) {
+              const mineruResult = await parseWithMinerU(parseTarget);
+              if (mineruResult.success && mineruResult.markdown) {
+                parsedMarkdown = mineruResult.markdown;
+                rawContent = mineruResult.markdown;
+                hasMathContent = (mineruResult.latexFormulas?.length || 0) > 0;
+                parserUsed = 'mineru';
+                try {
+                  editedMarkdown = autoTagQuestions(mineruResult.markdown);
+                } catch { /* non-fatal */ }
+              }
+            }
+            if (parserUsed === 'unknown') {
+              const enhancedResult = await parseDocxEnhanced(filePath);
+              rawContent = enhancedResult.rawText || '';
+              parserUsed = 'word';
+            }
+          } finally {
+            // Clean up the temporary converted PDF
+            if (tempPdf) {
+              try { fs.unlinkSync(tempPdf); } catch { /* non-fatal */ }
+            }
           }
         } else if (ext === '.txt') {
           const { parseText } = require('../services/text-service');
@@ -553,19 +755,35 @@ router.post('/import-multiple', requireAuth, (req: Request, res: Response) => {
           continue;
         }
 
+        // Auto-extract metadata per file (filename + this file's parsed markdown)
+        const autoMeta = autoExtractMetadata({
+          filename: originalName,
+          markdown: parsedMarkdown || rawContent,
+          userProvided: {
+            ...(title ? { title: title as string } : {}),
+            ...(year ? { year: parseInt(year) } : {}),
+            ...(region ? { region: region as string } : {}),
+            ...(examType ? { examType: examType as string } : {}),
+            ...(totalScore ? { totalScore: parseInt(totalScore) } : {}),
+            ...(duration ? { duration: parseInt(duration) } : {}),
+          },
+        });
+
         const paper = await prisma.examPaper.create({
           data: {
-            title: title || path.basename(originalName, ext),
+            title: autoMeta.title || path.basename(originalName, ext),
             source: source || 'Unknown',
-            year: year ? parseInt(year) : new Date().getFullYear(),
-            region: region || 'Unknown',
-            examType: examType || 'practice',
+            year: autoMeta.year,
+            region: autoMeta.region,
+            examType: autoMeta.examType,
             rawContent,
             pdfUrl,
             sourceFormat,
             parsedMarkdown,
             editedMarkdown,
             status: 'uploaded',
+            totalScore: autoMeta.totalScore,
+            duration: autoMeta.duration,
           },
         });
 
@@ -613,6 +831,52 @@ router.get('/:id/download-source', requireAuth, async (req: Request, res: Respon
 });
 
 /**
+ * GET /api/papers/:id/download-file
+ * Download the original whole-paper file (for students to print).
+ * Student access requires the paper to be published as an Exam assigned to them.
+ */
+router.get('/:id/download-file', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid paper ID' });
+    }
+    const paper = await prisma.examPaper.findUnique({ where: { id } });
+    if (!paper || !paper.pdfUrl) {
+      return res.status(404).json({ error: '试卷文件不存在' });
+    }
+    // Students can only download whole_paper files that are published and assigned to them
+    if (req.user?.role !== 'admin') {
+      if (paper.purpose !== 'whole_paper') {
+        return res.status(403).json({ error: '仅整卷可下载' });
+      }
+      const assignedExam = await prisma.exam.findFirst({
+        where: {
+          status: 'published',
+          paperId: id, // strictly link this paper to the exam
+          OR: [
+            { assignments: { some: { studentId: req.user!.id } } },
+            { assignments: { some: { class: { students: { some: { id: req.user!.id } } } } } },
+          ],
+        },
+        include: { assignments: true },
+      });
+      // Verify this exam is linked to this paper via paperId FK
+      if (!assignedExam) {
+        return res.status(403).json({ error: '未分配此试卷' });
+      }
+    }
+    const filePath = path.join(process.cwd(), paper.pdfUrl.replace(/^\//, ''));
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: '试卷文件不存在' });
+    }
+    res.download(filePath, paper.title + path.extname(filePath));
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/papers/:id/split
  * Split questions from an exam paper (legacy endpoint, kept for backward compatibility)
  */
@@ -648,7 +912,7 @@ router.post('/:id/split', requireAdmin, async (req: Request, res: Response) => {
  */
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
-    const { status, source, year } = req.query;
+    const { status, source, year, purpose } = req.query;
 
     const where: any = {};
     if (status) {
@@ -659,6 +923,9 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     }
     if (year) {
       where.year = parseInt(year as string);
+    }
+    if (purpose) {
+      where.purpose = purpose as string;
     }
 
     const papers = await prisma.examPaper.findMany({
