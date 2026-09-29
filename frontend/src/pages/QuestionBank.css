@@ -190,3 +190,136 @@ tr:hover {
   background: #f8d7da;
   color: #721c24;
 }
+/* 整卷/拆分入口按钮 */
+.import-entry-buttons {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.entry-btn {
+  flex: 1;
+  padding: 20px;
+  background: #f8f9fa;
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.2s;
+}
+.entry-btn:hover {
+  border-color: #17a2b8;
+  background: #f0fcfd;
+}
+.entry-btn.entry-active {
+  border-color: #17a2b8;
+  background: #e6f7ff;
+}
+.entry-icon { font-size: 28px; }
+.entry-title { font-size: 16px; font-weight: 600; color: #333; }
+.entry-desc { font-size: 12px; color: #888; }
+
+/* 用途徽章 */
+.purpose-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.purpose-whole {
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffe082;
+}
+.purpose-source {
+  background: #d1ecf1;
+  color: #0c5460;
+  border: 1px solid #bee5eb;
+}
+.paper-title-cell {
+  font-weight: 600;
+}
+.paper-meta-line {
+  font-size: 12px;
+  color: #888;
+  margin-top: 2px;
+}
+.meta-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.meta-modal {
+  background: #fff;
+  border-radius: 10px;
+  padding: 24px;
+  width: 460px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+}
+.meta-modal h3 {
+  margin: 0 0 4px;
+}
+.meta-modal-hint {
+  color: #999;
+  font-size: 12px;
+  margin: 0 0 16px;
+}
+.meta-form-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.meta-form-row label {
+  width: 90px;
+  text-align: right;
+  flex-shrink: 0;
+  color: #555;
+}
+.meta-form-row input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.meta-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+.btn-primary {
+  background: #1976d2;
+  color: #fff;
+}
+.btn-primary:hover {
+  background: #1565c0;
+}
+.dir-label {
+  cursor: pointer;
+  background: #e8f5e9;
+  border: 1px dashed #66bb6a;
+  color: #2e7d32;
+  border-radius: 6px;
+}
+.dir-label:hover {
+  background: #c8e6c9;
+}
+.btn-publish {
+  background: #ff9800;
+  color: #fff;
+  border: none;
+}
+.btn-publish:hover {
+  background: #f57c00;
+}

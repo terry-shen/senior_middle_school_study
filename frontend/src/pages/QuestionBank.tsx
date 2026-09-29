@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { importFromImage, importFromPDF, splitQuestions, getPapers, deletePaper, importMultipleFiles } from '../services/papers-api';
+import { importFromImage, importFromPDF, splitQuestions, getPapers, deletePaper, importMultipleFiles, updatePaper } from '../services/papers-api';
 import type { ExamPaper, MultiImportResult } from '../services/papers-api';
-import './PaperImport.css';
+import './QuestionBank.css';
 
 type Paper = ExamPaper;
 
-export default function PaperImport() {
+export default function QuestionBank() {
   const { token } = useAuth();
   const navigate = useNavigate();
   const [files, setFiles] = useState<File[]>([]);
@@ -17,6 +17,55 @@ export default function PaperImport() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [multiResults, setMultiResults] = useState<MultiImportResult[]>([]);
+
+  // Metadata editing modal state
+  const [editMetaPaper, setEditMetaPaper] = useState<Paper | null>(null);
+  const [metaForm, setMetaForm] = useState({
+    title: '',
+    source: '',
+    year: '' as string,
+    region: '',
+    examType: '',
+    totalScore: '' as string,
+    duration: '' as string,
+  });
+  const [savingMeta, setSavingMeta] = useState(false);
+
+  const handleEditMeta = (paper: Paper) => {
+    setMetaForm({
+      title: paper.title || '',
+      source: paper.source || '',
+      year: paper.year ? String(paper.year) : '',
+      region: paper.region || '',
+      examType: paper.examType || '',
+      totalScore: paper.totalScore ? String(paper.totalScore) : '',
+      duration: paper.duration ? String(paper.duration) : '',
+    });
+    setEditMetaPaper(paper);
+  };
+
+  const handleSaveMeta = async () => {
+    if (!token || !editMetaPaper) return;
+    setSavingMeta(true);
+    try {
+      const data: any = {
+        title: metaForm.title,
+        source: metaForm.source,
+      };
+      if (metaForm.year) data.year = parseInt(metaForm.year);
+      if (metaForm.region) data.region = metaForm.region;
+      if (metaForm.examType) data.examType = metaForm.examType;
+      if (metaForm.totalScore) data.totalScore = parseInt(metaForm.totalScore);
+      if (metaForm.duration) data.duration = parseInt(metaForm.duration);
+      await updatePaper(token, editMetaPaper.id, data);
+      setMessage('元数据已更新');
+      setEditMetaPaper(null);
+      await loadPapers();
+    } catch (e: any) {
+      setError(e.message || '保存失败');
+    }
+    setSavingMeta(false);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -29,7 +78,12 @@ export default function PaperImport() {
   };
 
   const handleImport = async () => {
-    if (files.length === 0) {
+    await runImport(files);
+  };
+
+  // Shared import executor (used by single-file, multi-file and folder import)
+  const runImport = async (fileList: File[]) => {
+    if (fileList.length === 0) {
       setError('请选择文件');
       return;
     }
@@ -44,9 +98,9 @@ export default function PaperImport() {
     setMultiResults([]);
 
     try {
-      if (files.length === 1) {
+      if (fileList.length === 1) {
         // Single file — use original import endpoint
-        const file = files[0];
+        const file = fileList[0];
         let result;
         if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
           result = await importFromPDF(token, file);
@@ -72,11 +126,11 @@ export default function PaperImport() {
         }
       } else {
         // Multi-file — use import-multiple endpoint
-        const result = await importMultipleFiles(token, files);
+        const result = await importMultipleFiles(token, fileList);
         if (result.success && result.results) {
           setMultiResults(result.results);
           const successCount = result.results.filter(r => r.success).length;
-          setMessage(`多文件导入完成: ${successCount}/${files.length} 成功`);
+          setMessage(`多文件导入完成: ${successCount}/${fileList.length} 成功`);
           setFiles([]);
           await loadPapers();
         } else {
@@ -124,7 +178,9 @@ export default function PaperImport() {
     if (!token) return;
     try {
       const data = await getPapers(token);
-      setPapers(Array.isArray(data) ? data : (data as any)?.data || []);
+      const all = Array.isArray(data) ? data : (data as any)?.data || [];
+      // 题库管理仅展示拆分来源试卷（整卷试卷归「试卷库」管理）
+      setPapers(all.filter((p: Paper) => (p as any).purpose !== 'whole_paper'));
     } catch (e) {
       console.error('Failed to load papers:', e);
     }
@@ -152,11 +208,12 @@ export default function PaperImport() {
 
   return (
     <div className="paper-import-container">
-      <h1>试卷导入</h1>
+      <h1>题库管理</h1>
+      <p className="hint">拆分导入：上传试卷 → MinerU 解析 → 编辑校准 → 按题拆分入库。整卷试卷请前往「试卷库」管理。</p>
 
       <div className="import-section">
-        <h2>上传试卷</h2>
-        <p className="hint">支持多文件批量导入。格式: PDF、图片（JPG/PNG）、Word（.docx/.doc）、文本（.txt）</p>
+        <h2>上传试卷（拆分导入）</h2>
+        <p className="hint">支持指定单个文件或多个文件批量导入。格式: PDF、图片（JPG/PNG）、Word（.docx/.doc）、文本（.txt）</p>
         <p className="hint">导入后不会自动跳转编辑器，请在下方列表中手动点击"编辑校准"。</p>
 
         <div className="file-input-wrapper">
@@ -201,7 +258,7 @@ export default function PaperImport() {
               <tbody>
                 {multiResults.map((r, i) => (
                   <tr key={i}>
-                    <td>{r.fileName}</td>
+                    <td title={r.fileName}>{r.fileName}</td>
                     <td>{r.success ? '✅ 成功' : '❌ 失败'}</td>
                     <td>{r.paperId || '-'}</td>
                     <td>{r.parserUsed || '-'}</td>
@@ -241,7 +298,14 @@ export default function PaperImport() {
             <tbody>
               {papers.map((paper) => (
                 <tr key={paper.id}>
-                  <td>{paper.title}</td>
+                  <td>
+                    <div className="paper-title-cell">{paper.title}</div>
+                    <div className="paper-meta-line">
+                      {paper.examType || '-'} · {paper.region || '-'}
+                      {paper.totalScore ? ` · ${paper.totalScore}分` : ''}
+                      {paper.duration ? ` · ${paper.duration}分钟` : ''}
+                    </div>
+                  </td>
                   <td>{paper.source}</td>
                   <td>{paper.sourceFormat || '-'}</td>
                   <td>{paper.year}</td>
@@ -271,6 +335,9 @@ export default function PaperImport() {
                         确认导入
                       </button>
                     )}
+                    <button onClick={() => handleEditMeta(paper)} className="btn-small">
+                      元数据
+                    </button>
                     <button onClick={() => handleDelete(paper.id)} className="btn-small btn-danger">
                       删除
                     </button>
@@ -281,6 +348,51 @@ export default function PaperImport() {
           </table>
         )}
       </div>
+
+      {editMetaPaper && (
+        <div className="meta-modal-overlay" onClick={() => setEditMetaPaper(null)}>
+          <div className="meta-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>编辑元数据</h3>
+            <p className="meta-modal-hint">导入时已自动提取，可在此手工修改</p>
+            <div className="meta-form">
+              <div className="meta-form-row">
+                <label>标题</label>
+                <input type="text" value={metaForm.title} onChange={(e) => setMetaForm({ ...metaForm, title: e.target.value })} />
+              </div>
+              <div className="meta-form-row">
+                <label>来源</label>
+                <input type="text" value={metaForm.source} onChange={(e) => setMetaForm({ ...metaForm, source: e.target.value })} />
+              </div>
+              <div className="meta-form-row">
+                <label>年份</label>
+                <input type="number" value={metaForm.year} onChange={(e) => setMetaForm({ ...metaForm, year: e.target.value })} placeholder="如 2026" />
+              </div>
+              <div className="meta-form-row">
+                <label>地区</label>
+                <input type="text" value={metaForm.region} onChange={(e) => setMetaForm({ ...metaForm, region: e.target.value })} placeholder="如 全国" />
+              </div>
+              <div className="meta-form-row">
+                <label>考试类型</label>
+                <input type="text" value={metaForm.examType} onChange={(e) => setMetaForm({ ...metaForm, examType: e.target.value })} placeholder="如 高考/期中/期末" />
+              </div>
+              <div className="meta-form-row">
+                <label>总分</label>
+                <input type="number" value={metaForm.totalScore} onChange={(e) => setMetaForm({ ...metaForm, totalScore: e.target.value })} placeholder="如 150" />
+              </div>
+              <div className="meta-form-row">
+                <label>时长(分钟)</label>
+                <input type="number" value={metaForm.duration} onChange={(e) => setMetaForm({ ...metaForm, duration: e.target.value })} placeholder="如 120" />
+              </div>
+            </div>
+            <div className="meta-modal-actions">
+              <button className="btn-small" onClick={() => setEditMetaPaper(null)}>取消</button>
+              <button className="btn-small btn-primary" onClick={handleSaveMeta} disabled={savingMeta}>
+                {savingMeta ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
