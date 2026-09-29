@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import MathText from '../components/MathText';
+import AnswerSheetUpload from '../components/AnswerSheetUpload';
 import {
   startExam,
   saveAnswer,
@@ -12,6 +13,7 @@ import {
   getExamById,
 } from '../services/online-exams-api';
 import type { ExamQuestion, ExamRecord } from '../services/online-exams-api';
+import { downloadWholePaperFile, triggerBlobDownload } from '../services/papers-api';
 import './TakeExam.css';
 
 export default function TakeExam() {
@@ -62,6 +64,12 @@ export default function TakeExam() {
     const questionsData = await getExamQuestions(parseInt(examId), token);
     setQuestions(questionsData || []);
 
+    // 整卷考试（无在线题目）：无需查询考试记录，直接显示下载提示页
+    if (examData.questionIds && examData.questionIds.length === 0) {
+      setLoading(false);
+      return;
+    }
+
     // Check if already started
     const existingRecord = await getExamRecord(parseInt(examId), token);
     if (existingRecord && existingRecord.status === 'in_progress') {
@@ -89,13 +97,31 @@ export default function TakeExam() {
   const handleStart = async () => {
     if (!examId || !token) return;
 
-    const result = await startExam(parseInt(examId), token);
-    if (result.record) {
-      setRecord(result.record);
+    const result: any = await startExam(parseInt(examId), token);
+    // Backend POST /:id/start returns the bare ExamRecord (not {record})
+    if (result && result.id) {
+      setRecord(result as ExamRecord);
       setTimeLeft(exam.duration * 60);
     } else {
-      alert(result.error || '无法开始测验');
+      alert(result?.error || '无法开始测验');
     }
+  };
+
+  /**
+   * Return the rendered option list for a question.
+   * Backend may deliver options as an array or as a JSON string; normalize both.
+   */
+  const getQuestionOptions = (q: ExamQuestion): string[] => {
+    if (Array.isArray(q.options)) return q.options;
+    if (typeof q.options === 'string') {
+      try {
+        const parsed = JSON.parse(q.options);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
   };
 
   const handleAnswerChange = (questionId: number, answer: string) => {
@@ -152,6 +178,50 @@ export default function TakeExam() {
     return <div className="loading">加载中...</div>;
   }
 
+  // 整卷考试：questionIds 为空 → 提示下载试卷线下作答
+  if (exam && exam.questionIds && exam.questionIds.length === 0) {
+    return (
+      <div className="take-exam start-page">
+        <h1>{exam.title}</h1>
+        <div className="exam-info">
+          <p>此为整卷考试（无在线题目）</p>
+          <p>总分: {exam.totalScore}</p>
+          <p>时长: {exam.duration} 分钟</p>
+        </div>
+        {exam.paper?.pdfUrl && (
+          <button
+            onClick={async () => {
+              if (!token) {
+                alert('请先登录');
+                return;
+              }
+              try {
+                const ext = (exam.paper!.pdfUrl || '').split('.').pop() || 'doc';
+                const { blob, filename } = await downloadWholePaperFile(token, exam.paper!.id, `${exam.title}.${ext}`);
+                triggerBlobDownload(blob, filename);
+              } catch (e: any) {
+                alert(e.message || '下载失败');
+              }
+            }}
+            className="btn-start"
+            style={{ display: 'inline-block', cursor: 'pointer' }}
+          >
+            下载试卷
+          </button>
+        )}
+        <p className="hint">请下载试卷后线下作答</p>
+
+        {exam.paper?.id && (
+          <AnswerSheetUpload
+            token={token!}
+            scene={{ wholePaperId: exam.paper.id }}
+            sceneLabel="整卷测验"
+          />
+        )}
+      </div>
+    );
+  }
+
   if (!record) {
     return (
       <div className="take-exam start-page">
@@ -196,7 +266,11 @@ export default function TakeExam() {
               第 {currentQuestion + 1} 题 ({questions[currentQuestion].score} 分)
             </h2>
             <span className="question-type">
-              {questions[currentQuestion].questionType === 'choice'
+              {questions[currentQuestion].questionType === 'single_choice'
+                ? '单选题'
+                : questions[currentQuestion].questionType === 'multiple_choice'
+                ? '多选题'
+                : questions[currentQuestion].questionType === 'choice'
                 ? '选择题'
                 : questions[currentQuestion].questionType === 'fill'
                 ? '填空题'
@@ -208,26 +282,35 @@ export default function TakeExam() {
             <p><MathText text={questions[currentQuestion].content} /></p>
           </div>
 
-          {questions[currentQuestion].questionType === 'choice' && questions[currentQuestion].options && (
-            <div className="options">
-              {questions[currentQuestion].options!.map((option, index) => (
-                <label key={index} className="option">
-                  <input
-                    type="radio"
-                    name={`question-${questions[currentQuestion].id}`}
-                    value={String.fromCharCode(65 + index)}
-                    checked={answers[questions[currentQuestion].id] === String.fromCharCode(65 + index)}
-                    onChange={() =>
-                      handleAnswerChange(questions[currentQuestion].id, String.fromCharCode(65 + index))
-                    }
-                  />
-                  <span>
-                    {String.fromCharCode(65 + index)}. <MathText text={option} />
-                  </span>
-                </label>
-              ))}
-            </div>
-          )}
+          {(() => {
+            const currentQ = questions[currentQuestion];
+            const isChoiceType =
+              currentQ.questionType === 'choice' ||
+              currentQ.questionType === 'single_choice' ||
+              currentQ.questionType === 'multiple_choice';
+            const opts = getQuestionOptions(currentQ);
+            if (!isChoiceType || opts.length === 0) return null;
+            return (
+              <div className="options">
+                {opts.map((option, index) => (
+                  <label key={index} className="option">
+                    <input
+                      type="radio"
+                      name={`question-${currentQ.id}`}
+                      value={String.fromCharCode(65 + index)}
+                      checked={answers[currentQ.id] === String.fromCharCode(65 + index)}
+                      onChange={() =>
+                        handleAnswerChange(currentQ.id, String.fromCharCode(65 + index))
+                      }
+                    />
+                    <span>
+                      {String.fromCharCode(65 + index)}. <MathText text={option} />
+                    </span>
+                  </label>
+                ))}
+              </div>
+            );
+          })()}
 
           {questions[currentQuestion].questionType === 'fill' && (
             <div className="fill-input">
