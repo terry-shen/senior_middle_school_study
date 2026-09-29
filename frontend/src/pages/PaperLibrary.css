@@ -1,0 +1,339 @@
+.paper-library {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px;
+  text-align: left;
+}
+
+.lib-hint {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.lib-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid #e0e0e0;
+  margin-bottom: 20px;
+}
+
+.lib-tabs button {
+  padding: 10px 24px;
+  border: none;
+  background: none;
+  font-size: 15px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+}
+
+.lib-tabs button.active {
+  color: #1976d2;
+  border-bottom-color: #1976d2;
+  font-weight: 600;
+}
+
+/* 导入区 */
+.lib-import {
+  background: #fafafa;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.import-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-import {
+  display: inline-block;
+  padding: 8px 18px;
+  background: #1976d2;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  border: none;
+}
+
+.btn-import:hover { background: #1565c0; }
+.btn-import:disabled { background: #90caf9; cursor: not-allowed; }
+
+.importing-hint { color: #f57c00; font-size: 13px; }
+
+.multi-results {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.multi-results summary { cursor: pointer; color: #1976d2; }
+
+.multi-results table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+}
+
+.multi-results td,
+.multi-results th {
+  border: 1px solid #eee;
+  padding: 4px 8px;
+  text-align: left;
+}
+
+/* 筛选区 */
+.lib-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.lib-filters select,
+.lib-filters input[type='text'] {
+  padding: 7px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+}
+
+.lib-filters input[type='text'] { min-width: 180px; }
+
+.btn-search {
+  padding: 7px 16px;
+  background: #555;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.subject-stats {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.stat-chip {
+  padding: 3px 10px;
+  background: #e3f2fd;
+  color: #1565c0;
+  border-radius: 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.stat-chip:hover { background: #bbdefb; }
+
+/* 表格 */
+.lib-table-wrap {
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+}
+
+.lib-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.lib-table th,
+.lib-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.lib-table th {
+  background: #fafafa;
+  font-weight: 600;
+  color: #555;
+  white-space: nowrap;
+}
+
+.title-cell {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions-cell {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.btn-sm {
+  padding: 3px 10px;
+  font-size: 12px;
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  color: #333;
+  display: inline-block;
+}
+
+.btn-sm:hover { background: #f5f5f5; }
+.btn-primary { background: #1976d2; border-color: #1976d2; color: #fff; }
+.btn-primary:hover { background: #1565c0; }
+.btn-danger { background: #d32f2f; border-color: #d32f2f; color: #fff; }
+.btn-danger:hover { background: #b71c1c; }
+.btn-warn { background: #f57c00; border-color: #f57c00; color: #fff; }
+.btn-warn:hover { background: #ef6c00; }
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  background: #eee;
+  color: #666;
+}
+
+.badge-published { background: #c8e6c9; color: #2e7d32; }
+
+.muted { color: #999; }
+.empty { text-align: center; color: #999; padding: 32px; }
+
+.pagination {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
+.pagination button {
+  padding: 5px 14px;
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* 回收批改 */
+.recovery-card {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.recovery-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.recovery-title { font-weight: 600; font-size: 15px; }
+
+.recovery-stats {
+  display: flex;
+  gap: 20px;
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.recovery-stats b { color: #1976d2; }
+
+.recovery-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.recovery-table th,
+.recovery-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid #f0f0f0;
+  text-align: left;
+}
+
+.recovery-table th { background: #fafafa; color: #555; }
+
+/* 模态框 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 10px;
+  padding: 24px;
+  width: 480px;
+  max-width: 92vw;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+.modal h3 { margin: 0 0 14px; }
+.modal-hint { color: #666; font-size: 13px; margin: 0 0 14px; }
+
+.form-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 10px;
+}
+
+.form-row label {
+  width: 90px;
+  flex-shrink: 0;
+  font-size: 14px;
+  color: #555;
+}
+
+.form-row input,
+.form-row select {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.modal-actions button {
+  padding: 8px 20px;
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.modal-actions .btn-primary { background: #1976d2; border-color: #1976d2; color: #fff; }
+
+.message { padding: 8px 12px; border-radius: 6px; margin-top: 8px; font-size: 14px; }
+.message.success { background: #c8e6c9; color: #2e7d32; }
+.message.error { background: #ffcdd2; color: #c62828; }

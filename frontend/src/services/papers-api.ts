@@ -19,6 +19,9 @@ export interface ExamPaper {
   totalScore: number;
   duration: number;
   sourceFormat?: string; // pdf | image | word | txt
+  purpose?: 'whole_paper' | 'question_source'; // whole_paper=整卷考试；question_source=拆分来源（默认）
+  subject?: string | null; // 学科（试卷库分类）：语文/数学/英语/物理/化学/生物/政治/历史/地理/理综/文综
+  school?: string | null; // 学校（自由文本，试卷库分类）
   pageImages?: string[]; // rendered page image URLs (for math/chart visual support)
   parsedMarkdown?: string; // MinerU parsed Markdown with LaTeX formulas
   editedMarkdown?: string; // User-edited Markdown (calibrated version)
@@ -32,7 +35,7 @@ export interface Question {
   paperId: number;
   questionNumber: string;
   content: string;
-  questionType: 'choice' | 'fill' | 'essay' | 'unknown';
+  questionType: 'single_choice' | 'multiple_choice' | 'fill' | 'essay' | 'unknown' | 'choice';
   score: number;
   difficulty?: string;
   analysis?: string;
@@ -332,12 +335,19 @@ export async function splitPreview(token: string, paperId: number): Promise<{ su
 }
 
 /**
- * Confirm import: split questions and create DB records
+ * Confirm import: split questions and create DB records.
+ * If questions[] is provided (from split-preview calibration), those edited
+ * questions are saved authoritatively instead of re-splitting from markdown.
  */
-export async function confirmImport(token: string, paperId: number): Promise<{ success: boolean; questionsCreated?: number; appliedCleanings?: number; error?: string }> {
+export async function confirmImport(
+  token: string,
+  paperId: number,
+  questions?: SplitPreviewQuestion[]
+): Promise<{ success: boolean; questionsCreated?: number; appliedCleanings?: number; error?: string }> {
   const response = await fetch(`${API_BASE}/papers/${paperId}/confirm-import`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: questions && questions.length > 0 ? JSON.stringify({ questions }) : undefined,
   });
   const data = await response.json().catch(() => ({ success: false, error: `确认导入失败 (${response.status})` }));
   return data;
@@ -433,6 +443,7 @@ export interface MultiImportResult {
   fileName: string;
   paperId?: number;
   title?: string;
+  purpose?: string;
   parserUsed?: string;
   contentLength?: number;
   hasMathContent?: boolean;
@@ -451,6 +462,260 @@ export async function importMultipleFiles(token: string, files: File[]): Promise
   return data;
 }
 
+/**
+ * 多文件整卷导入（文件夹导入）：目录下每个文件直接保存为整卷（不解析/不拆分）
+ * POST /api/papers/import-whole-multiple (multipart/form-data)
+ */
+export async function importWholePapers(token: string, files: File[]): Promise<{ success: boolean; results: MultiImportResult[] }> {
+  const formData = new FormData();
+  files.forEach(file => formData.append('files', file));
+  const response = await fetch(`${API_BASE}/papers/import-whole-multiple`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  const data = await response.json().catch(() => ({ success: false, results: [], error: `文件夹整卷导入失败 (${response.status})` }));
+  return data;
+}
+
 export function getDownloadSourceUrl(paperId: number): string {
   return `${API_BASE}/papers/${paperId}/download-source`;
+}
+
+/**
+ * 整卷文件下载（学生下载已发布整卷试卷）。
+ * 通过 Authorization header 携带 token（后端 requireAuth 只认 header，不认 query token）。
+ * 返回 Blob + 从 Content-Disposition 提取的下载文件名。
+ */
+export async function downloadWholePaperFile(
+  token: string,
+  paperId: number,
+  fallbackFilename?: string
+): Promise<{ blob: Blob; filename: string }> {
+  const response = await fetch(`${API_BASE}/papers/${paperId}/download-file`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    let message = `下载失败 (${response.status})`;
+    try {
+      const body = await response.json();
+      if (body && body.error) message = body.error;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new Error(message);
+  }
+  // 解析 Content-Disposition 中的文件名（cd 头跨域默认不可见，后端已 Access-Control-Expose-Headers 暴露）
+  let filename = fallbackFilename || `paper-${paperId}`;
+  const cd = response.headers.get('Content-Disposition') || '';
+  const utf8Match = cd.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match) {
+    filename = decodeURIComponent(utf8Match[1].replace(/^"|"$/g, ''));
+  } else {
+    const plainMatch = cd.match(/filename="?([^";]+)"?/i);
+    if (plainMatch && plainMatch[1] && !/^.*\uFFFD+.*$/.test(plainMatch[1])) filename = plainMatch[1];
+  }
+  const blob = await response.blob();
+  return { blob, filename };
+}
+
+/**
+ * 触发浏览器下载（object URL 方式，兼容中文文件名）
+ */
+export function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * 整卷导入：直接保存原始文件 + 元数据，不进行 MinerU 解析/拆分
+ * POST /api/papers/import-whole (multipart/form-data)
+ */
+export async function importWholePaper(
+  token: string,
+  file: File,
+  metadata: { title: string; year?: number; region?: string; examType?: string; totalScore?: number; duration?: number }
+): Promise<{ success: boolean; paper?: ExamPaper; error?: string }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('title', metadata.title);
+  if (metadata.year !== undefined) formData.append('year', String(metadata.year));
+  if (metadata.region) formData.append('region', metadata.region);
+  if (metadata.examType) formData.append('examType', metadata.examType);
+  if (metadata.totalScore !== undefined) formData.append('totalScore', String(metadata.totalScore));
+  if (metadata.duration !== undefined) formData.append('duration', String(metadata.duration));
+
+  const response = await fetch(`${API_BASE}/papers/import-whole`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    return { success: false, error: data?.error || '导入失败' };
+  }
+  return data;
+}
+
+/** 题型中文标签 */
+export function getQuestionTypeLabel(type?: string | null): string {
+  switch (type) {
+    case 'single_choice': return '单选题';
+    case 'multiple_choice': return '多选题';
+    case 'choice': return '选择题';
+    case 'fill': return '填空题';
+    case 'essay': return '解答题';
+    case 'unknown': return '未分类';
+    default: return '未分类';
+  }
+}
+
+// ============================================================
+// 试卷库（Paper Library）—— 整卷生命周期：分类筛选 / 发布考试 / 回收批改
+// ============================================================
+
+export interface PaperLibraryFilters {
+  subject?: string;
+  year?: string;
+  region?: string;
+  examType?: string;
+  school?: string;
+  keyword?: string;
+  purpose?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface PaperLibraryFilterOptions {
+  subjects: string[];
+  years: string[];
+  regions: string[];
+  examTypes: string[];
+  schools: string[];
+}
+
+export interface RecoveryGroup {
+  mockExamId: number;
+  paper: { id: number; title: string; subject: string | null; year: number | null; region: string | null } | null;
+  createdAt: string;
+  status: string;
+  totalStudents: number;
+  uploaded: number;
+  graded: number;
+  pending: number;
+  sheetsByStudent: {
+    id: number;
+    studentId: number;
+    status: string;
+    totalScore: number | null;
+    fileUrl: string;
+    createdAt: string;
+  }[];
+}
+
+/** GET /api/paper-library — 多维筛选查询（整卷） */
+export async function getPaperLibrary(
+  token: string,
+  filters: PaperLibraryFilters = {}
+): Promise<{ data: ExamPaper[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
+  const params = new URLSearchParams();
+  if (filters.purpose) params.set('purpose', filters.purpose);
+  if (filters.subject) params.set('subject', filters.subject);
+  if (filters.year) params.set('year', filters.year);
+  if (filters.region) params.set('region', filters.region);
+  if (filters.examType) params.set('examType', filters.examType);
+  if (filters.school) params.set('school', filters.school);
+  if (filters.keyword) params.set('keyword', filters.keyword);
+  if (filters.page) params.set('page', String(filters.page));
+  if (filters.limit) params.set('limit', String(filters.limit));
+  const response = await fetch(`${API_BASE}/paper-library?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || '试卷库查询失败');
+  }
+  return response.json();
+}
+
+/** GET /api/paper-library/filters — 筛选下拉的可选值 */
+export async function getPaperLibraryFilters(token: string): Promise<PaperLibraryFilterOptions> {
+  const response = await fetch(`${API_BASE}/paper-library/filters`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || '筛选项获取失败');
+  }
+  return response.json();
+}
+
+/** PUT /api/paper-library/:id — 更新整卷元数据（含 subject/school） */
+export async function updatePaperLibraryPaper(
+  token: string,
+  paperId: number,
+  data: Partial<ExamPaper>
+): Promise<ExamPaper> {
+  const response = await fetch(`${API_BASE}/paper-library/${paperId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || '元数据更新失败');
+  }
+  return response.json();
+}
+
+/** POST /api/paper-library/:id/publish — 发布为整卷模拟考试 */
+export async function publishPaperAsMockExam(
+  token: string,
+  paperId: number,
+  payload: { startTime?: string; endTime?: string } = {}
+): Promise<{ success: boolean; mockExamId: number; error?: string }> {
+  const response = await fetch(`${API_BASE}/paper-library/${paperId}/publish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || '发布失败');
+  }
+  return data;
+}
+
+/** DELETE /api/paper-library/:id/unpublish — 取消发布 */
+export async function unpublishMockExam(
+  token: string,
+  paperId: number
+): Promise<{ success: boolean; removedMockExamId: number; error?: string }> {
+  const response = await fetch(`${API_BASE}/paper-library/${paperId}/unpublish`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || '取消发布失败');
+  }
+  return data;
+}
+
+/** GET /api/paper-library/recovery/all — 回收批改进度（按已发布整卷考试分组） */
+export async function getRecoveryList(token: string): Promise<{ groups: RecoveryGroup[] }> {
+  const response = await fetch(`${API_BASE}/paper-library/recovery/all`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || '回收批改列表获取失败');
+  }
+  return response.json();
 }
