@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import MathText from '../components/MathText';
+import AnswerSheetUpload from '../components/AnswerSheetUpload';
+import { downloadWholePaperFile, triggerBlobDownload } from '../services/papers-api';
 import {
   getMockExams,
   getMockExamHistory,
@@ -21,7 +23,14 @@ import {
 } from '../services/mock-exams-api';
 import './MockExam.css';
 
-type View = 'list' | 'taking' | 'result' | 'benchmark' | 'wrong-analysis';
+type View = 'list' | 'taking' | 'result' | 'benchmark' | 'wrong-analysis' | 'answer-sheet';
+
+/** 整卷模式：关联原始试卷（questionIds 为空） */
+function isWholePaperExam(exam: MockExam): boolean {
+  let ids: number[] = [];
+  try { ids = JSON.parse(exam.questionIds || '[]'); } catch { ids = []; }
+  return ids.length === 0 && !!exam.paper;
+}
 
 export default function MockExamPage() {
   const { user, token } = useAuth();
@@ -102,6 +111,18 @@ export default function MockExamPage() {
       setView('taking');
     } catch (e: any) {
       setError(e.message);
+    }
+  };
+
+  /** Student: download the whole paper (整卷模式) */
+  const handleDownloadPaper = async (exam: MockExam) => {
+    if (!token || !exam.paper) return;
+    try {
+      const ext = (exam.paper.pdfUrl?.split('.').pop() || 'doc').toLowerCase();
+      const { blob, filename } = await downloadWholePaperFile(token, exam.paper.id, `${exam.title}.${ext}`);
+      triggerBlobDownload(blob, filename);
+    } catch (e: any) {
+      setError(e.message || '试卷下载失败');
     }
   };
 
@@ -217,7 +238,14 @@ export default function MockExamPage() {
                         <td>{exam.studentScore !== undefined ? `${exam.studentScore}/${exam.totalScore}` : '-'}</td>
                         <td>
                           {exam.status === 'published' && (
-                            <button className="btn-small" onClick={() => handleStart(exam.id)}>开始考试</button>
+                            isWholePaperExam(exam) ? (
+                              <button className="btn-small" onClick={() => handleDownloadPaper(exam)}>下载试卷</button>
+                            ) : (
+                              <button className="btn-small" onClick={() => handleStart(exam.id)}>开始考试</button>
+                            )
+                          )}
+                          {isWholePaperExam(exam) && exam.status === 'published' && (
+                            <button className="btn-small" onClick={() => { setCurrentExamId(exam.id); setView('answer-sheet'); }}>上传答题纸</button>
                           )}
                           {exam.status === 'completed' && (
                             <>
@@ -255,8 +283,34 @@ export default function MockExamPage() {
         />
       )}
 
+      {view === 'answer-sheet' && currentExamId && token && (
+        <div className="whole-paper-sheet-view">
+          <div className="whole-paper-head">
+            <h2>上传答题纸</h2>
+            <button className="btn-small" onClick={() => setView('list')}>返回列表</button>
+          </div>
+          <p className="whole-paper-tip">
+            本场为整卷考试：先「下载试卷」线下作答，然后把答题纸拍照或导出为 Word 上传，由老师离线批改。
+          </p>
+          <AnswerSheetUpload
+            token={token}
+            scene={{ mockExamId: currentExamId }}
+            sceneLabel="模拟考试"
+          />
+        </div>
+      )}
+
       {view === 'result' && result && (
-        <ResultView result={result} onBack={() => { setView('list'); setResult(null); }} />
+        <>
+          <ResultView result={result} onBack={() => { setView('list'); setResult(null); }} />
+          {currentExamId && token && (
+            <AnswerSheetUpload
+              token={token}
+              scene={{ mockExamId: currentExamId }}
+              sceneLabel="模拟考试"
+            />
+          )}
+        </>
       )}
 
       {view === 'benchmark' && benchmark && (
@@ -408,20 +462,23 @@ function TakingExam({ examId, token, onSubmit, onBack }: {
             </button>
           </div>
           <div className="question-content"><MathText text={q.content} /></div>
-          {options && (
+          {options && Array.isArray(options) && (
             <div className="options">
-              {Object.entries(options).map(([key, val]) => (
-                <label key={key} className={`option ${answers[q.id] === key ? 'selected' : ''}`}>
-                  <input
-                    type="radio"
-                    name={`q${q.id}`}
-                    checked={answers[q.id] === key}
-                    onChange={() => handleAnswer(q.id, key)}
-                  />
-                  <span className="option-key">{key}.</span>
-                  <span className="option-text">{val as string}</span>
-                </label>
-              ))}
+              {options.map((option: string, index: number) => {
+                const key = String.fromCharCode(65 + index);
+                return (
+                  <label key={key} className={`option ${answers[q.id] === key ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name={`q${q.id}`}
+                      checked={answers[q.id] === key}
+                      onChange={() => handleAnswer(q.id, key)}
+                    />
+                    <span className="option-key">{key}.</span>
+                    <span className="option-text"><MathText text={option} /></span>
+                  </label>
+                );
+              })}
             </div>
           )}
           {(q.questionType === 'fill' || q.questionType === 'essay') && (

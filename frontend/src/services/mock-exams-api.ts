@@ -18,6 +18,9 @@ export interface MockExam {
   creator?: { id: number; name: string; studentId: string };
   studentScore?: number;
   answered?: number;
+  paperId?: number | null;
+  /** 整卷模式：关联的原始试卷（下载/线下作答/答题纸） */
+  paper?: { id: number; title: string; pdfUrl?: string | null; purpose?: string | null; subject?: string | null; school?: string | null } | null;
 }
 
 export interface MockExamAnswer {
