@@ -144,6 +144,25 @@
 .question-block-analysis .block-label { background: #ff9800; }
 .question-block-analysis .block-body { background: #fff8e1; }
 
+/* Question options (A/B/C/D) inside content block */
+.question-options {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #ccc;
+}
+.question-option-item {
+  display: flex;
+  align-items: flex-start;
+  margin: 4px 0;
+  text-align: left;
+}
+.question-option-item .option-label {
+  font-weight: bold;
+  margin-right: 6px;
+  min-width: 20px;
+  color: #555;
+}
+
 /* Images inside MathText */
 .math-text-image {
   max-width: 100% !important;
@@ -203,6 +222,63 @@
 .edit-form textarea {
   min-height: 80px;
   resize: vertical;
+}
+
+/* Edit options (choice questions) */
+.edit-options {
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: 10px;
+  background: #fafafa;
+}
+
+.edit-options-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #555;
+}
+
+.btn-option-add {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: #17a2b8;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-option-add:hover {
+  background: #138496;
+}
+
+.edit-option-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.edit-option-row input {
+  flex: 1;
+}
+
+.btn-option-remove {
+  padding: 3px 8px;
+  font-size: 12px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-option-remove:hover {
+  background: #c82333;
 }
 
 .edit-actions {
