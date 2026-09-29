@@ -32,7 +32,19 @@ export default function SplitPreview() {
   const [enrichMessage, setEnrichMessage] = useState('');
 
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState({ content: '', correctAnswer: '', analysis: '' });
+  const [editForm, setEditForm] = useState({ content: '', correctAnswer: '', analysis: '', questionType: '' });
+  const [editOptions, setEditOptions] = useState<string[]>([]);
+
+  const isChoiceType = (type: string) => type === 'choice' || type === 'single_choice' || type === 'multiple_choice';
+
+  const getQuestionOptions = (q: SplitPreviewQuestion): string[] => {
+    if (!q.options) return [];
+    if (Array.isArray(q.options)) return q.options;
+    try {
+      const parsed = JSON.parse(q.options as unknown as string);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  };
 
   useEffect(() => {
     if (!token || !paperId) return;
@@ -69,16 +81,23 @@ export default function SplitPreview() {
       content: q.content,
       correctAnswer: q.correctAnswer || '',
       analysis: q.analysis || '',
+      questionType: q.questionType || 'unknown',
     });
+    setEditOptions(isChoiceType(q.questionType) ? getQuestionOptions(q) : []);
   };
 
   const handleSaveEdit = (questionNumber: number) => {
+    let options: string[] | undefined = undefined;
+    if (isChoiceType(editForm.questionType)) {
+      options = editOptions;
+    }
     setQuestions(prev => prev.map(q =>
       q.questionNumber === questionNumber
-        ? { ...q, content: editForm.content, correctAnswer: editForm.correctAnswer, analysis: editForm.analysis }
+        ? { ...q, content: editForm.content, correctAnswer: editForm.correctAnswer, analysis: editForm.analysis, questionType: editForm.questionType, options }
         : q
     ));
     setEditingId(null);
+    setEditOptions([]);
   };
 
   // ---- AI 忠实还原清洗 ----
@@ -132,7 +151,9 @@ export default function SplitPreview() {
     }
     setConfirming(true);
     try {
-      const result = await confirmImport(token, paperId);
+      // 提交人工校准后的题目数据（含选项编辑），后端按题号保存；若用户未编辑任何内容，
+      // 后端将回退到基于 markdown 的标签拆分。
+      const result = await confirmImport(token, paperId, questions);
       if (result.success) {
         if (result.appliedCleanings && result.appliedCleanings > 0) {
           setEnrichMessage(`已应用 ${result.appliedCleanings} 项 AI 清洗结果`);
@@ -275,6 +296,44 @@ export default function SplitPreview() {
                   onChange={e => setEditForm({ ...editForm, analysis: e.target.value })}
                   rows={5}
                 />
+                <label>题型:</label>
+                <select
+                  value={editForm.questionType}
+                  onChange={e => setEditForm({ ...editForm, questionType: e.target.value })}
+                  className="type-select"
+                >
+                  <option value="single_choice">单选题</option>
+                  <option value="multiple_choice">多选题</option>
+                  <option value="fill">填空题</option>
+                  <option value="essay">解答题</option>
+                  <option value="unknown">未分类</option>
+                </select>
+                {isChoiceType(editForm.questionType) && (
+                  <div className="edit-options">
+                    <div className="edit-options-header">
+                      <span>选项</span>
+                      <button className="btn-option-add" onClick={() => setEditOptions([...editOptions, ''])}>+ 添加选项</button>
+                    </div>
+                    {editOptions.map((opt, idx) => (
+                      <div key={idx} className="edit-option-row">
+                        <span className="option-label">{String.fromCharCode(65 + idx)}.</span>
+                        <input
+                          type="text"
+                          value={opt}
+                          onChange={e => {
+                            const next = [...editOptions];
+                            next[idx] = e.target.value;
+                            setEditOptions(next);
+                          }}
+                          placeholder={`选项 ${String.fromCharCode(65 + idx)} 内容`}
+                        />
+                        {editOptions.length > 2 && (
+                          <button className="btn-option-remove" onClick={() => setEditOptions(editOptions.filter((_, i) => i !== idx))}>✕</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="edit-actions">
                   <button className="btn btn-primary" onClick={() => handleSaveEdit(q.questionNumber)}>保存</button>
                   <button className="btn btn-secondary" onClick={() => setEditingId(null)}>取消</button>
@@ -284,13 +343,26 @@ export default function SplitPreview() {
               <>
                 <div className="question-header">
                   <span className="question-number">第 {q.questionNumber} 题</span>
-                  <span className="question-type">{q.questionType}</span>
+                  <span className="question-type">{({single_choice:'单选题',multiple_choice:'多选题',choice:'选择题',fill:'填空题',essay:'解答题',unknown:'未分类'} as Record<string,string>)[q.questionType||'unknown'] || q.questionType}</span>
                   <button className="btn-edit" onClick={() => handleEdit(q)}>编辑</button>
                 </div>
                 <div className="question-block">
                   <div className="block-header blue">题目</div>
                   <div className="block-content"><MathText text={q.content} /></div>
                 </div>
+                {getQuestionOptions(q).length > 0 && (
+                  <div className="question-block">
+                    <div className="block-header blue">选项</div>
+                    <div className="block-content">
+                      {getQuestionOptions(q).map((opt, oi) => (
+                        <div key={oi} className="preview-option-row">
+                          <span className="option-label">{String.fromCharCode(65 + oi)}.</span>
+                          <MathText text={opt} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {q.correctAnswer && (
                   <div className="question-block">
                     <div className="block-header green">答案</div>
