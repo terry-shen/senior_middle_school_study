@@ -27,7 +27,7 @@ export interface GradingStats {
   byQuestionType: {
     type: string;
     total: number;
-    correct: number;
+    graded: number;
     averageScore: number;
   }[];
 }
@@ -89,6 +89,8 @@ export async function adjustGrade(
 
 /**
  * Get grading statistics
+ * Backend returns {total, graded, pending, avgScore, byType: Record<string,{total,graded,avgScore}>};
+ * transformed here to the frontend shape.
  */
 export async function getGradingStats(token: string): Promise<GradingStats> {
   const response = await fetch(`${API_BASE}/grading/stats`, {
@@ -96,5 +98,20 @@ export async function getGradingStats(token: string): Promise<GradingStats> {
       Authorization: `Bearer ${token}`,
     },
   });
-  return response.json();
+  const data = await response.json();
+  return {
+    totalRecords: data?.total ?? 0,
+    gradedRecords: data?.graded ?? 0,
+    pendingRecords: data?.pending ?? 0,
+    averageScore: data?.avgScore ?? 0,
+    byQuestionType: Object.entries(data?.byType ?? {}).map(([type, v]) => {
+      const entry = v as { total?: number; graded?: number; avgScore?: number };
+      return {
+        type,
+        total: entry?.total ?? 0,
+        graded: entry?.graded ?? 0,
+        averageScore: entry?.avgScore ?? 0,
+      };
+    }),
+  };
 }

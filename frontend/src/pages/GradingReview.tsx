@@ -96,7 +96,7 @@ export default function GradingReview() {
           </div>
           <div className="stat-card">
             <h3>平均分</h3>
-            <div className="stat-value">{stats.averageScore.toFixed(1)}</div>
+            <div className="stat-value">{(stats.averageScore ?? 0).toFixed(1)}</div>
           </div>
         </div>
       ) : null}
@@ -184,8 +184,8 @@ export default function GradingReview() {
               <tr>
                 <th>题型</th>
                 <th>总数</th>
-                <th>正确数</th>
-                <th>正确率</th>
+                <th>已批改</th>
+                <th>批改率</th>
                 <th>平均分</th>
               </tr>
             </thead>
@@ -193,20 +193,24 @@ export default function GradingReview() {
               {stats.byQuestionType.map((type) => (
                 <tr key={type.type}>
                   <td>
-                    {type.type === 'choice'
+                    {type.type === 'single_choice'
+                      ? '单选题'
+                      : type.type === 'multiple_choice'
+                      ? '多选题'
+                      : type.type === 'choice'
                       ? '选择题'
                       : type.type === 'fill'
                       ? '填空题'
                       : '解答题'}
                   </td>
                   <td>{type.total}</td>
-                  <td>{type.correct}</td>
+                  <td>{type.graded}</td>
                   <td>
                     {type.total > 0
-                      ? ((type.correct / type.total) * 100).toFixed(1) + '%'
+                      ? ((type.graded / type.total) * 100).toFixed(1) + '%'
                       : '0%'}
                   </td>
-                  <td>{type.averageScore.toFixed(1)}</td>
+                  <td>{(type.averageScore ?? 0).toFixed(1)}</td>
                 </tr>
               ))}
             </tbody>
