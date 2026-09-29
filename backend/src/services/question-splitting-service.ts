@@ -7,10 +7,12 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+export type QuestionType = 'single_choice' | 'multiple_choice' | 'fill' | 'essay' | 'unknown';
+
 export interface SplitQuestion {
   questionNumber: number;
   content: string;
-  questionType: 'choice' | 'fill' | 'essay' | 'unknown';
+  questionType: QuestionType;
   score?: number;
   options?: string[];
   imageUrl?: string;
@@ -25,27 +27,89 @@ export interface SplitResult {
 }
 
 /**
- * Detect question type from content
+ * Detect question type from section header text.
+ * Recognizes Chinese section titles like "一、单项选择题" / "二、多项选择题" / "三、填空题" / "四、解答题"
+ * @returns QuestionType or null if no section header detected
  */
-export function detectQuestionType(content: string): 'choice' | 'fill' | 'essay' | 'unknown' {
-  // Choice questions have options (A, B, C, D)
-  const hasOptions = /（\s*[A-D]\s*[）)]|[（(]\s*[A-D]\s*[）)]/g.test(content);
+export function detectSectionType(headerText: string): QuestionType | null {
+  if (/单选|单项选择/.test(headerText)) return 'single_choice';
+  if (/多选|多项选择/.test(headerText)) return 'multiple_choice';
+  if (/填空/.test(headerText)) return 'fill';
+  if (/解答|计算|证明|综合/.test(headerText)) return 'essay';
+  if (/选择/.test(headerText)) return 'single_choice'; // generic "选择题" → default to single
+  return null;
+}
+
+/**
+ * Scan markdown for section headers and return a map of question start position → section type.
+ * Section headers: "一、单项选择题(本题共8小题...)" / "二、多项选择题" / "1. 选择题" etc.
+ * Each question inherits the section type of the section it falls in.
+ */
+export function scanSectionTypes(markdown: string): Map<number, QuestionType> {
+  const sectionMap = new Map<number, QuestionType>();
+  // Match: line start + Chinese numeral or Arabic numeral + 、 or . + section title
+  // Only match Chinese numerals + 、 separator (NOT \d+. which are question numbers)
+  // Handle ## markdown heading prefix and 、ideographic comma separator
+  const sectionRegex = /(?:^|\n)\s*#{0,3}\s*([一二三四五六七八九十]+)、\s*([^\n]{2,30})/g;
+  let match: RegExpExecArray | null;
+  while ((match = sectionRegex.exec(markdown)) !== null) {
+    const headerText = match[2];
+    const sectionType = detectSectionType(headerText);
+    if (sectionType) {
+      sectionMap.set(match.index, sectionType);
+    }
+  }
+  return sectionMap;
+}
+
+/**
+ * Get the section type for a question at a given position in the markdown.
+ * Returns the section type of the most recent section header before this position,
+ * or null if no section header precedes it.
+ */
+function getSectionTypeAtPosition(markdown: string, position: number, sectionMap: Map<number, QuestionType>): QuestionType | null {
+  let result: QuestionType | null = null;
+  for (const [sectionPos, sectionType] of sectionMap) {
+    if (sectionPos <= position) {
+      result = sectionType;
+    } else {
+      break; // sectionMap is in order of position
+    }
+  }
+  return result;
+}
+
+/**
+ * Detect question type from content (enhanced rule-based detection)
+ * - Detects single_choice vs multiple_choice by option patterns
+ * - Detects fill by blank patterns
+ * - Falls back to essay only if content is long AND has no option/blank signals
+ */
+export function detectQuestionType(content: string): QuestionType {
+  // Detect options: A. B. C. D. (most common), （A）, A、, A）
+  const hasOptions = /(?:^|\n|\s)[A-D][.、）)]\s*\S/.test(content)
+    || /（\s*[A-D]\s*[）)]/.test(content)
+    || /(?:^|\n|\s)[A-D][.、）)]/m.test(content);
+  
   if (hasOptions) {
-    return 'choice';
+    // Distinguish single vs multiple choice:
+    // Multiple choice clues: "多选" in text, or 5+ options (A-E), or "有两个或两个以上"
+    const hasMultipleChoiceSignal = /多选|有两个或两个以上|有两个及以上/.test(content);
+    const optionCount = (content.match(/(?:^|\n|\s)[A-E][.、）)]/g) || []).length;
+    if (hasMultipleChoiceSignal || optionCount >= 5) {
+      return 'multiple_choice';
+    }
+    return 'single_choice';
   }
 
-  // Fill-in questions have blanks (____ or (    ))
-  const hasBlanks = /_{2,}|（\s{3,}）|\(\s{3,}\)/g.test(content);
+  // Fill-in questions have blanks
+  const hasBlanks = /_{2,}|（\s{3,}）|\(\s{3,}\)/.test(content);
   if (hasBlanks) {
     return 'fill';
   }
 
-  // Essay questions are typically longer
-  if (content.length > 100) {
-    return 'essay';
-  }
-
-  return 'unknown';
+  // No options, no blanks → essay (length check removed: LaTeX formulas inflate length)
+  return 'essay';
 }
 
 /**
@@ -95,6 +159,29 @@ export function extractOptions(content: string): string[] | undefined {
   }
 
   return options.length === 4 ? options : undefined;
+}
+
+/**
+ * Strip option lines from question content.
+ * Used after extractOptions() to remove the residual option text (e.g. "A. xxx B. yyy ...")
+ * from the question stem, so options are stored separately and not duplicated in content.
+ *
+ * Strategy: find the first occurrence of an option marker (A./A、/A）/（A） etc.)
+ * and truncate everything from that point to the end of content (options are always at the tail).
+ * Also strips a trailing "（ ）" / "(  )" placeholder that often follows options.
+ */
+export function stripOptionsFromContent(content: string): string {
+  // Match the start of an option block: A. / A、 / A） / （A） / (A) followed by content
+  // Require that B. / C. / D. markers also exist later (to avoid false positives like "A. 第一段...")
+  const optionBlockRegex = /\n?\s*[（(]?\s*A\s*[.、）)]\s*\S[\s\S]*?\bB\s*[.、）)]\s*\S[\s\S]*?\bC\s*[.、）)]\s*\S[\s\S]*?\bD\s*[.、）)]/i;
+  const match = content.match(optionBlockRegex);
+  if (match && match.index !== undefined) {
+    let cleaned = content.substring(0, match.index).trim();
+    // Also strip trailing placeholder like "（ ）" or "(  )" that may follow the question stem
+    cleaned = cleaned.replace(/[（(]\s*[）)]\s*$/m, '').trim();
+    return cleaned;
+  }
+  return content;
 }
 
 /**
@@ -168,7 +255,7 @@ export function splitQuestions(content: string): SplitResult {
       
       const questionType = detectQuestionType(cleanContent);
       const score = extractScore(cleanContent);
-      const options = questionType === 'choice' ? extractOptions(cleanContent) : undefined;
+      const options = (questionType === 'single_choice' || questionType === 'multiple_choice') ? extractOptions(cleanContent) : undefined;
 
       questions.push({
         questionNumber: matches[i].number,
@@ -200,6 +287,9 @@ export function splitQuestions(content: string): SplitResult {
  */
 export function splitQuestionsFromMarkdown(markdown: string): SplitResult {
   const questions: SplitQuestion[] = [];
+
+  // Scan section headers for type context
+  const sectionMap = scanSectionTypes(markdown);
 
   // Strategy: Split by 【答案 markers into blocks.
   // Block 0 = content before first answer (Q1 question + options)
@@ -234,11 +324,15 @@ export function splitQuestionsFromMarkdown(markdown: string): SplitResult {
   }
 
   if (q1Content.length >= 3) {
+    const q1SectionType = getSectionTypeAtPosition(markdown, 0, sectionMap);
+    const q1Type = q1SectionType || detectQuestionType(q1Content);
+    const q1Opts = extractOptions(q1Content);
+    const q1Clean = q1Opts ? stripOptionsFromContent(q1Content) : q1Content;
     questions.push({
       questionNumber: 1,
-      content: q1Content,
-      questionType: detectQuestionType(q1Content),
-      options: extractOptions(q1Content),
+      content: q1Clean,
+      questionType: q1Type,
+      options: q1Opts,
       correctAnswer: undefined,
       analysis: undefined,
     });
@@ -312,20 +406,27 @@ export function splitQuestionsFromMarkdown(markdown: string): SplitResult {
         .trim();
 
       if (cleanedContent.length >= 3) {
+        // Use section type from markdown context if available
+        const contentPos = nextQMatch?.index ?? 0;
+        const sectionType = getSectionTypeAtPosition(markdown, contentPos, sectionMap);
+        const qType = sectionType || detectQuestionType(cleanedContent);
         const existing = questions.find(q => q.questionNumber === i + 1);
         if (!existing) {
+          const opts = extractOptions(cleanedContent);
+          const clean = opts ? stripOptionsFromContent(cleanedContent) : cleanedContent;
           questions.push({
             questionNumber: i + 1,
-            content: cleanedContent,
-            questionType: detectQuestionType(cleanedContent),
-            options: extractOptions(cleanedContent),
+            content: clean,
+            questionType: qType,
+            options: opts,
             correctAnswer: undefined,
             analysis: undefined,
           });
         } else if (!existing.content) {
-          existing.content = cleanedContent;
-          existing.questionType = detectQuestionType(cleanedContent);
-          existing.options = extractOptions(cleanedContent);
+          const opts2 = extractOptions(cleanedContent);
+          existing.content = opts2 ? stripOptionsFromContent(cleanedContent) : cleanedContent;
+          existing.questionType = qType;
+          existing.options = opts2;
         }
       }
     }
@@ -379,7 +480,9 @@ export function splitQuestionsFromMarkdown(markdown: string): SplitResult {
         
         if (rawContent.length >= 3) {
           questions[qi].content = rawContent;
-          questions[qi].questionType = detectQuestionType(rawContent);
+          const fillPos = ansIdx < ansPositions.length ? ansPositions[ansIdx] : 0;
+          const fillSectionType = getSectionTypeAtPosition(markdown, fillPos, sectionMap);
+          questions[qi].questionType = fillSectionType || detectQuestionType(rawContent);
           questions[qi].options = extractOptions(rawContent);
         }
       }
@@ -396,6 +499,7 @@ export function splitQuestionsFromMarkdown(markdown: string): SplitResult {
 // Split questions from DOCX format (no 【答案 markers, uses ． full-width period)
 function splitQuestionsFromDocx(markdown: string): SplitResult {
   const questions: SplitQuestion[] = [];
+  const sectionMap = scanSectionTypes(markdown);
 
   // DOCX format uses full-width period ． (U+FF0E) for question numbers
   // Pattern: "N．" or "N." at line start, followed by question text
@@ -435,14 +539,16 @@ function splitQuestionsFromDocx(markdown: string): SplitResult {
 
     if (content.length < 5) continue;
 
-    // Extract options if present (A． B． C． D． format)
+    // Extract options if present (A． B． C． D． format), then strip from content
     const extractedOpts = extractOptions(content);
     const opts: string[] | undefined = (extractedOpts && extractedOpts.length > 0) ? extractedOpts : undefined;
+    const cleanContent = opts ? stripOptionsFromContent(content) : content;
 
+    const sectionType = getSectionTypeAtPosition(markdown, startIdx, sectionMap);
     questions.push({
       questionNumber: matches[i].num,
-      content,
-      questionType: detectQuestionType(content),
+      content: cleanContent,
+      questionType: sectionType || detectQuestionType(content),
       options: opts,
     });
   }
@@ -458,6 +564,7 @@ function splitQuestionsFromDocx(markdown: string): SplitResult {
 function splitQuestionsByRegex(markdown: string): SplitResult {
   const questions: SplitQuestion[] = [];
   const processedMd = markdown.replace(/[。）\]\s]+(\d{1,2}\.\s)/g, '\n$1');
+  const sectionMap = scanSectionTypes(markdown);
   const questionRegex = /(?:^|\n)\s*(\d{1,2})\.\s*(?![\d.])/g;
 
   let matches: { num: number; index: number }[] = [];
@@ -525,7 +632,7 @@ function splitQuestionsByRegex(markdown: string): SplitResult {
     questions.push({
       questionNumber: matches[i].num,
       content,
-      questionType: detectQuestionType(content),
+      questionType: getSectionTypeAtPosition(markdown, matches[i].index, sectionMap) || detectQuestionType(content),
       options: options.length > 0 ? options : undefined,
       correctAnswer,
       analysis,
@@ -546,11 +653,13 @@ async function createQuestionsInDb(paperId: number, questions: SplitQuestion[]):
   const createdQuestions: SplitQuestion[] = [];
 
   for (const q of questions) {
+    // Strip option text from content if options were extracted separately
+    const cleanContent = q.options ? stripOptionsFromContent(q.content) : q.content;
     const question = await prisma.question.create({
       data: {
         paperId,
         questionNumber: q.questionNumber,
-        content: q.content,
+        content: cleanContent,
         questionType: q.questionType,
         score: q.score,
         options: q.options ? JSON.stringify(q.options) : null,
@@ -663,11 +772,12 @@ export async function splitQuestionsFromPaper(paperId: number): Promise<SplitRes
     const createdQuestions: SplitQuestion[] = [];
 
     for (const q of result.questions) {
+      const cleanContent = q.options ? stripOptionsFromContent(q.content) : q.content;
       const question = await prisma.question.create({
         data: {
           paperId,
           questionNumber: q.questionNumber,
-          content: q.content,
+          content: cleanContent,
           questionType: q.questionType,
           score: q.score,
           options: q.options ? JSON.stringify(q.options) : null,
@@ -798,7 +908,11 @@ export function autoTagQuestions(markdown: string): string {
   while ((m = qStartRegex.exec(cleanMd)) !== null) {
     const qNum = parseInt(m[1]);
     if (qNum >= 1 && qNum <= 30) {
-      qStarts.push({ num: qNum, pos: m.index + m[0].length - 1 }); // Position of the number itself
+      // Position at the START of the question-number digit itself, so the START tag
+      // is inserted BEFORE "N. " (the number belongs to THIS question) and the END tag
+      // of the previous question lands BEFORE "N+1. " (never swallowing the next number).
+      const digitStart = m.index + m[0].indexOf(m[1]);
+      qStarts.push({ num: qNum, pos: digitStart });
     }
   }
 
@@ -863,6 +977,7 @@ export function splitQuestionsByTags(markdown: string): SplitResult {
   }
 
   const questions: SplitQuestion[] = [];
+  const sectionMap = scanSectionTypes(markdown);
 
   // Extract all tag pairs: <!--QN_START-->(content)<!--QN_END-->
   const tagRegex = /<!--Q(\d+)_START-->([\s\S]*?)<!--Q\1_END-->/g;
@@ -871,6 +986,15 @@ export function splitQuestionsByTags(markdown: string): SplitResult {
   while ((match = tagRegex.exec(markdown)) !== null) {
     const qNum = parseInt(match[1]);
     let content = match[2].trim();
+
+    // Boundary regularization. Older auto-tagging placed the END tag AFTER the next
+    // question's number (e.g. "...9\n\n2.<!--Q1_END-->"), swallowing that number into
+    // this block. If the block ends with a lone "N." line, it is the next question's
+    // number — drop it (the user may also see the number moved into the current
+    // question via the START position fix in autoTagQuestions).
+    content = content.replace(/\n\s*\d{1,2}[.．]\s*$/, '').trim();
+
+    const contentPos = match.index;
 
     // Extract answer from content (look for 【答案 marker)
     let answer: string | undefined;
@@ -898,11 +1022,15 @@ export function splitQuestionsByTags(markdown: string): SplitResult {
       content = content.substring(0, anaIdx2).trim();
     }
 
+    // Extract options, then strip option text from content to avoid duplication
+    const extractedOpts = extractOptions(content);
+    const cleanContent = extractedOpts ? stripOptionsFromContent(content) : content;
+
     questions.push({
       questionNumber: qNum,
-      content,
-      questionType: detectQuestionType(content),
-      options: extractOptions(content),
+      content: cleanContent,
+      questionType: getSectionTypeAtPosition(markdown, contentPos, sectionMap) || detectQuestionType(content),
+      options: extractedOpts,
       correctAnswer: answer,
       analysis,
     });
@@ -923,11 +1051,14 @@ export function splitQuestionsByTags(markdown: string): SplitResult {
 
     if (content.length > 0) {
       console.warn(`[splitQuestionsByTags] Unpaired tag for Q${qNum}, using content to next tag`);
+      const unpairedPos = match.index;
+      const unpairedOpts = extractOptions(content);
+      const unpairedClean = unpairedOpts ? stripOptionsFromContent(content) : content;
       questions.push({
         questionNumber: qNum,
-        content,
-        questionType: detectQuestionType(content),
-        options: extractOptions(content),
+        content: unpairedClean,
+        questionType: getSectionTypeAtPosition(markdown, unpairedPos, sectionMap) || detectQuestionType(content),
+        options: unpairedOpts,
       });
     }
   }
@@ -950,23 +1081,31 @@ export function splitQuestionsByTags(markdown: string): SplitResult {
 export async function splitQuestionsByTagsAndSave(
   paperId: number,
   markdown: string,
-  overrides?: Map<number, { content: string; options?: string[] }>
+  overrides?: Map<number, { content: string; options?: string[] }>,
+  userEdited?: SplitQuestion[]
 ): Promise<{ success: boolean; created: number; updated: number; error?: string }> {
-  const splitResult = splitQuestionsByTags(markdown);
-  if (!splitResult.success) {
-    return { success: false, created: 0, updated: 0, error: splitResult.error };
+  let questions: SplitQuestion[];
+  if (userEdited && userEdited.length > 0) {
+    // Front-end calibrated data is authoritative (user may have edited content/options/answer/analysis)
+    questions = userEdited;
+  } else {
+    const splitResult = splitQuestionsByTags(markdown);
+    if (!splitResult.success) {
+      return { success: false, created: 0, updated: 0, error: splitResult.error };
+    }
+    questions = splitResult.questions;
   }
 
   let created = 0;
   let updated = 0;
 
-  for (const q of splitResult.questions) {
-    // Apply accepted AI cleaning proposal (if any) — overrides only content/options
+  for (const q of questions) {
+    // Apply accepted AI cleaning proposal (if any) — only when not user-edited
     const override = overrides?.get(q.questionNumber);
-    const content = override && override.content ? override.content : q.content;
-    const options = override && override.content
-      ? (override.options ?? extractOptions(override.content))
-      : q.options;
+    const content = (userEdited || !override || !override.content) ? q.content : override.content;
+    const options = (userEdited || !override || !override.content)
+      ? q.options
+      : (override.options ?? extractOptions(override.content));
 
     // Check if question with same sourcePaperId + sourceQuestionNumber exists
     const existing = await prisma.question.findFirst({
@@ -978,10 +1117,11 @@ export async function splitQuestionsByTagsAndSave(
 
     if (existing) {
       // Update existing question
+      const cleanContent = options ? stripOptionsFromContent(content) : content;
       await prisma.question.update({
         where: { id: existing.id },
         data: {
-          content,
+          content: cleanContent,
           questionType: q.questionType,
           options: options ? JSON.stringify(options) : null,
           answer: q.correctAnswer || null,
@@ -993,11 +1133,12 @@ export async function splitQuestionsByTagsAndSave(
       updated++;
     } else {
       // Create new question
+      const cleanContent = options ? stripOptionsFromContent(content) : content;
       await prisma.question.create({
         data: {
           paperId,
           questionNumber: q.questionNumber,
-          content,
+          content: cleanContent,
           questionType: q.questionType,
           options: options ? JSON.stringify(options) : null,
           answer: q.correctAnswer || null,
