@@ -41,7 +41,7 @@ const uploadAnswerImage = multer({
  */
 router.post('/', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { title, description, questionIds, totalScore, duration, startTime, endTime } = req.body;
+    const { title, description, questionIds, totalScore, duration, startTime, endTime, paperId } = req.body;
     const creatorId = (req as any).user.id;
     
     const exam = await ExamService.createExam({
@@ -53,6 +53,7 @@ router.post('/', requireAdmin, async (req: Request, res: Response) => {
       startTime: startTime ? new Date(startTime) : undefined,
       endTime: endTime ? new Date(endTime) : undefined,
       creatorId,
+      paperId: paperId ? parseInt(paperId) : undefined,
     });
     
     res.status(201).json({ exam });
