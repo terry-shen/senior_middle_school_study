@@ -16,6 +16,8 @@ import gradingRoutes from './routes/grading';
 import wrongQuestionsRoutes from './routes/wrong-questions';
 import mockExamRoutes from './routes/mock-exams';
 import incentiveRoutes from './routes/incentive';
+import answerSheetRoutes from './routes/answer-sheets';
+import paperLibraryRoutes from './routes/paper-library';
 
 // Load environment variables
 dotenv.config();
@@ -24,7 +26,12 @@ const app: Application = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    // Expose Content-Disposition so cross-origin blob downloads can read the server-provided filename
+    exposedHeaders: ['Content-Disposition'],
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -167,6 +174,8 @@ try {
 // Learning Incentive routes
 try {
   app.use('/api/incentive', incentiveRoutes);
+app.use('/api/answer-sheets', answerSheetRoutes);
+app.use('/api/paper-library', paperLibraryRoutes);
   console.log('Incentive routes registered at /api/incentive');
 } catch (error) {
   console.error('Failed to register Incentive routes:', error);
