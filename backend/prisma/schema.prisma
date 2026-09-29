@@ -109,6 +109,7 @@ model Student {
   learningPaths LearningPath[]
   mockExams     MockExam[]
   mockExamAnswers MockExamAnswer[]
+  answerSheets  AnswerSheet[]
   userBadges    UserBadge[]
   checkIns      CheckIn[]
   challengeOrganizers Challenge[]
@@ -288,12 +289,15 @@ model MockExam {
   endTime       DateTime? @map("end_time")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
+  paperId       Int?     @map("paper_id") // 整卷模式关联 ExamPaper(purpose=whole_paper)
 
   creator       Student @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  paper         ExamPaper? @relation("ExamPaperMockExams", fields: [paperId], references: [id], onDelete: SetNull)
   answers       MockExamAnswer[]
 
   @@index([creatorId])
   @@index([status])
+  @@index([paperId])
   @@map("mock_exams")
 }
 
@@ -325,6 +329,38 @@ model MockExamAnswer {
   @@index([studentId])
   @@index([questionId])
   @@map("mock_exam_answers")
+}
+
+// 学生答题纸（整卷/在线测验/模拟考试结束后上传，老师离线阅卷批注）
+model AnswerSheet {
+  id             Int      @id @default(autoincrement())
+  studentId      Int      @map("student_id")
+  // 三种场景之一（创建时按场景填一个，其余为 null）
+  examId         Int?     @map("exam_id")        // 在线测验 (Exam.id)
+  mockExamId     Int?     @map("mock_exam_id")    // 模拟考试 (MockExam.id)
+  wholePaperId   Int?     @map("whole_paper_id") // 整卷测验 (ExamPaper.id, purpose=whole_paper)
+  fileUrl        String   @map("file_url")        // 上传的原始答题纸 URL
+  fileType       String   @map("file_type")       // 'image' | 'word'
+  fileName       String?  @map("file_name")       // 原始文件名
+  // 老师批改数据
+  annotations    String?  // 批注 JSON: [{type:'rect'|'circle'|'arrow'|'text'|'pen', x,y,w,h?,color,note?}, ...]
+  gradedFileUrl  String?  @map("graded_file_url") // 老师批改版文件 URL（word 答题纸离线批注后回传）
+  teacherComment String?  @map("teacher_comment") // 老师评语
+  totalScore     Int?     @map("total_score")     // 老师给的总分
+  gradedBy       Int?     @map("graded_by")        // 批改老师 Student.id
+  gradedAt       DateTime? @map("graded_at")
+  status         String   @default("submitted")   // submitted（待批改）, graded（已批改）
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([examId])
+  @@index([mockExamId])
+  @@index([wholePaperId])
+  @@index([status])
+  @@map("answer_sheets")
 }
 
 model Session {
@@ -391,6 +427,9 @@ model ExamPaper {
   totalScore  Int?     @map("total_score") // 总分
   duration    Int?     // 考试时长（分钟）
   sourceFormat String? @map("source_format") // pdf | image | word | txt
+  purpose     String   @default("question_source") // whole_paper | question_source
+  subject     String?  // 学科: 语文/数学/英语/物理/化学/生物/政治/历史/地理/理综/文综/其他
+  school      String?  // 学校（自由文本）
   pageImages  String?  @map("page_images") // JSON array of page image URLs
   parsedMarkdown String? @map("parsed_markdown") // MinerU parsed Markdown with LaTeX formulas
   editedMarkdown String? @map("edited_markdown") // User-edited Markdown (calibrated version)
@@ -398,12 +437,15 @@ model ExamPaper {
   updatedAt   DateTime @updatedAt @map("updated_at")
   questions   Question[]
   enrichmentProposals EnrichmentProposal[]
+  exams       Exam[] @relation("ExamPaperExams")
+  mockExams   MockExam[] @relation("ExamPaperMockExams")
 
   @@index([year])
   @@index([region])
   @@index([examType])
   @@index([status])
   @@index([sourceFormat])
+  @@index([subject, year, region])
   @@map("exam_papers")
 }
 
@@ -592,15 +634,18 @@ model Exam {
   endTime       DateTime? @map("end_time")
   status        String   @default("draft") // draft, published, ongoing, ended
   creatorId     Int      @map("creator_id")
+  paperId       Int?     @map("paper_id") // 关联整卷 ExamPaper（整卷考试时非空）
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
   
   creator       Student @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  paper         ExamPaper? @relation("ExamPaperExams", fields: [paperId], references: [id], onDelete: SetNull)
   records       ExamRecord[]
   assignments   ExamAssignment[]
   
   @@index([creatorId])
   @@index([status])
+  @@index([paperId])
   @@map("exams")
 }
 
