@@ -6,10 +6,14 @@ const API_BASE = 'http://localhost:3000/api';
 
 export interface ExamGenerationParams {
   name?: string;
-  questionTypes: {
-    choice: number;
+  /** 指定从某一导入试卷出卷；缺省/0 表示从全部题目中抽取自由组卷 */
+  paperId?: number;
+  typeDistribution: {
+    single_choice?: number;
+    multiple_choice?: number;
     fill: number;
     essay: number;
+    [key: string]: number | undefined;
   };
   difficultyDistribution: {
     easy: number;
@@ -17,7 +21,15 @@ export interface ExamGenerationParams {
     hard: number;
     very_hard: number;
   };
+  scoreDistribution?: {
+    single_choice?: number;
+    multiple_choice?: number;
+    fill: number;
+    essay: number;
+    [key: string]: number | undefined;
+  };
   totalScore: number;
+  duration?: number;
 }
 
 export interface GeneratedQuestion {
@@ -45,7 +57,13 @@ export interface ExamTemplate {
   id: number;
   name: string;
   description?: string;
-  config: ExamGenerationParams;
+  totalScore: number;
+  duration?: number;
+  questionCount?: number;
+  typeDistribution: string;      // JSON string
+  difficultyDistribution: string; // JSON string
+  scoreDistribution: string;      // JSON string
+  isDefault?: boolean;
   createdAt: string;
 }
 
