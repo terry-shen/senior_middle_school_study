@@ -64,7 +64,7 @@ router.post('/:id/publish', requireAuth, requireAdmin, async (req, res) => {
   try {
     const id = parseInt(String(req.params.id));
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
-    const exam = await publishMockExam(id, req.body.startTime, req.body.endTime);
+    const exam = await publishMockExam(id, req.body?.startTime, req.body?.endTime);
     res.json(exam);
   } catch (e: any) {
     res.status(400).json({ error: e.message });

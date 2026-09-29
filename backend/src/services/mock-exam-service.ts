@@ -35,8 +35,13 @@ async function selectQuestionsForMockExam(params: {
   const difficulty = params.difficultyRatio || preset.difficulty;
 
   // Get all questions with their metadata
+  // Note: aiAnalyzed filter removed - after decouple-knowledge-from-questions,
+  // no question is ever marked aiAnalyzed=true, so filtering on it yields zero.
   const allQuestions = await prisma.question.findMany({
-    where: { aiAnalyzed: true },
+    where: {
+      OR: [{ analysis: { not: '' } }, { answer: { not: '' } }],
+      questionType: { not: 'unknown' },
+    },
     select: { id: true, score: true, difficulty: true, questionType: true },
   });
 
@@ -96,15 +101,26 @@ export async function createMockExam(data: {
   difficultyRatio?: Record<string, number>;
   knowledgePointWeights?: Record<string, number>;
   creatorId: number;
+  paperId?: number; // 整卷模式：关联 ExamPaper(purpose=whole_paper)，跳过题目选择
 }) {
   const standard = data.standard || 'custom';
-  const { questionIds, totalScore } = await selectQuestionsForMockExam({
-    standard,
-    totalScore: data.totalScore,
-    duration: data.duration,
-    difficultyRatio: data.difficultyRatio,
-    knowledgePointWeights: data.knowledgePointWeights,
-  });
+  let questionIds: number[] = [];
+  let totalScore = data.totalScore || STANDARD_PRESETS[standard]?.totalScore || 100;
+
+  if (data.paperId) {
+    // 整卷模式：无在线题目，学生下载原始试卷线下作答
+    questionIds = [];
+  } else {
+    const selected = await selectQuestionsForMockExam({
+      standard,
+      totalScore: data.totalScore,
+      duration: data.duration,
+      difficultyRatio: data.difficultyRatio,
+      knowledgePointWeights: data.knowledgePointWeights,
+    });
+    questionIds = selected.questionIds;
+    totalScore = selected.totalScore;
+  }
 
   return prisma.mockExam.create({
     data: {
@@ -117,20 +133,92 @@ export async function createMockExam(data: {
       knowledgePointWeights: JSON.stringify(data.knowledgePointWeights || {}),
       status: 'draft',
       creatorId: data.creatorId,
+      paperId: data.paperId || null,
     },
   });
 }
 
 /**
+ * Create a mock exam from a generated exam (自动出卷 → 模拟考试打通)
+ * Used by POST /api/exams/generate so the admin's generated paper is
+ * immediately available as a draft mock exam that students can take after publish.
+ */
+export async function createMockExamFromGeneratedExam(data: {
+  title: string;
+  questionIds: number[];
+  totalScore: number;
+  duration?: number;
+  creatorId: number;
+}) {
+  return prisma.mockExam.create({
+    data: {
+      title: data.title,
+      standard: 'custom',
+      questionIds: JSON.stringify(data.questionIds),
+      totalScore: data.totalScore || 100,
+      duration: data.duration || 120,
+      difficultyRatio: JSON.stringify({ easy: 30, medium: 50, hard: 20 }),
+      knowledgePointWeights: JSON.stringify({}),
+      status: 'draft',
+      creatorId: data.creatorId,
+    },
+  });
+}
+
+/**
+ * Raised when caller-supplied input is invalid (bad datetime, endTime <= startTime).
+ * Routes map this to HTTP 400 rather than 500.
+ */
+export class MockExamInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'MockExamInputError';
+  }
+}
+
+/**
+ * Normalize a client-supplied datetime into a valid Date.
+ * Accepts Date, ISO-8601 strings, and browser `datetime-local` values
+ * (e.g. "2026-09-29T12:27" - no seconds, no timezone), which Prisma rejects
+ * on DateTime fields with "premature end of input".
+ * Returns undefined when the value is absent/blank; throws MockExamInputError
+ * when a value was supplied but cannot be parsed.
+ */
+function toDateTime(value: Date | string | null | undefined, field: string): Date | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) throw new MockExamInputError(`Invalid ${field}: not a valid date`);
+    return value;
+  }
+  const raw = String(value).trim();
+  if (raw === '') return undefined;
+  // `datetime-local` has no timezone; Safari omits the seconds field.
+  const parsed = new Date(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw) ? `${raw}:00` : raw);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new MockExamInputError(`Invalid ${field}: "${raw}" is not a valid date-time`);
+  }
+  return parsed;
+}
+
+/**
  * Publish a mock exam
  */
-export async function publishMockExam(examId: number, startTime?: Date, endTime?: Date) {
+export async function publishMockExam(
+  examId: number,
+  startTime?: Date | string | null,
+  endTime?: Date | string | null
+) {
+  const start = toDateTime(startTime, 'startTime');
+  const end = toDateTime(endTime, 'endTime');
+  if (start && end && end.getTime() <= start.getTime()) {
+    throw new MockExamInputError('endTime must be later than startTime');
+  }
   return prisma.mockExam.update({
     where: { id: examId },
     data: {
       status: 'published',
-      startTime: startTime || new Date(),
-      endTime: endTime || new Date(Date.now() + 24 * 60 * 60 * 1000),
+      startTime: start || new Date(),
+      endTime: end || new Date(Date.now() + 24 * 60 * 60 * 1000),
     },
   });
 }
@@ -247,9 +335,19 @@ export async function submitMockExam(mockExamId: number, studentId: number) {
     let isCorrect = false;
     let feedback = '';
 
-    if (question.questionType === 'choice') {
+    if (question.questionType === 'choice' || question.questionType === 'single_choice' || question.questionType === 'multiple_choice') {
       const correctAnswer = question.answer || '';
-      isCorrect = (answer.answer || '').trim().toLowerCase() === correctAnswer.trim().toLowerCase();
+      // Multi-choice: answer may be a JSON array like ["A","C"] or comma-separated "A,C"
+      let isCorrect = false;
+      if (question.questionType === 'multiple_choice' && correctAnswer.startsWith('[')) {
+        try {
+          const correctSet = JSON.parse(correctAnswer).map((x: string) => x.trim()).sort().join(',');
+          const givenSet = (answer.answer || '').split(/[,，;；]/).map((x: string) => x.trim()).sort().join(',');
+          isCorrect = givenSet.toLowerCase() === correctSet.toLowerCase();
+        } catch { isCorrect = false; }
+      } else {
+        isCorrect = (answer.answer || '').trim().toLowerCase() === correctAnswer.trim().toLowerCase();
+      }
       score = isCorrect ? Math.round(question.score || 5) : 0;
       feedback = isCorrect ? '回答正确' : `正确答案: ${correctAnswer}`;
     } else if (question.questionType === 'fill') {
@@ -317,33 +415,37 @@ export async function getMockExamResult(mockExamId: number, studentId: number) {
 }
 
 /**
- * Get student's mock exam history
+ * Get student's mock exam list
+ * Returns ALL exams the student can see (published/in_progress/completed),
+ * with the student's own answer status attached. Without this, students who
+ * have never taken an exam see an empty list even when exams are published.
  */
 export async function getMockExamHistory(studentId: number) {
-  const answers = await prisma.mockExamAnswer.findMany({
-    where: { studentId },
-    select: { mockExamId: true },
-    distinct: ['mockExamId'],
-  });
-
-  const examIds = answers.map(a => a.mockExamId);
+  // All exams that are visible to students (published or beyond)
   const exams = await prisma.mockExam.findMany({
-    where: { id: { in: examIds } },
+    where: { status: { in: ['published', 'in_progress', 'completed'] } },
     orderBy: { createdAt: 'desc' },
+    include: { paper: { select: { id: true, title: true, pdfUrl: true, purpose: true, subject: true, school: true } } },
   });
 
-  // Get scores for each exam
-  const results = await Promise.all(
-    exams.map(async exam => {
-      const examAnswers = await prisma.mockExamAnswer.findMany({
-        where: { mockExamId: exam.id, studentId },
-      });
-      const score = examAnswers.reduce((sum, a) => sum + (a.score || 0), 0);
-      return { ...exam, studentScore: score, answered: examAnswers.length };
-    })
-  );
+  // Student's answers for these exams
+  const examAnswers = await prisma.mockExamAnswer.findMany({
+    where: { studentId },
+  });
 
-  return results;
+  // Aggregate per-exam score for the student
+  const scoreByExam = new Map<number, number>();
+  const answeredCountByExam = new Map<number, number>();
+  for (const a of examAnswers) {
+    scoreByExam.set(a.mockExamId, (scoreByExam.get(a.mockExamId) || 0) + (a.score || 0));
+    answeredCountByExam.set(a.mockExamId, (answeredCountByExam.get(a.mockExamId) || 0) + 1);
+  }
+
+  return exams.map(exam => ({
+    ...exam,
+    studentScore: scoreByExam.get(exam.id),
+    answered: answeredCountByExam.get(exam.id) || 0,
+  }));
 }
 
 /**
@@ -419,7 +521,10 @@ export async function listMockExams(status?: string) {
   return prisma.mockExam.findMany({
     where: status ? { status } : undefined,
     orderBy: { createdAt: 'desc' },
-    include: { creator: { select: { id: true, name: true, studentId: true } } },
+    include: {
+      creator: { select: { id: true, name: true, studentId: true } },
+      paper: { select: { id: true, title: true, pdfUrl: true, purpose: true, subject: true, school: true } },
+    },
   });
 }
 
@@ -429,7 +534,10 @@ export async function listMockExams(status?: string) {
 export async function getMockExam(id: number) {
   return prisma.mockExam.findUnique({
     where: { id },
-    include: { creator: { select: { id: true, name: true, studentId: true } } },
+    include: {
+      creator: { select: { id: true, name: true, studentId: true } },
+      paper: { select: { id: true, title: true, pdfUrl: true, purpose: true, subject: true, school: true } },
+    },
   });
 }
 
