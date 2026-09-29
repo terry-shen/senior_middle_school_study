@@ -13,10 +13,15 @@ export interface ExamGenerationParams {
   name: string;
   totalScore: number;
   duration?: number;
+  /** 指定从某一导入试卷中出卷；缺省/0 表示从全部题目中抽取 */
+  paperId?: number;
   typeDistribution: {
-    choice?: number;  // 选择题数量
+    choice?: number;         // 选择题数量（旧枚举别名，兼容 single_choice）
+    single_choice?: number;  // 单选题数量
+    multiple_choice?: number; // 多选题数量
     fill?: number;    // 填空题数量
     essay?: number;   // 解答题数量
+    [key: string]: number | undefined;
   };
   difficultyDistribution: {
     easy?: number;      // 简单题比例 (0-1)
@@ -25,9 +30,12 @@ export interface ExamGenerationParams {
     very_hard?: number; // 极难题比例 (0-1)
   };
   scoreDistribution: {
-    choice?: number;  // 选择题每题分值
+    choice?: number;         // 选择题每题分值（旧枚举别名）
+    single_choice?: number;  // 单选题每题分值
+    multiple_choice?: number; // 多选题每题分值
     fill?: number;    // 填空题每题分值
     essay?: number;   // 解答题每题分值
+    [key: string]: number | undefined;
   };
 }
 
@@ -57,20 +65,29 @@ export async function selectQuestions(params: ExamGenerationParams): Promise<Sel
   const selectedQuestions: SelectedQuestion[] = [];
   let questionNumber = 1;
 
-  // 1. 获取题库中的所有题目
+  // 容错：参数可能部分缺省
+  const typeDistribution = params.typeDistribution || {};
+  const difficultyDistribution = params.difficultyDistribution || {};
+  const scoreDistribution = params.scoreDistribution || {};
+
+  // 1. 获取题库中的所有题目（可限定来源试卷）
   const allQuestions = await prisma.question.findMany({
     where: {
       OR: [
         { analysis: { not: '' } },
         { answer: { not: '' } }
-      ]
+      ],
+      ...(params.paperId && params.paperId > 0 ? { paperId: params.paperId } : {}),
     },
     orderBy: { questionNumber: 'asc' }
   });
 
-  // 2. 按题型分类
+  // 2. 按题型分类（兼容新旧枚举：choice≈single_choice）
+  const isChoiceLike = (t: string | null) => t === 'choice' || t === 'single_choice';
   const questionsByType: Record<string, typeof allQuestions> = {
-    choice: allQuestions.filter(q => q.questionType === 'choice'),
+    choice: allQuestions.filter(q => isChoiceLike(q.questionType)),
+    single_choice: allQuestions.filter(q => isChoiceLike(q.questionType)),
+    multiple_choice: allQuestions.filter(q => q.questionType === 'multiple_choice'),
     fill: allQuestions.filter(q => q.questionType === 'fill'),
     essay: allQuestions.filter(q => q.questionType === 'essay'),
   };
@@ -83,16 +100,38 @@ export async function selectQuestions(params: ExamGenerationParams): Promise<Sel
     very_hard: allQuestions.filter(q => q.difficulty === 'very_hard'),
   };
 
-  // 4. 选择题选题
-  if (params.typeDistribution.choice && params.typeDistribution.choice > 0) {
-    const count = params.typeDistribution.choice;
-    const scorePerQuestion = params.scoreDistribution.choice || 5;
+  // 4. 单选题（选择题）选题：兼容 choice / single_choice 两种键
+  const singleChoiceCount = typeDistribution.single_choice ?? typeDistribution.choice ?? 0;
+  if (singleChoiceCount > 0) {
+    const count = singleChoiceCount;
+    const scorePerQuestion = scoreDistribution.single_choice ?? scoreDistribution.choice ?? 5;
     const selected = selectByDifficulty(
-      questionsByType.choice,
+      questionsByType.single_choice,
       count,
-      params.difficultyDistribution
+      difficultyDistribution
     );
-    
+
+    selected.forEach(q => {
+      selectedQuestions.push({
+        id: q.id,
+        questionId: q.id,
+        questionNumber: questionNumber++,
+        score: scorePerQuestion
+      });
+    });
+  }
+
+  // 4b. 多选题选题
+  const multipleChoiceCount = typeDistribution.multiple_choice ?? 0;
+  if (multipleChoiceCount > 0) {
+    const count = multipleChoiceCount;
+    const scorePerQuestion = scoreDistribution.multiple_choice ?? 5;
+    const selected = selectByDifficulty(
+      questionsByType.multiple_choice,
+      count,
+      difficultyDistribution
+    );
+
     selected.forEach(q => {
       selectedQuestions.push({
         id: q.id,
@@ -104,15 +143,15 @@ export async function selectQuestions(params: ExamGenerationParams): Promise<Sel
   }
 
   // 5. 填空题选题
-  if (params.typeDistribution.fill && params.typeDistribution.fill > 0) {
-    const count = params.typeDistribution.fill;
-    const scorePerQuestion = params.scoreDistribution.fill || 10;
+  if (typeDistribution.fill && typeDistribution.fill > 0) {
+    const count = typeDistribution.fill;
+    const scorePerQuestion = scoreDistribution.fill || 10;
     const selected = selectByDifficulty(
       questionsByType.fill,
       count,
-      params.difficultyDistribution
+      difficultyDistribution
     );
-    
+
     selected.forEach(q => {
       selectedQuestions.push({
         id: q.id,
@@ -124,15 +163,15 @@ export async function selectQuestions(params: ExamGenerationParams): Promise<Sel
   }
 
   // 6. 解答题选题
-  if (params.typeDistribution.essay && params.typeDistribution.essay > 0) {
-    const count = params.typeDistribution.essay;
-    const scorePerQuestion = params.scoreDistribution.essay || 15;
+  if (typeDistribution.essay && typeDistribution.essay > 0) {
+    const count = typeDistribution.essay;
+    const scorePerQuestion = scoreDistribution.essay || 15;
     const selected = selectByDifficulty(
       questionsByType.essay,
       count,
-      params.difficultyDistribution
+      difficultyDistribution
     );
-    
+
     selected.forEach(q => {
       selectedQuestions.push({
         id: q.id,
@@ -234,9 +273,16 @@ export async function generateExam(
 
 /**
  * 预览试卷（不保存）
+ * 返回题目详情（内容/题型/难度）供前端渲染预览卡片
  */
 export async function previewExam(params: ExamGenerationParams): Promise<{
-  questions: SelectedQuestion[];
+  questions: (SelectedQuestion & {
+    content: string;
+    questionType: string;
+    difficulty: string | null;
+    options: string | null;
+    imageUrl: string | null;
+  })[];
   totalScore: number;
   coverage: {
     difficultyDistribution: Record<string, number>;
@@ -250,6 +296,20 @@ export async function previewExam(params: ExamGenerationParams): Promise<{
   const questionIds = questions.map(q => q.questionId);
   const questionDetails = await prisma.question.findMany({
     where: { id: { in: questionIds } }
+  });
+  const detailMap = new Map(questionDetails.map(q => [q.id, q]));
+
+  // 合并题目详情到选题结果
+  const enrichedQuestions = questions.map(q => {
+    const detail = detailMap.get(q.questionId);
+    return {
+      ...q,
+      content: detail?.content || '',
+      questionType: detail?.questionType || 'unknown',
+      difficulty: detail?.difficulty || null,
+      options: detail?.options || null,
+      imageUrl: detail?.imageUrl || null,
+    };
   });
 
   // 计算难度分布
@@ -266,7 +326,7 @@ export async function previewExam(params: ExamGenerationParams): Promise<{
   });
 
   return {
-    questions,
+    questions: enrichedQuestions,
     totalScore,
     coverage: {
       difficultyDistribution,

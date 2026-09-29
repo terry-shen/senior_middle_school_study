@@ -16,6 +16,7 @@ export interface CreateExamData {
   startTime?: Date;
   endTime?: Date;
   creatorId: number;
+  paperId?: number; // 关联整卷 ExamPaper（整卷考试时设置）
 }
 
 export interface PublishExamData {
@@ -37,6 +38,7 @@ export async function createExam(data: CreateExamData) {
       startTime: data.startTime,
       endTime: data.endTime,
       creatorId: data.creatorId,
+      paperId: data.paperId,
     },
   });
   
@@ -55,6 +57,9 @@ export async function getExamById(id: number) {
     include: {
       creator: {
         select: { id: true, studentId: true, name: true },
+      },
+      paper: {
+        select: { id: true, pdfUrl: true, purpose: true, title: true },
       },
       assignments: {
         include: {
@@ -121,6 +126,9 @@ export async function listExams(filters: {
       creator: {
         select: { id: true, studentId: true, name: true },
       },
+      paper: {
+        select: { id: true, pdfUrl: true, purpose: true, title: true },
+      },
       _count: {
         select: { assignments: true, records: true },
       },
@@ -140,7 +148,16 @@ export async function listExams(filters: {
 export async function publishExam(examId: number, data: PublishExamData) {
   // Create assignments
   const assignments: { examId: number; classId?: number; studentId?: number }[] = [];
-  
+
+  // 若未指定分配对象，默认分配给所有学生（前端可能传空对象）
+  if ((!data.classIds || data.classIds.length === 0) && (!data.studentIds || data.studentIds.length === 0)) {
+    const allStudents = await prisma.student.findMany({
+      where: { role: 'student' },
+      select: { id: true },
+    });
+    data.studentIds = allStudents.map((s) => s.id);
+  }
+
   if (data.classIds) {
     for (const classId of data.classIds) {
       assignments.push({ examId, classId });
@@ -190,7 +207,24 @@ export async function getExamQuestions(examId: number) {
   
   // Sort by order in questionIds
   const questionMap = new Map(questions.map((q) => [q.id, q]));
-  return questionIds.map((id) => questionMap.get(id)).filter(Boolean);
+  return questionIds
+    .map((id) => questionMap.get(id))
+    .filter(Boolean)
+    .map((q) => ({ ...q, options: parseQuestionOptions((q as any).options) }));
+}
+
+/**
+ * Parse the JSON-string `options` column into a string array.
+ * Returns null when empty/invalid (callers treat null as "no options").
+ */
+function parseQuestionOptions(raw: string | null | undefined): string[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -201,7 +235,15 @@ export async function startExam(examId: number, studentId: number) {
   const exam = await prisma.exam.findUnique({
     where: { id: examId },
     include: {
-      assignments: true,
+      assignments: {
+        include: {
+          class: {
+            include: {
+              students: { select: { id: true } },
+            },
+          },
+        },
+      },
     },
   });
   
@@ -217,7 +259,10 @@ export async function startExam(examId: number, studentId: number) {
   const isAssigned = exam.assignments.some((a) => {
     if (a.studentId === studentId) return true;
     // Check if student is in assigned class
-    return false; // TODO: Check class membership
+    if (a.classId) {
+      return a.class?.students?.some((s: any) => s.id === studentId) ?? false;
+    }
+    return false;
   });
   
   // Check if already started
