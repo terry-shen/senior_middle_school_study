@@ -169,7 +169,8 @@ export default function WrongQuestionBook() {
             </select>
             <select value={filters.questionType} onChange={e => setFilters({...filters, questionType: e.target.value})}>
               <option value="">全部题型</option>
-              <option value="choice">选择题</option>
+              <option value="single_choice">单选题</option>
+              <option value="multiple_choice">多选题</option>
               <option value="fill">填空题</option>
               <option value="essay">解答题</option>
             </select>
@@ -266,7 +267,7 @@ export default function WrongQuestionBook() {
               
               <div className="practice-answer">
                 <h3>你的答案</h3>
-                {selectedQuestion.question?.questionType === 'choice' ? (
+                {(selectedQuestion.question?.questionType === 'choice' || selectedQuestion.question?.questionType === 'single_choice' || selectedQuestion.question?.questionType === 'multiple_choice') ? (
                   <div className="choice-options">
                     {['A', 'B', 'C', 'D'].map(opt => (
                       <button
@@ -325,7 +326,7 @@ export default function WrongQuestionBook() {
             <div className="stats-bar">
               {stats.byType.map(t => (
                 <div key={t.type} className="bar-item">
-                  <span className="bar-label">{t.type === 'choice' ? '选择题' : t.type === 'fill' ? '填空题' : '解答题'}</span>
+                  <span className="bar-label">{t.type === 'single_choice' ? '单选题' : t.type === 'multiple_choice' ? '多选题' : t.type === 'choice' ? '选择题' : t.type === 'fill' ? '填空题' : '解答题'}</span>
                   <div className="bar-fill" style={{ width: `${(t.count / stats.total) * 100}%` }}>
                     {t.count}
                   </div>
