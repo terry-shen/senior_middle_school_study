@@ -26,6 +26,9 @@ const OnlineExamManagement = lazy(() => import('./pages/OnlineExamManagement'));
 const TakeExam = lazy(() => import('./pages/TakeExam'));
 const GradingReview = lazy(() => import('./pages/GradingReview'));
 const WrongQuestionBook = lazy(() => import('./pages/WrongQuestionBook'));
+const WrongQuestionEdit = lazy(() => import('./pages/WrongQuestionEdit'));
+const WrongQuestionPractice = lazy(() => import('./pages/WrongQuestionPractice'));
+const WrongQuestionPrint = lazy(() => import('./pages/WrongQuestionPrint'));
 const MockExamPage = lazy(() => import('./pages/MockExam'));
 const LearningIncentive = lazy(() => import('./pages/LearningIncentive'));
 const AnswerSheetsList = lazy(() => import('./pages/AnswerSheetsList'));
@@ -213,7 +216,7 @@ function AppRoutes() {
       <Route
         path="/questions"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute requireAdmin>
             <QuestionList />
           </ProtectedRoute>
         }
@@ -279,6 +282,38 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <WrongQuestionBook />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/wrong-questions/edit/:id"
+        element={
+          <ProtectedRoute>
+            <WrongQuestionEdit />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/wrong-questions/edit"
+        element={
+          <ProtectedRoute>
+            <WrongQuestionEdit />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/wrong-questions/practice/:id"
+        element={
+          <ProtectedRoute>
+            <WrongQuestionPractice />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/wrong-questions/print"
+        element={
+          <ProtectedRoute>
+            <WrongQuestionPrint />
           </ProtectedRoute>
         }
       />
@@ -369,13 +404,15 @@ function AppContent() {
                 知识点导入
               </Link>
             )}
-            <Link
-              to="/questions"
-              className={location.pathname === '/questions' ? 'nav-link active' : 'nav-link'}
-              onClick={closeMobileMenu}
-            >
-              题目列表
-            </Link>
+            {user?.role === 'admin' && (
+              <Link
+                to="/questions"
+                className={location.pathname === '/questions' ? 'nav-link active' : 'nav-link'}
+                onClick={closeMobileMenu}
+              >
+                题目列表
+              </Link>
+            )}
             {user?.role === 'admin' && (
               <>
                 <NavDropdown title="管理" links={adminLinks} />

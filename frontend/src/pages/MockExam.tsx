@@ -15,15 +15,13 @@ import {
   submitMockExam,
   getMockExamResult,
   getBenchmarkAnalysis,
-  getWrongQuestionAnalysis,
   type MockExam,
   type MockExamResult,
   type BenchmarkAnalysis,
-  type WrongQuestionAnalysis,
 } from '../services/mock-exams-api';
 import './MockExam.css';
 
-type View = 'list' | 'taking' | 'result' | 'benchmark' | 'wrong-analysis' | 'answer-sheet';
+type View = 'list' | 'taking' | 'result' | 'benchmark' | 'answer-sheet';
 
 /** 整卷模式：关联原始试卷（questionIds 为空） */
 function isWholePaperExam(exam: MockExam): boolean {
@@ -40,7 +38,6 @@ export default function MockExamPage() {
   const [currentExamId, setCurrentExamId] = useState<number | null>(null);
   const [result, setResult] = useState<MockExamResult | null>(null);
   const [benchmark, setBenchmark] = useState<BenchmarkAnalysis | null>(null);
-  const [wrongAnalysis, setWrongAnalysis] = useState<WrongQuestionAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -152,19 +149,6 @@ export default function MockExamPage() {
     }
   };
 
-  // Student: View wrong analysis
-  const handleViewWrong = async (id: number) => {
-    if (!token) return;
-    try {
-      const w = await getWrongQuestionAnalysis(token, id);
-      setWrongAnalysis(w);
-      setCurrentExamId(id);
-      setView('wrong-analysis');
-    } catch (e: any) {
-      setError(e.message);
-    }
-  };
-
   const statusBadge = (status: string) => {
     const colors: Record<string, string> = {
       draft: 'gray',
@@ -251,7 +235,6 @@ export default function MockExamPage() {
                             <>
                               <button className="btn-small" onClick={() => handleViewResult(exam.id)}>查看结果</button>
                               <button className="btn-small" onClick={() => handleViewBenchmark(exam.id)}>对标分析</button>
-                              <button className="btn-small" onClick={() => handleViewWrong(exam.id)}>错题分析</button>
                             </>
                           )}
                         </td>
@@ -315,10 +298,6 @@ export default function MockExamPage() {
 
       {view === 'benchmark' && benchmark && (
         <BenchmarkView benchmark={benchmark} onBack={() => { setView('list'); setBenchmark(null); }} />
-      )}
-
-      {view === 'wrong-analysis' && wrongAnalysis && (
-        <WrongAnalysisView analysis={wrongAnalysis} onBack={() => { setView('list'); setWrongAnalysis(null); }} />
       )}
     </div>
   );
@@ -578,47 +557,6 @@ function BenchmarkView({ benchmark, onBack }: { benchmark: BenchmarkAnalysis; on
           <h3>班级最低</h3>
           <p className="stat-value">{benchmark.classMin}</p>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ===== Wrong Analysis View =====
-function WrongAnalysisView({ analysis, onBack }: { analysis: WrongQuestionAnalysis; onBack: () => void }) {
-  return (
-    <div className="wrong-analysis-view">
-      <div className="result-header">
-        <button className="btn-secondary" onClick={onBack}>返回</button>
-        <h2>错题分析</h2>
-      </div>
-      <div className="card">
-        <h3>共错 {analysis.totalWrong} 题</h3>
-        {analysis.byQuestionType && analysis.byQuestionType.length > 0 && (
-          <div className="kp-wrong">
-            <h4>按题型分布</h4>
-            {analysis.byQuestionType.map(t => (
-              <div key={t.questionType} className="kp-bar">
-                <span>{t.questionType}</span>
-                <div className="bar-container">
-                  <div className="bar-fill" style={{ width: `${(t.wrongCount / analysis.totalWrong) * 100}%` }}></div>
-                </div>
-                <span>{t.wrongCount}题</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="wrong-list">
-        {analysis.wrongAnswers.map(a => (
-          <div key={a.id} className="wrong-item card">
-            <div className="wrong-q">{a.question?.content}</div>
-            <div className="wrong-a">
-              <span>你的答案: {a.answer || '(未作答)'}</span>
-              <span>正确答案: {a.question?.answer || '(待批改)'}</span>
-            </div>
-            <div className="wrong-feedback">{a.feedback}</div>
-          </div>
-        ))}
       </div>
     </div>
   );

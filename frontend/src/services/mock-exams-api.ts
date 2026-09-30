@@ -74,12 +74,6 @@ export interface BenchmarkAnalysis {
   percentile: number;
 }
 
-export interface WrongQuestionAnalysis {
-  totalWrong: number;
-  byQuestionType: { questionType: string; wrongCount: number; questions: number[] }[];
-  wrongAnswers: MockExamAnswer[];
-}
-
 function authHeaders(token: string) {
   return {
     'Content-Type': 'application/json',
@@ -187,12 +181,6 @@ export async function getMockExamResult(token: string, id: number): Promise<Mock
 // Student: Get benchmark analysis
 export async function getBenchmarkAnalysis(token: string, id: number): Promise<BenchmarkAnalysis> {
   const res = await fetch(`${API_BASE}/mock-exams/${id}/benchmark`, { headers: authHeaders(token) });
-  return res.json();
-}
-
-// Student: Get wrong question analysis
-export async function getWrongQuestionAnalysis(token: string, id: number): Promise<WrongQuestionAnalysis> {
-  const res = await fetch(`${API_BASE}/mock-exams/${id}/wrong-analysis`, { headers: authHeaders(token) });
   return res.json();
 }
 
