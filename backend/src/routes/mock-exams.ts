@@ -10,7 +10,6 @@ import {
   getMockExamResult,
   getMockExamHistory,
   getBenchmarkAnalysis,
-  getWrongQuestionAnalysis,
   listMockExams,
   getMockExam,
   deleteMockExam,
@@ -157,18 +156,6 @@ router.get('/:id/benchmark', requireAuth, async (req, res) => {
     const id = parseInt(String(req.params.id));
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
     const result = await getBenchmarkAnalysis(id, (req as any).user.id);
-    res.json(result);
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
-});
-
-// Student: Get wrong question analysis
-router.get('/:id/wrong-analysis', requireAuth, async (req, res) => {
-  try {
-    const id = parseInt(String(req.params.id));
-    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
-    const result = await getWrongQuestionAnalysis(id, (req as any).user.id);
     res.json(result);
   } catch (e: any) {
     res.status(400).json({ error: e.message });

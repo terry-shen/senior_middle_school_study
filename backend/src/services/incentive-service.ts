@@ -236,8 +236,8 @@ export async function checkAllBadges(studentId: number): Promise<void> {
   await updateBadgeProgress(studentId, 'perfect_score', perfectCount);
   void perfectScores; // suppress unused warning
 
-  // 5. Wrong questions mastered
-  const masteredWrong = await prisma.wrongQuestion.count({
+  // 5. Wrong questions mastered (student wrong questions table)
+  const masteredWrong = await prisma.studentWrongQuestion.count({
     where: { studentId, reviewStatus: 'mastered' },
   });
   await updateBadgeProgress(studentId, 'wrong_mastered', masteredWrong);

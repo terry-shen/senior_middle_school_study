@@ -1,238 +1,337 @@
 /**
- * Wrong Questions Service
- * Handles wrong question collection, classification, and practice
+ * Student Wrong Questions Service
+ *
+ * 学生自主录入错题本（拍照/手动），不依赖 Question 表外键，
+ * 重练用自评判分，掌握度按自由文本标签分组。
  */
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+export interface CreateWrongQuestionInput {
+  source?: 'photo' | 'manual';
+  imageUrl?: string | null;
+  content?: string | null;
+  options?: string | null; // JSON 字符串数组
+  myAnswer?: string | null;
+  correctAnswer?: string | null;
+  analysis?: string | null;
+  questionType?: string;
+  difficulty?: string;
+  knowledgePointTags?: string | null;
+  notes?: string | null;
+}
+
+export interface UpdateWrongQuestionInput {
+  imageUrl?: string | null;
+  content?: string | null;
+  options?: string | null;
+  myAnswer?: string | null;
+  correctAnswer?: string | null;
+  analysis?: string | null;
+  questionType?: string;
+  difficulty?: string;
+  knowledgePointTags?: string | null;
+  notes?: string | null;
+}
+
+export interface WrongQuestionFilters {
+  questionType?: string;
+  difficulty?: string;
+  tag?: string; // 模糊匹配 knowledgePointTags
+  reviewStatus?: string; // new/reviewing/mastered
+  viewMode?: 'unmastered' | 'all'; // 默认 unmastered
+  sortBy?: 'createdAt' | 'lastReviewAt';
+  page?: number;
+  limit?: number;
+}
+
 /**
- * Auto-collect wrong question when graded
+ * 创建错题
  */
-export async function collectWrongQuestion(
+export async function createWrongQuestion(
   studentId: number,
-  questionId: number,
-  originalAnswer: string,
-  correctAnswer: string
+  data: CreateWrongQuestionInput
 ) {
-  // Check if already exists
-  const existing = await prisma.wrongQuestion.findUnique({
-    where: {
-      studentId_questionId: {
-        studentId,
-        questionId,
-      },
-    },
-  });
-
-  if (existing) {
-    // Update wrong count and last wrong time
-    return prisma.wrongQuestion.update({
-      where: { id: existing.id },
-      data: {
-        wrongCount: existing.wrongCount + 1,
-        lastWrongAt: new Date(),
-        originalAnswer,
-        reviewStatus: existing.reviewStatus === 'mastered' ? 'reviewing' : existing.reviewStatus,
-      },
-    });
-  }
-
-  // Create new wrong question record
-  return prisma.wrongQuestion.create({
+  return prisma.studentWrongQuestion.create({
     data: {
       studentId,
-      questionId,
-      originalAnswer,
-      correctAnswer,
-      wrongCount: 1,
-      reviewStatus: 'not_reviewed',
+      source: data.source ?? 'manual',
+      imageUrl: data.imageUrl ?? null,
+      content: data.content ?? null,
+      options: data.options ?? null,
+      myAnswer: data.myAnswer ?? null,
+      correctAnswer: data.correctAnswer ?? null,
+      analysis: data.analysis ?? null,
+      questionType: data.questionType ?? 'unknown',
+      difficulty: data.difficulty ?? 'unknown',
+      knowledgePointTags: data.knowledgePointTags ?? null,
+      notes: data.notes ?? null,
     },
   });
 }
 
 /**
- * Get wrong questions with filters
+ * 查询错题列表（多维筛选 + 分页 + 视图消减）
  */
 export async function getWrongQuestions(
   studentId: number,
-  filters?: {
-    reviewStatus?: string;
-    knowledgePoint?: string;
-    questionType?: string;
-    difficulty?: string;
-  }
+  filters: WrongQuestionFilters = {}
 ) {
-  const wrongQuestions = await prisma.wrongQuestion.findMany({
-    where: {
-      studentId,
-      ...(filters?.reviewStatus && { reviewStatus: filters.reviewStatus }),
-    },
-    include: {
-      question: true,
-    },
-    orderBy: {
-      lastWrongAt: 'desc',
-    },
-  });
+  const {
+    questionType,
+    difficulty,
+    tag,
+    reviewStatus,
+    viewMode = 'unmastered',
+    sortBy = 'createdAt',
+    page = 1,
+    limit = 20,
+  } = filters;
 
-  // Apply additional filters in memory
-  let result = wrongQuestions;
+  const where: Prisma.StudentWrongQuestionWhereInput = { studentId };
 
-  if (filters?.questionType) {
-    result = result.filter(wq => wq.question.questionType === filters.questionType);
+  if (questionType && questionType !== 'all') {
+    where.questionType = questionType;
+  }
+  if (difficulty && difficulty !== 'all') {
+    where.difficulty = difficulty;
+  }
+  if (reviewStatus && reviewStatus !== 'all') {
+    where.reviewStatus = reviewStatus;
+  } else if (viewMode === 'unmastered') {
+    // 默认视图：仅未掌握
+    where.reviewStatus = { not: 'mastered' };
+  }
+  if (tag && tag.trim()) {
+    where.knowledgePointTags = { contains: tag.trim() };
   }
 
-  if (filters?.difficulty) {
-    result = result.filter(wq => wq.question.difficulty === filters.difficulty);
-  }
+  const orderBy: Prisma.StudentWrongQuestionOrderByWithRelationInput =
+    sortBy === 'lastReviewAt'
+      ? { lastReviewAt: 'desc' }
+      : { createdAt: 'desc' };
 
-  return result;
-}
-
-/**
- * Record a re-practice
- */
-export async function recordPractice(
-  wrongQuestionId: number,
-  studentId: number,
-  questionId: number,
-  userAnswer: string,
-  isCorrect: boolean
-) {
-  // Create practice record
-  const practice = await prisma.wrongQuestionPractice.create({
-    data: {
-      wrongQuestionId,
-      studentId,
-      questionId,
-      userAnswer,
-      isCorrect,
-    },
-  });
-
-  // Update wrong question if correct
-  if (isCorrect) {
-    await prisma.wrongQuestion.update({
-      where: { id: wrongQuestionId },
-      data: {
-        reviewStatus: 'mastered',
-        lastReviewAt: new Date(),
-      },
-    });
-  }
-
-  return practice;
-}
-
-/**
- * Generate variation question using LLM
- */
-export async function generateVariationQuestion(originalId: number) {
-  // This would call LLM service to generate a similar question
-  // For now, return a placeholder
-  const variation = await prisma.variationQuestion.create({
-    data: {
-      originalId,
-      content: 'Generated variation question content',
-      questionType: 'fill',
-      answer: 'Generated answer',
-      difficulty: 'medium',
-      generatedBy: 'ai',
-    },
-  });
-
-  return variation;
-}
-
-/**
- * Get variation questions for a question
- */
-export async function getVariationQuestions(questionId: number) {
-  return prisma.variationQuestion.findMany({
-    where: { originalId: questionId },
-  });
-}
-
-/**
- * Update review status
- */
-export async function updateReviewStatus(
-  wrongQuestionId: number,
-  status: string,
-  notes?: string
-) {
-  return prisma.wrongQuestion.update({
-    where: { id: wrongQuestionId },
-    data: {
-      reviewStatus: status,
-      lastReviewAt: new Date(),
-      ...(notes && { notes }),
-    },
-  });
-}
-
-/**
- * Get wrong question statistics
- */
-export async function getWrongQuestionStats(studentId: number) {
-  const total = await prisma.wrongQuestion.count({
-    where: { studentId },
-  });
-
-  const byStatus = await prisma.wrongQuestion.groupBy({
-    by: ['reviewStatus'],
-    where: { studentId },
-    _count: true,
-  });
-
-  const byDifficulty = await prisma.wrongQuestion.findMany({
-    where: { studentId },
-    include: {
-      question: {
-        select: {
-          difficulty: true,
-        },
-      },
-    },
-  });
-
-  const difficultyStats = byDifficulty.reduce((acc, wq) => {
-    const diff = wq.question.difficulty || 'unknown';
-    acc[diff] = (acc[diff] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const [data, total] = await Promise.all([
+    prisma.studentWrongQuestion.findMany({
+      where,
+      orderBy,
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.studentWrongQuestion.count({ where }),
+  ]);
 
   return {
-    total,
-    byStatus: byStatus.reduce((acc, s) => {
-      acc[s.reviewStatus] = s._count;
-      return acc;
-    }, {} as Record<string, number>),
-    byDifficulty: difficultyStats,
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit) || 0,
+    },
   };
 }
 
 /**
- * Get practice history
+ * 获取错题详情
  */
-export async function getPracticeHistory(
-  studentId: number,
-  limit: number = 50
-) {
-  return prisma.wrongQuestionPractice.findMany({
-    where: { studentId },
-    include: {
-      wrongQuestion: {
-        include: {
-          question: true,
-        },
-      },
-    },
-    orderBy: {
-      practiceAt: 'desc',
-    },
-    take: limit,
+export async function getWrongQuestionById(id: number, studentId: number) {
+  return prisma.studentWrongQuestion.findFirst({
+    where: { id, studentId },
   });
+}
+
+/**
+ * 更新错题（补录题面/编辑）
+ */
+export async function updateWrongQuestion(
+  id: number,
+  studentId: number,
+  data: UpdateWrongQuestionInput
+) {
+  return prisma.studentWrongQuestion.update({
+    where: { id },
+    data: {
+      ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl }),
+      ...(data.content !== undefined && { content: data.content }),
+      ...(data.options !== undefined && { options: data.options }),
+      ...(data.myAnswer !== undefined && { myAnswer: data.myAnswer }),
+      ...(data.correctAnswer !== undefined && { correctAnswer: data.correctAnswer }),
+      ...(data.analysis !== undefined && { analysis: data.analysis }),
+      ...(data.questionType !== undefined && { questionType: data.questionType }),
+      ...(data.difficulty !== undefined && { difficulty: data.difficulty }),
+      ...(data.knowledgePointTags !== undefined && { knowledgePointTags: data.knowledgePointTags }),
+      ...(data.notes !== undefined && { notes: data.notes }),
+    },
+  });
+}
+
+/**
+ * 删除错题
+ */
+export async function deleteWrongQuestion(id: number, studentId: number) {
+  return prisma.studentWrongQuestion.deleteMany({
+    where: { id, studentId },
+  });
+}
+
+/**
+ * 重练自评
+ * - selfAssessment='correct' → reviewStatus=mastered, wrongCount 不变
+ * - selfAssessment='wrong'   → wrongCount+1, reviewStatus='reviewing'
+ */
+export async function practiceWrongQuestion(
+  id: number,
+  studentId: number,
+  selfAssessment: 'correct' | 'wrong',
+  userAnswer?: string
+) {
+  const now = new Date();
+  if (selfAssessment === 'correct') {
+    return prisma.studentWrongQuestion.update({
+      where: { id },
+      data: {
+        reviewStatus: 'mastered',
+        lastReviewAt: now,
+        myAnswer: userAnswer ?? undefined,
+      },
+    });
+  }
+  // 答错
+  const current = await prisma.studentWrongQuestion.findFirst({
+    where: { id, studentId },
+    select: { wrongCount: true },
+  });
+  return prisma.studentWrongQuestion.update({
+    where: { id },
+    data: {
+      wrongCount: (current?.wrongCount ?? 0) + 1,
+      reviewStatus: 'reviewing',
+      lastReviewAt: now,
+      myAnswer: userAnswer ?? undefined,
+    },
+  });
+}
+
+/**
+ * 标记/取消掌握
+ */
+export async function setMastered(
+  id: number,
+  studentId: number,
+  mastered: boolean
+) {
+  return prisma.studentWrongQuestion.update({
+    where: { id },
+    data: {
+      reviewStatus: mastered ? 'mastered' : 'reviewing',
+      lastReviewAt: new Date(),
+    },
+  });
+}
+
+/**
+ * 掌握度概览：按知识点标签分组
+ * 掌握度 = 已掌握数 / 总数 × 100%
+ * 未打标签的错题归入「未分类」行
+ */
+export async function getMasteryOverview(studentId: number) {
+  const all = await prisma.studentWrongQuestion.findMany({
+    where: { studentId },
+    select: {
+      knowledgePointTags: true,
+      reviewStatus: true,
+    },
+  });
+
+  type GroupStat = {
+    tag: string;
+    total: number;
+    mastered: number;
+    mastery: number; // 0-100
+    weak: boolean; // mastery < 50
+  };
+
+  const groups = new Map<string, { total: number; mastered: number }>();
+
+  for (const item of all) {
+    let tags: string[] = [];
+    if (item.knowledgePointTags && item.knowledgePointTags.trim()) {
+      tags = item.knowledgePointTags
+        .split(/[,，;；]/)
+        .map((t) => t.trim())
+        .filter(Boolean);
+    }
+    if (tags.length === 0) tags = ['未分类'];
+
+    for (const t of tags) {
+      const g = groups.get(t) ?? { total: 0, mastered: 0 };
+      g.total += 1;
+      if (item.reviewStatus === 'mastered') g.mastered += 1;
+      groups.set(t, g);
+    }
+  }
+
+  const overview: GroupStat[] = Array.from(groups.entries()).map(([tag, stat]) => {
+    const mastery = stat.total === 0 ? 0 : Math.round((stat.mastered / stat.total) * 100);
+    return {
+      tag,
+      total: stat.total,
+      mastered: stat.mastered,
+      mastery,
+      weak: mastery < 50,
+    };
+  });
+
+  // 排序：未分类最后；其余按掌握度升序（薄弱在前）
+  overview.sort((a, b) => {
+    if (a.tag === '未分类' && b.tag !== '未分类') return 1;
+    if (b.tag === '未分类' && a.tag !== '未分类') return -1;
+    return a.mastery - b.mastery;
+  });
+
+  const total = all.length;
+  const masteredCount = all.filter((x) => x.reviewStatus === 'mastered').length;
+  const overallMastery = total === 0 ? 0 : Math.round((masteredCount / total) * 100);
+
+  return {
+    overall: {
+      total,
+      mastered: masteredCount,
+      mastery: overallMastery,
+    },
+    groups: overview,
+  };
+}
+
+/**
+ * 打印导出：返回排版数据供前端 window.print() 渲染
+ */
+export async function getPrintExportData(
+  studentId: number,
+  ids: number[],
+  includeAnswerAnalysis: boolean = false
+) {
+  const items = await prisma.studentWrongQuestion.findMany({
+    where: { id: { in: ids }, studentId },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return items.map((item, idx) => ({
+    index: idx + 1,
+    id: item.id,
+    questionType: item.questionType,
+    difficulty: item.difficulty,
+    content: item.content,
+    imageUrl: item.imageUrl,
+    options: item.options,
+    knowledgePointTags: item.knowledgePointTags,
+    ...(includeAnswerAnalysis && {
+      myAnswer: item.myAnswer,
+      correctAnswer: item.correctAnswer,
+      analysis: item.analysis,
+    }),
+  }));
 }

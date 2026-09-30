@@ -101,8 +101,7 @@ model Student {
   masteryRecords MasteryRecord[]
   masteryHistory MasteryHistory[]
   learningReports LearningReport[]
-  wrongQuestions WrongQuestion[]
-  wrongQuestionPractices WrongQuestionPractice[]
+  studentWrongQuestions StudentWrongQuestion[]
   recommendations Recommendation[]
   feedbacks RecommendationFeedback[]
   practiceSessions PracticeSession[]
@@ -497,8 +496,6 @@ model Question {
   reviews AIContentReview[]
   difficultyAdjustments DifficultyAdjustment[]
   answers AnswerRecord[]
-  wrongQuestions WrongQuestion[]
-  variationQuestions VariationQuestion[]
   recommendationItems RecommendationItem[]
   mockExamAnswers MockExamAnswer[]
 }
@@ -776,68 +773,35 @@ model LearningReport {
   @@map("learning_reports")
 }
 
-// 错题记录
-model WrongQuestion {
+// 学生错题本（独立表，不外键 Question 表）
+model StudentWrongQuestion {
   id                Int      @id @default(autoincrement())
   studentId         Int      @map("student_id")
-  questionId        Int      @map("question_id")
-  originalAnswer    String?  @map("original_answer") // 学生原始答案
-  correctAnswer     String   @map("correct_answer") // 正确答案
-  wrongCount        Int      @default(1) @map("wrong_count") // 错误次数
-  reviewStatus      String   @default("not_reviewed") // not_reviewed, reviewing, mastered
-  lastWrongAt       DateTime @default(now()) @map("last_wrong_at")
-  lastReviewAt      DateTime? @map("last_review_at")
+  source            String   @default("manual") // photo | manual
+  imageUrl          String?  @map("image_url") // 拍照题图片 URL
+  content           String?  // 题面文本（支持 LaTeX，拍照题可后续补录）
+  options           String?  // 选项（JSON 数组，选择题用）
+  myAnswer          String?  @map("my_answer") // 学生原始答案
+  correctAnswer     String?  @map("correct_answer") // 正确答案
+  analysis          String?  // 解析（支持 LaTeX）
+  questionType      String   @default("unknown") @map("question_type") // single_choice/multiple_choice/fill/essay/unknown
+  difficulty        String   @default("unknown") // easy/medium/hard/very_hard/unknown
+  knowledgePointTags String? @map("knowledge_point_tags") // 自由文本逗号分隔
   notes             String? // 学生笔记
-  tags              String? // 标签（逗号分隔）
+  reviewStatus      String   @default("new") @map("review_status") // new/reviewing/mastered
+  wrongCount        Int      @default(1) @map("wrong_count")
   createdAt         DateTime @default(now()) @map("created_at")
+  lastReviewAt      DateTime? @map("last_review_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
-  
-  student           Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  question          Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  practices         WrongQuestionPractice[]
-  
-  @@unique([studentId, questionId])
-  @@index([studentId])
-  @@index([questionId])
-  @@index([reviewStatus])
-  @@map("wrong_questions")
-}
 
-// 错题重练记录
-model WrongQuestionPractice {
-  id              Int      @id @default(autoincrement())
-  wrongQuestionId Int      @map("wrong_question_id")
-  studentId       Int      @map("student_id")
-  questionId      Int      @map("question_id")
-  userAnswer      String?  @map("user_answer")
-  isCorrect       Boolean  @default(false) @map("is_correct")
-  practiceAt      DateTime @default(now()) @map("practice_at")
-  
-  wrongQuestion   WrongQuestion @relation(fields: [wrongQuestionId], references: [id], onDelete: Cascade)
-  student         Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  
-  @@index([wrongQuestionId])
-  @@index([studentId])
-  @@index([practiceAt])
-  @@map("wrong_question_practices")
-}
+  student           Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
-// 变式题目
-model VariationQuestion {
-  id              Int      @id @default(autoincrement())
-  originalId      Int      @map("original_id") // 原题ID
-  content         String   @map("content")
-  questionType    String   @map("question_type")
-  options         String?  @map("options") // JSON
-  answer          String   @map("answer")
-  difficulty      String   @default("medium") @map("difficulty")
-  generatedBy     String   @default("ai") // ai, manual
-  createdAt       DateTime @default(now()) @map("created_at")
-  
-  original        Question @relation(fields: [originalId], references: [id], onDelete: Cascade)
-  
-  @@index([originalId])
-  @@map("variation_questions")
+  @@index([studentId, reviewStatus])
+  @@index([studentId, questionType])
+  @@index([studentId, difficulty])
+  @@index([studentId, createdAt])
+  @@index([studentId, lastReviewAt])
+  @@map("student_wrong_questions")
 }
 
 // ===== Personalized Recommendation Models =====

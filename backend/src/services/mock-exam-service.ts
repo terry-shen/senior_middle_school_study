@@ -486,35 +486,6 @@ export async function getBenchmarkAnalysis(mockExamId: number, studentId: number
 }
 
 /**
- * Get wrong question analysis for mock exam
- */
-export async function getWrongQuestionAnalysis(mockExamId: number, studentId: number) {
-  const answers = await prisma.mockExamAnswer.findMany({
-    where: { mockExamId, studentId, isCorrect: false },
-    include: { question: true },
-  });
-
-  // Group by question type (replaces by-knowledge-point after decoupling)
-  const byType: Record<string, { wrongCount: number; questions: number[] }> = {};
-  for (const a of answers) {
-    const qt = a.question.questionType || 'unknown';
-    if (!byType[qt]) byType[qt] = { wrongCount: 0, questions: [] };
-    byType[qt].wrongCount++;
-    byType[qt].questions.push(a.questionId);
-  }
-
-  const sortedTypes = Object.entries(byType)
-    .map(([questionType, data]) => ({ questionType, ...data }))
-    .sort((a, b) => b.wrongCount - a.wrongCount);
-
-  return {
-    totalWrong: answers.length,
-    byQuestionType: sortedTypes,
-    wrongAnswers: answers,
-  };
-}
-
-/**
  * Get all mock exams (admin)
  */
 export async function listMockExams(status?: string) {
