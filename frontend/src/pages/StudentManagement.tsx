@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import './StudentManagement.css';
 
@@ -222,6 +223,11 @@ export default function StudentManagement() {
                   <td>{student.role === 'admin' ? '管理员' : '学生'}</td>
                   <td>{student.class ? `${student.class.grade} - ${student.class.name}` : '-'}</td>
                   <td>
+                    {student.role !== 'admin' && (
+                      <Link to={`/admin/students/${student.id}/wrong-questions`} className="btn-small btn-wrongbook">
+                        错题本
+                      </Link>
+                    )}
                     <button onClick={() => handleEdit(student)} className="btn-small">
                       编辑
                     </button>

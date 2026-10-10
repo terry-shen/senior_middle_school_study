@@ -265,3 +265,34 @@ export async function getPrintExportData(
   );
   return response.json();
 }
+
+// ===== Admin 只读视图 =====
+
+// 管理员查询某学生的错题列表
+export async function getStudentWrongQuestionsForAdmin(
+  token: string,
+  studentId: number,
+  filters: { questionType?: string; difficulty?: string; tag?: string; reviewStatus?: string; viewMode?: ViewMode; page?: number; limit?: number } = {}
+): Promise<WrongQuestionsResult> {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(filters)) {
+    if (v !== undefined && v !== null && v !== '') params.append(k, String(v));
+  }
+  const response = await fetch(
+    `${API_BASE}/wrong-questions/student/${studentId}?${params.toString()}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  return response.json();
+}
+
+// 管理员查询某学生的掌握度概览
+export async function getStudentMasteryOverviewForAdmin(
+  token: string,
+  studentId: number
+): Promise<MasteryOverview> {
+  const response = await fetch(
+    `${API_BASE}/wrong-questions/student/${studentId}/mastery-overview`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  return response.json();
+}
