@@ -69,6 +69,7 @@ export async function batchGradeExamRecord(
 
 /**
  * Adjust a grade manually
+ * 统一模型下 recordId 即 ExamSubmission.id
  */
 export async function adjustGrade(
   recordId: number,
@@ -76,13 +77,13 @@ export async function adjustGrade(
   feedback: string,
   token: string
 ): Promise<{ success: boolean }> {
-  const response = await fetch(`${API_BASE}/grading/adjust/${recordId}`, {
+  const response = await fetch(`${API_BASE}/grading/adjust`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ score, feedback }),
+    body: JSON.stringify({ submissionId: recordId, newScore: score, feedback }),
   });
   return response.json();
 }

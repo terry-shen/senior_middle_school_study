@@ -6,7 +6,6 @@ import AnswerSheetUpload from '../components/AnswerSheetUpload';
 import {
   startExam,
   saveAnswer,
-  uploadImageAnswer,
   submitExam,
   getExamRecord,
   getExamQuestions,
@@ -25,7 +24,6 @@ export default function TakeExam() {
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
   const [record, setRecord] = useState<ExamRecord | null>(null);
   const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [imageAnswers, setImageAnswers] = useState<Record<number, string>>({});
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -53,7 +51,7 @@ export default function TakeExam() {
   const loadExam = async () => {
     if (!examId || !token) return;
 
-    const examData = await getExamById(parseInt(examId), token);
+    const examData = await getExamById(token, parseInt(examId));
     if (!examData) {
       alert('测验不存在');
       navigate('/exams');
@@ -61,8 +59,8 @@ export default function TakeExam() {
     }
     setExam(examData);
 
-    const questionsData = await getExamQuestions(parseInt(examId), token);
-    setQuestions(questionsData || []);
+    const questionsData = await getExamQuestions(token, parseInt(examId));
+    setQuestions(questionsData?.data || []);
 
     // 整卷考试（无在线题目）：无需查询考试记录，直接显示下载提示页
     if (examData.questionIds && examData.questionIds.length === 0) {
@@ -71,12 +69,13 @@ export default function TakeExam() {
     }
 
     // Check if already started
-    const existingRecord = await getExamRecord(parseInt(examId), token);
-    if (existingRecord && existingRecord.status === 'in_progress') {
+    const existingRecord = await getExamRecord(token, parseInt(examId));
+    if (existingRecord && 'status' in existingRecord && existingRecord.status === 'pending') {
       setRecord(existingRecord);
+      const startedAt = existingRecord.createdAt ? new Date(existingRecord.createdAt).getTime() : Date.now();
       const remainingTime = Math.max(
         0,
-        examData.duration * 60 - Math.floor((Date.now() - new Date(existingRecord.startTime).getTime()) / 1000)
+        examData.duration * 60 - Math.floor((Date.now() - startedAt) / 1000)
       );
       setTimeLeft(remainingTime);
 
@@ -97,10 +96,10 @@ export default function TakeExam() {
   const handleStart = async () => {
     if (!examId || !token) return;
 
-    const result: any = await startExam(parseInt(examId), token);
-    // Backend POST /:id/start returns the bare ExamRecord (not {record})
-    if (result && result.id) {
-      setRecord(result as ExamRecord);
+    const result: any = await startExam(token, parseInt(examId));
+    const submission = result?.submission || result?.record || (result?.id ? result : null);
+    if (submission) {
+      setRecord(submission as ExamRecord);
       setTimeLeft(exam.duration * 60);
     } else {
       alert(result?.error || '无法开始测验');
@@ -128,37 +127,25 @@ export default function TakeExam() {
     setAnswers((prev) => ({ ...prev, [questionId]: answer }));
   };
 
-  const handleImageUpload = async (questionId: number, file: File) => {
-    if (!record || !token) return;
-
-    const result = await uploadImageAnswer(record.id, questionId, file, token);
-    if (result.success && result.imageUrl) {
-      setImageAnswers((prev) => ({ ...prev, [questionId]: result.imageUrl! }));
-      alert('图片上传成功');
-    } else {
-      alert('上传失败');
-    }
-  };
-
   const handleSave = async (questionId: number) => {
-    if (!record || !token) return;
+    if (!examId || !token) return;
 
     const answer = answers[questionId] || '';
-    if (!answer && !imageAnswers[questionId]) {
+    if (!answer) {
       alert('请先回答问题');
       return;
     }
 
-    await saveAnswer(record.id, questionId, answer, token);
+    await saveAnswer(token, parseInt(examId), questionId, answer);
     alert('答案已保存');
   };
 
   const handleSubmit = async () => {
-    if (!record || !token) return;
+    if (!examId || !token) return;
     if (submitting) return;
 
     setSubmitting(true);
-    const result = await submitExam(record.id, token);
+    const result = await submitExam(token, parseInt(examId));
     if (result.success) {
       alert('测验已提交');
       navigate('/exams');
@@ -214,7 +201,7 @@ export default function TakeExam() {
         {exam.paper?.id && (
           <AnswerSheetUpload
             token={token!}
-            scene={{ wholePaperId: exam.paper.id }}
+            scene={{ examSessionId: parseInt(examId || '0') }}
             sceneLabel="整卷测验"
           />
         )}
@@ -330,18 +317,6 @@ export default function TakeExam() {
                 onChange={(e) => handleAnswerChange(questions[currentQuestion].id, e.target.value)}
                 placeholder="写出详细解答过程..."
               />
-              <div className="image-upload">
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={(e) => e.target.files && handleImageUpload(questions[currentQuestion].id, e.target.files[0])}
-                />
-                <label className="upload-hint">点击拍照或选择图片上传</label>
-                {imageAnswers[questions[currentQuestion].id] && (
-                  <img src={imageAnswers[questions[currentQuestion].id]} alt="答案图片" />
-                )}
-              </div>
             </div>
           )}
 

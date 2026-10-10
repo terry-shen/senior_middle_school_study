@@ -19,6 +19,9 @@ import {
   type MockExamResult,
   type BenchmarkAnalysis,
 } from '../services/mock-exams-api';
+import { generateExam, type ExamGenerationParams } from '../services/exams-api';
+import { createExamSession } from '../services/exam-sessions-api';
+import { getPaperLibrary } from '../services/papers-api';
 import './MockExam.css';
 
 type View = 'list' | 'taking' | 'result' | 'benchmark' | 'answer-sheet';
@@ -59,16 +62,43 @@ export default function MockExamPage() {
     if (user) loadExams();
   }, [user, loadExams]);
 
-  // Admin: Create mock exam
-  const handleCreate = async (formData: { title: string; standard: string; duration: number; totalScore: number }) => {
+  // Admin: Create mock exam (three sources: manual / auto from question bank / whole paper from library)
+  const handleCreate = async (payload: {
+    source: 'manual' | 'auto' | 'library';
+    title: string;
+    standard: string;
+    duration: number;
+    totalScore: number;
+    typeDistribution?: Record<string, number>;
+    paperId?: number;
+  }) => {
     if (!token) return;
     try {
-      await createMockExam(token, {
-        title: formData.title,
-        standard: formData.standard,
-        duration: formData.duration,
-        totalScore: formData.totalScore,
-      });
+      if (payload.source === 'auto') {
+        await generateExam(token, {
+          name: payload.title,
+          totalScore: payload.totalScore,
+          duration: payload.duration,
+          typeDistribution: (payload.typeDistribution || {}) as ExamGenerationParams['typeDistribution'],
+          scoreDistribution: { single_choice: 5, multiple_choice: 5, fill: 10, essay: 15 },
+        });
+      } else if (payload.source === 'library' && payload.paperId) {
+        await createExamSession(token, {
+          title: payload.title,
+          mode: 'whole_paper',
+          source: 'library',
+          paperId: payload.paperId,
+          totalScore: payload.totalScore,
+          duration: payload.duration,
+        });
+      } else {
+        await createMockExam(token, {
+          title: payload.title,
+          standard: payload.standard,
+          duration: payload.duration,
+          totalScore: payload.totalScore,
+        });
+      }
       setShowCreate(false);
       loadExams();
     } catch (e: any) {
@@ -277,7 +307,7 @@ export default function MockExamPage() {
           </p>
           <AnswerSheetUpload
             token={token}
-            scene={{ mockExamId: currentExamId }}
+            scene={{ examSessionId: currentExamId }}
             sceneLabel="模拟考试"
           />
         </div>
@@ -289,7 +319,7 @@ export default function MockExamPage() {
           {currentExamId && token && (
             <AnswerSheetUpload
               token={token}
-              scene={{ mockExamId: currentExamId }}
+              scene={{ examSessionId: currentExamId }}
               sceneLabel="模拟考试"
             />
           )}
@@ -304,39 +334,214 @@ export default function MockExamPage() {
 }
 
 // ===== Create Mock Exam Form =====
-function CreateMockExamForm({ onCreate }: { onCreate: (data: { title: string; standard: string; duration: number; totalScore: number }) => void }) {
+export type CreateExamPayload = {
+  source: 'manual' | 'auto' | 'library';
+  title: string;
+  standard: string;
+  duration: number;
+  totalScore: number;
+  typeDistribution?: Record<string, number>;
+  paperId?: number;
+};
+
+function CreateMockExamForm({ onCreate }: { onCreate: (data: CreateExamPayload) => Promise<void> }) {
+  const { token } = useAuth();
+  const [source, setSource] = useState<'manual' | 'auto' | 'library'>('manual');
+  const [creating, setCreating] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  // manual fields
   const [title, setTitle] = useState('');
   const [standard, setStandard] = useState('gaokao');
   const [duration, setDuration] = useState(120);
   const [totalScore, setTotalScore] = useState(150);
 
+  // auto fields (question bank composition)
+  const [autoTitle, setAutoTitle] = useState('');
+  const [dist, setDist] = useState<Record<string, number>>({ single_choice: 8, multiple_choice: 2, fill: 4, essay: 3 });
+  const distLabels: Record<string, string> = { single_choice: '单选题', multiple_choice: '多选题', fill: '填空题', essay: '解答题' };
+
+  // library fields (whole paper)
+  const [papers, setPapers] = useState<any[]>([]);
+  const [paperId, setPaperId] = useState<number | ''>('');
+  const [libDuration, setLibDuration] = useState(120);
+  const [loadingPapers, setLoadingPapers] = useState(false);
+
+  useEffect(() => {
+    if (source === 'library' && token && papers.length === 0) {
+      setLoadingPapers(true);
+      getPaperLibrary(token, { purpose: 'whole_paper', page: 1, limit: 500 })
+        .then((d: any) => {
+          const list = d?.data || [];
+          setPapers(list);
+          if (list.length === 0) setFormError('试卷库中暂无整卷试卷，请先到「试卷库」导入');
+          else setFormError('');
+        })
+        .catch((e: any) => setFormError(e.message || '试卷库加载失败'))
+        .finally(() => setLoadingPapers(false));
+    }
+  }, [source, token, papers.length]);
+
+  const handleAutoSubmit = async () => {
+    const total = Object.values(dist).reduce((s, v) => s + (v || 0), 0);
+    if (total === 0) { setFormError('请至少设置一种题型的数量'); return; }
+    setCreating(true);
+    setFormError('');
+    try {
+      await onCreate({
+        source: 'auto',
+        title: autoTitle || `自动组卷试卷 ${new Date().toLocaleDateString()}`,
+        standard: 'custom',
+        duration,
+        totalScore,
+        typeDistribution: dist,
+      });
+    } catch (e: any) {
+      setFormError(e.message || '自动组卷失败');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleLibrarySubmit = async () => {
+    const paper = papers.find(p => p.id === Number(paperId));
+    if (!paper) { setFormError('请选择一份试卷'); return; }
+    setCreating(true);
+    setFormError('');
+    try {
+      await onCreate({
+        source: 'library',
+        title: paper.title,
+        standard: 'custom',
+        duration: libDuration || paper.duration || 120,
+        totalScore: paper.totalScore || 150,
+        paperId: paper.id,
+      });
+    } catch (e: any) {
+      setFormError(e.message || '整卷发布失败');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleManualSubmit = async () => {
+    if (!title) return;
+    setCreating(true);
+    setFormError('');
+    try {
+      await onCreate({ source: 'manual', title, standard, duration, totalScore });
+    } catch (e: any) {
+      setFormError(e.message || '创建失败');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div className="create-form card">
       <h3>创建模拟考试</h3>
-      <div className="form-row">
-        <label>标题</label>
-        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="期末模拟考试" />
+      {formError && <div className="error-msg">{formError}</div>}
+      <div className="form-row source-tabs">
+        <label className={source === 'manual' ? 'active' : ''} onClick={() => { setSource('manual'); setFormError(''); }}>📝 手动创建</label>
+        <label className={source === 'auto' ? 'active' : ''} onClick={() => { setSource('auto'); setFormError(''); }}>🤖 题库自动组卷</label>
+        <label className={source === 'library' ? 'active' : ''} onClick={() => { setSource('library'); setFormError(''); }}>📚 试卷库整卷</label>
       </div>
-      <div className="form-row">
-        <label>考试标准</label>
-        <select value={standard} onChange={e => setStandard(e.target.value)}>
-          <option value="gaokao">高考标准 (150分/120分钟)</option>
-          <option value="midterm">期中考试 (100分/90分钟)</option>
-          <option value="final">期末考试 (100分/90分钟)</option>
-          <option value="custom">自定义</option>
-        </select>
-      </div>
-      <div className="form-row">
-        <label>时长(分钟)</label>
-        <input type="number" value={duration} onChange={e => setDuration(parseInt(e.target.value) || 120)} />
-      </div>
-      <div className="form-row">
-        <label>满分</label>
-        <input type="number" value={totalScore} onChange={e => setTotalScore(parseInt(e.target.value) || 150)} />
-      </div>
-      <button className="btn-primary" onClick={() => onCreate({ title, standard, duration, totalScore })} disabled={!title}>
-        创建
-      </button>
+
+      {source === 'manual' && (
+        <>
+          <div className="form-row">
+            <label>标题</label>
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="期末模拟考试" />
+          </div>
+          <div className="form-row">
+            <label>考试标准</label>
+            <select value={standard} onChange={e => setStandard(e.target.value)}>
+              <option value="gaokao">高考标准 (150分/120分钟)</option>
+              <option value="midterm">期中考试 (100分/90分钟)</option>
+              <option value="final">期末考试 (100分/90分钟)</option>
+              <option value="custom">自定义</option>
+            </select>
+          </div>
+          <div className="form-row">
+            <label>时长(分钟)</label>
+            <input type="number" value={duration} onChange={e => setDuration(parseInt(e.target.value) || 120)} />
+          </div>
+          <div className="form-row">
+            <label>满分</label>
+            <input type="number" value={totalScore} onChange={e => setTotalScore(parseInt(e.target.value) || 150)} />
+          </div>
+          <button className="btn-primary" onClick={handleManualSubmit} disabled={!title || creating}>
+            {creating ? '创建中...' : '创建'}
+          </button>
+        </>
+      )}
+
+      {source === 'auto' && (
+        <>
+          <p className="source-hint">从题库中按题型分布随机选题组卷（仅含题库中已导入的题目）</p>
+          <div className="form-row">
+            <label>试卷标题</label>
+            <input value={autoTitle} onChange={e => setAutoTitle(e.target.value)} placeholder="留空自动生成标题" />
+          </div>
+          {Object.keys(dist).map(key => (
+            <div className="form-row" key={key}>
+              <label>{distLabels[key] || key} 题数</label>
+              <input
+                type="number"
+                min={0}
+                value={dist[key]}
+                onChange={e => setDist({ ...dist, [key]: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+          ))}
+          <div className="form-row">
+            <label>时长(分钟)</label>
+            <input type="number" value={duration} onChange={e => setDuration(parseInt(e.target.value) || 120)} />
+          </div>
+          <div className="form-row">
+            <label>满分</label>
+            <input type="number" value={totalScore} onChange={e => setTotalScore(parseInt(e.target.value) || 150)} />
+          </div>
+          <button className="btn-primary" onClick={handleAutoSubmit} disabled={creating}>
+            {creating ? '组卷中...' : '自动组卷'}
+          </button>
+        </>
+      )}
+
+      {source === 'library' && (
+        <>
+          <p className="source-hint">选择试卷库中的一份整卷直接发布，学生下载试卷线下作答、上传答题纸，老师离线批改</p>
+          {loadingPapers ? (
+            <p>试卷库加载中...</p>
+          ) : (
+            <>
+              <div className="form-row">
+                <label>选择试卷</label>
+                <select value={paperId} onChange={e => {
+                  const id = e.target.value ? Number(e.target.value) : '';
+                  setPaperId(id);
+                  const p = papers.find(x => x.id === id);
+                  if (p) setLibDuration(p.duration || 120);
+                }}>
+                  <option value="">请选择...</option>
+                  {papers.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.title}（{p.totalScore || '?'}分/{p.duration || '?'}分钟{p.subject ? ` · ${p.subject}` : ''}{p.year ? ` · ${p.year}` : ''}）
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-row">
+                <label>时长(分钟)</label>
+                <input type="number" value={libDuration} onChange={e => setLibDuration(parseInt(e.target.value) || 120)} />
+              </div>
+              <button className="btn-primary" onClick={handleLibrarySubmit} disabled={!paperId || creating}>
+                {creating ? '发布中...' : '发布整卷考试'}
+              </button>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -397,7 +602,7 @@ function TakingExam({ examId, token, onSubmit, onBack }: {
   const handleAnswer = async (questionId: number, answer: string) => {
     setAnswers(prev => ({ ...prev, [questionId]: answer }));
     try {
-      await saveMockAnswer(token, examId, { questionId, answer });
+      await saveMockAnswer(token, examId, questionId, answer);
     } catch {}
   };
 

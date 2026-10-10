@@ -3,9 +3,7 @@ const API_BASE = 'http://localhost:3000/api';
 export interface AnswerSheet {
   id: number;
   studentId: number;
-  examId?: number | null;
-  mockExamId?: number | null;
-  wholePaperId?: number | null;
+  examSessionId?: number | null;
   fileUrl: string;
   fileType: 'image' | 'word';
   fileName?: string | null;
@@ -44,10 +42,11 @@ export interface AnswerSheetsResult {
 export async function uploadAnswerSheet(
   token: string,
   file: File,
-  scene: { examId?: number; mockExamId?: number; wholePaperId?: number }
+  scene: { examId?: number; mockExamId?: number; wholePaperId?: number; examSessionId?: number }
 ): Promise<UploadResult> {
   const fd = new FormData();
   fd.append('file', file);
+  if (scene.examSessionId) fd.append('examSessionId', String(scene.examSessionId));
   if (scene.examId) fd.append('examId', String(scene.examId));
   if (scene.mockExamId) fd.append('mockExamId', String(scene.mockExamId));
   if (scene.wholePaperId) fd.append('wholePaperId', String(scene.wholePaperId));

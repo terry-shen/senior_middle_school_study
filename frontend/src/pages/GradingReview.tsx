@@ -107,7 +107,7 @@ export default function GradingReview() {
         <div className="batch-form">
           <input
             type="number"
-            placeholder="输入考试记录ID"
+            placeholder="输入考试ID(examSessionId)"
             value={examRecordId}
             onChange={(e) => setExamRecordId(e.target.value)}
           />

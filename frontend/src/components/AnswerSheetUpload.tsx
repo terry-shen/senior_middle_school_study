@@ -9,7 +9,7 @@ import {
 
 interface Props {
   token: string;
-  scene: { examId?: number; mockExamId?: number; wholePaperId?: number };
+  scene: { examSessionId?: number };
   /** 当场景是整卷测验时需要显示的场景标题（可选） */
   sceneLabel?: string;
 }
@@ -31,10 +31,7 @@ export default function AnswerSheetUpload({ token, scene, sceneLabel }: Props) {
     try {
       const { answerSheets } = await getMyAnswerSheets(token);
       const matched = answerSheets.find(
-        (s) =>
-          (scene.examId && s.examId === scene.examId) ||
-          (scene.mockExamId && s.mockExamId === scene.mockExamId) ||
-          (scene.wholePaperId && s.wholePaperId === scene.wholePaperId)
+        (s) => scene.examSessionId && s.examSessionId === scene.examSessionId
       );
       setSheet(matched || null);
     } catch (e: any) {
@@ -47,7 +44,7 @@ export default function AnswerSheetUpload({ token, scene, sceneLabel }: Props) {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, scene.examId, scene.mockExamId, scene.wholePaperId]);
+  }, [token, scene.examSessionId]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

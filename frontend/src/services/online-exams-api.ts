@@ -1,173 +1,139 @@
 /**
- * Online Exams API Service
+ * Online Exam API — 兼容代理层
+ * 内部全部转发到 /api/exam-sessions（统一考试），保留旧函数签名以减少页面改动。
  */
 
 const API_BASE = 'http://localhost:3000/api';
 
+function authHeaders(token: string) {
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
+}
+
 export interface OnlineExam {
   id: number;
   title: string;
-  questionIds: number[];
+  mode?: string;
+  source?: string;
+  questionIds: string; // JSON 数组字符串
+  paperId?: number | null;
+  paper?: { id: number; title: string; pdfUrl?: string | null; purpose?: string; subject?: string | null; school?: string | null } | null;
   totalScore: number;
-  duration: number; // in minutes
-  startTime: Date | null;
-  endTime: Date | null;
-  status: 'draft' | 'published' | 'ongoing' | 'ended';
-  createdAt: Date;
-  paper?: { id: number; pdfUrl?: string; purpose?: string; title?: string };
-}
-
-export interface ExamRecord {
-  id: number;
-  examId: number;
-  studentId: number;
-  startTime: Date;
-  submitTime: Date | null;
-  totalScore: number | null;
-  status: 'in_progress' | 'submitted' | 'graded';
-  timeSpent: number; // in seconds
-}
-
-export interface AnswerRecord {
-  id: number;
-  recordId: number;
-  questionId: number;
-  answer: string;
-  imageUrl: string | null;
-  timeSpent: number;
-  score: number | null;
-  feedback: string | null;
+  duration: number;
+  status: string;
+  createdAt: string;
+  studentScore?: number | null;
+  answered?: number;
+  studentSubmission?: { id: number; status: string } | null;
 }
 
 export interface ExamQuestion {
   id: number;
+  questionNumber?: number;
   content: string;
   questionType: 'single_choice' | 'multiple_choice' | 'choice' | 'fill' | 'essay';
-  score: number;
-  options?: string[];
+  options?: string | null;
+  score?: number | null;
 }
 
-// Admin APIs
-export async function createExam(
-  exam: {
-    title: string;
-    questionIds: number[];
-    totalScore: number;
-    duration: number;
-    paperId?: number;
-  },
-  token: string
-): Promise<{ exam?: OnlineExam; error?: string }> {
-  const response = await fetch(`${API_BASE}/online-exams`, {
+export interface ExamRecord {
+  id: number;
+  examSessionId?: number;
+  examId?: number;
+  studentId: number;
+  status: string; // pending | submitted | graded
+  answers?: string | null; // JSON
+  totalScore?: number | null;
+  submittedAt?: string | null;
+  createdAt?: string;
+}
+
+// 管理员：创建在线测验（mode=online, source=manual）
+export async function createExam(token: string, data: { title: string; questionIds: number[]; totalScore: number; duration: number; paperId?: number }): Promise<{ success: boolean; exam?: OnlineExam; error?: string }> {
+  const res = await fetch(`${API_BASE}/exam-sessions`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(exam),
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      title: data.title,
+      mode: 'online',
+      source: 'manual',
+      questionIds: data.questionIds,
+      totalScore: data.totalScore,
+      duration: data.duration,
+      paperId: data.paperId,
+    }),
   });
-  return response.json();
+  const d = await res.json();
+  if (d.examSession) d.exam = d.examSession;
+  return d;
 }
 
-export async function publishExam(
-  examId: number,
-  data: { classIds?: number[]; studentIds?: number[] },
-  token: string
-): Promise<{ exam?: OnlineExam; error?: string }> {
-  const response = await fetch(`${API_BASE}/online-exams/${examId}/publish`, {
+// 发布
+export async function publishExam(token: string, examId: number, data: { startTime?: string | null; endTime?: string | null } = {}): Promise<{ success: boolean; exam?: OnlineExam; error?: string }> {
+  const res = await fetch(`${API_BASE}/exam-sessions/${examId}/publish`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
+    headers: authHeaders(token),
     body: JSON.stringify(data),
   });
-  return response.json();
+  const d = await res.json();
+  if (d.examSession) d.exam = d.examSession;
+  return d;
 }
 
+// 管理员：列表
 export async function getExams(token: string): Promise<OnlineExam[]> {
-  const response = await fetch(`${API_BASE}/online-exams`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return response.json();
+  const res = await fetch(`${API_BASE}/exam-sessions?limit=100&mode=online`, { headers: authHeaders(token) });
+  const d = await res.json();
+  return d.data || [];
 }
 
-export async function getExamById(examId: number, token: string): Promise<OnlineExam | null> {
-  const response = await fetch(`${API_BASE}/online-exams/${examId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return response.json();
+// 详情
+export async function getExamById(token: string, examId: number): Promise<OnlineExam> {
+  const res = await fetch(`${API_BASE}/exam-sessions/${examId}`, { headers: authHeaders(token) });
+  return res.json();
 }
 
-export async function getExamQuestions(examId: number, token: string): Promise<ExamQuestion[]> {
-  const response = await fetch(`${API_BASE}/online-exams/${examId}/questions`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return response.json();
+// 题目列表
+export async function getExamQuestions(token: string, examId: number): Promise<{ data: ExamQuestion[] }> {
+  const res = await fetch(`${API_BASE}/exam-sessions/${examId}/questions`, { headers: authHeaders(token) });
+  return res.json();
 }
 
-// Student APIs
-export async function startExam(examId: number, token: string): Promise<{ record?: ExamRecord; error?: string }> {
-  const response = await fetch(`${API_BASE}/online-exams/${examId}/start`, {
+// 学生：开始
+export async function startExam(token: string, examId: number): Promise<{ success?: boolean; session?: OnlineExam; submission?: ExamRecord; record?: ExamRecord; error?: string }> {
+  const res = await fetch(`${API_BASE}/exam-sessions/${examId}/start`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(token),
+    body: JSON.stringify({}),
   });
-  return response.json();
+  return res.json();
 }
 
-export async function saveAnswer(
-  recordId: number,
-  questionId: number,
-  answer: string,
-  token: string
-): Promise<{ success: boolean }> {
-  const response = await fetch(`${API_BASE}/online-exams/records/${recordId}/answer`, {
+// 学生：保存答案
+export async function saveAnswer(token: string, recordId: number, questionId: number, answer: string | string[], timeSpent?: number): Promise<{ success: boolean }> {
+  // recordId 在统一模型下即 examSessionId（学生答题通过 /:id/answer）
+  const res = await fetch(`${API_BASE}/exam-sessions/${recordId}/answer`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ questionId, answer }),
+    headers: authHeaders(token),
+    body: JSON.stringify({ questionId, answer, timeSpent }),
   });
-  return response.json();
+  return res.json();
 }
 
-export async function uploadImageAnswer(
-  recordId: number,
-  questionId: number,
-  imageFile: File,
-  token: string
-): Promise<{ success: boolean; imageUrl?: string }> {
-  const formData = new FormData();
-  formData.append('image', imageFile);
-  formData.append('questionId', questionId.toString());
-
-  const response = await fetch(`${API_BASE}/online-exams/records/${recordId}/image`, {
+// 学生：提交
+export async function submitExam(token: string, recordId: number): Promise<{ success: boolean; totalScore?: number; error?: string }> {
+  const res = await fetch(`${API_BASE}/exam-sessions/${recordId}/submit`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body: formData,
+    headers: authHeaders(token),
+    body: JSON.stringify({}),
   });
-  return response.json();
+  return res.json();
 }
 
-export async function submitExam(recordId: number, token: string): Promise<{ success: boolean; record?: ExamRecord }> {
-  const response = await fetch(`${API_BASE}/online-exams/records/${recordId}/submit`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return response.json();
-}
-
-export async function getExamRecord(examId: number, token: string): Promise<ExamRecord | null> {
-  const response = await fetch(`${API_BASE}/online-exams/${examId}/record`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return response.json();
-}
-
-// Answers for a record are included in the getExamRecord response (record.answers).
-// Kept for reference/backward-compat but no longer used by the student flow.
-export async function getAnswerRecords(examId: number, token: string): Promise<AnswerRecord[]> {
-  const record = await getExamRecord(examId, token);
-  return Array.isArray((record as any)?.answers) ? (record as any).answers : [];
+// 学生：获取答题记录
+export async function getExamRecord(token: string, examId: number): Promise<ExamRecord | { error: string }> {
+  const res = await fetch(`${API_BASE}/exam-sessions/${examId}/record`, { headers: authHeaders(token) });
+  return res.json();
 }

@@ -89,13 +89,13 @@ export default function OnlineExamManagement() {
         alert('请填写试卷标题');
         return;
       }
-      const result = await createExam({
+      const result = await createExam(token, {
         title,
         questionIds: [],
         totalScore: wholePaperTotalScore || 0,
         duration,
         paperId: wholePaperId,
-      }, token);
+      });
       if (result.exam) {
         alert(`整卷测验创建成功（${wholePaperTitle}），发布后学生可下载打印`);
         setTitle('');
@@ -117,14 +117,14 @@ export default function OnlineExamManagement() {
 
     const totalScore = questions
       .filter((q) => selectedQuestions.includes(q.id))
-      .reduce((sum, q) => sum + q.score, 0);
+      .reduce((sum, q) => sum + (q.score ?? 0), 0);
 
-    const result = await createExam({
+    const result = await createExam(token, {
       title,
       questionIds: selectedQuestions,
       totalScore,
       duration,
-    }, token);
+    });
 
     if (result.exam) {
       alert('测验创建成功');
@@ -139,7 +139,7 @@ export default function OnlineExamManagement() {
 
   const handlePublishExam = async (examId: number) => {
     if (!token) return;
-    const result = await publishExam(examId, {}, token);
+    const result = await publishExam(token, examId, {});
     if (result.exam) {
       alert('测验已发布');
       loadData();
