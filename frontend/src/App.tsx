@@ -12,6 +12,7 @@ import './App.css';
 // Lazy-loaded pages for code splitting
 const ModelManagement = lazy(() => import('./components/ModelManagement'));
 const StudentManagement = lazy(() => import('./pages/StudentManagement'));
+const AdminWrongQuestionView = lazy(() => import('./pages/AdminWrongQuestionView'));
 const KnowledgePointManagement = lazy(() => import('./pages/KnowledgePointManagement'));
 const KnowledgePointImport = lazy(() => import('./pages/KnowledgePointImport'));
 const PaperLibrary = lazy(() => import('./pages/PaperLibrary'));
@@ -21,7 +22,6 @@ const SplitPreview = lazy(() => import('./pages/SplitPreview'));
 const QuestionList = lazy(() => import('./pages/QuestionList'));
 const KPEdit = lazy(() => import('./pages/KPEdit'));
 const DifficultyManagement = lazy(() => import('./pages/DifficultyManagement'));
-const ExamGeneration = lazy(() => import('./pages/ExamGeneration'));
 const OnlineExamManagement = lazy(() => import('./pages/OnlineExamManagement'));
 const TakeExam = lazy(() => import('./pages/TakeExam'));
 const GradingReview = lazy(() => import('./pages/GradingReview'));
@@ -38,21 +38,19 @@ function Home() {
   const { user, logout } = useAuth();
 
   const adminFeatures = [
-    { icon: '📚', title: '学生管理', desc: '管理学生账号和班级', link: '/students' },
     { icon: '📚', title: '试卷库', desc: '整卷导入/分类/发布考试', link: '/paper-library' },
     { icon: '✂️', title: '题库管理', desc: '拆分导入/编辑校准/入库', link: '/question-bank' },
     { icon: '📊', title: '难度管理', desc: 'AI驱动的难度评估', link: '/difficulty' },
-    { icon: '📝', title: '自动出卷', desc: '智能组卷生成试卷', link: '/exams' },
-    { icon: '🎯', title: '模拟考试', desc: '限时模拟考试场景', link: '/mock-exams' },
+    { icon: '🎯', title: '模拟考试', desc: '题库组卷/整卷发布/在线测验', link: '/mock-exams' },
     { icon: '🌐', title: '在线测验', desc: '发布和管理在线测验', link: '/online-exams' },
     { icon: '✏️', title: 'AI批改', desc: '自动批改与人工审核', link: '/grading' },
+    { icon: '📝', title: '学生管理', desc: '管理学生账号和班级', link: '/students' },
     { icon: '⚙️', title: '模型管理', desc: '配置大语言模型', link: '/models' },
   ];
 
   const studentFeatures = [
-    { icon: '🌐', title: '在线测验', desc: '参加老师布置的测验', link: '/online-exams' },
     { icon: '❌', title: '错题本', desc: '复习错题，针对性提升', link: '/wrong-questions' },
-    { icon: '🏆', title: '模拟考试', desc: '限时模拟，对标真实考试', link: '/mock-exams' },
+    { icon: '🏆', title: '模拟考试', desc: '参加考试，限时模拟', link: '/mock-exams' },
     { icon: '🎖️', title: '学习激励', desc: '徽章、打卡、排行榜', link: '/incentive' },
   ];
 
@@ -150,6 +148,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/admin/students/:id/wrong-questions"
+        element={
+          <ProtectedRoute requireAdmin>
+            <AdminWrongQuestionView />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/knowledge-points"
         element={
           <ProtectedRoute>
@@ -231,11 +237,7 @@ function AppRoutes() {
       />
       <Route
         path="/exams"
-        element={
-          <ProtectedRoute requireAdmin>
-            <ExamGeneration />
-          </ProtectedRoute>
-        }
+        element={<Navigate to="/mock-exams" replace />}
       />
       <Route
         path="/online-exams"
@@ -343,21 +345,46 @@ function AppContent() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const adminLinks = [
-    { to: '/students', label: '学生管理' },
-    { to: '/paper-library', label: '试卷库' },
-    { to: '/question-bank', label: '题库管理' },
-    { to: '/difficulty', label: '难度管理' },
-    { to: '/exams', label: '自动出卷' },
-    { to: '/mock-exams', label: '模拟考试' },
-    { to: '/online-exams', label: '在线测验' },
-    { to: '/grading', label: 'AI批改' },
-    { to: '/answer-sheets', label: '答题纸阅卷' },
-    { to: '/models', label: '模型管理' },
+  const adminMenus: { title: string; links: { to: string; label: string }[] }[] = [
+    {
+      title: '试卷管理',
+      links: [
+        { to: '/paper-library', label: '试卷库' },
+        { to: '/question-bank', label: '题库管理(拆分)' },
+      ],
+    },
+    {
+      title: '题目管理',
+      links: [
+        { to: '/questions', label: '题目列表' },
+        { to: '/difficulty', label: '难度管理' },
+      ],
+    },
+    {
+      title: '学生管理',
+      links: [
+        { to: '/students', label: '学生列表' },
+        { to: '/incentive', label: '学习激励' },
+      ],
+    },
+    {
+      title: '考试管理',
+      links: [
+        { to: '/mock-exams', label: '模拟考试' },
+        { to: '/online-exams', label: '在线测验' },
+        { to: '/grading', label: 'AI批改' },
+        { to: '/answer-sheets', label: '答题纸阅卷' },
+      ],
+    },
+    {
+      title: '系统设置',
+      links: [
+        { to: '/models', label: '模型管理' },
+      ],
+    },
   ];
 
   const studentLinks = [
-    { to: '/online-exams', label: '在线测验' },
     { to: '/wrong-questions', label: '错题本' },
     { to: '/mock-exams', label: '模拟考试' },
     { to: '/answer-sheets', label: '我的答题纸' },
@@ -404,33 +431,18 @@ function AppContent() {
                 知识点导入
               </Link>
             )}
+            {user?.role === 'admin' &&
+              adminMenus.map((menu) => (
+                <NavDropdown key={menu.title} title={menu.title} links={menu.links} />
+              ))}
             {user?.role === 'admin' && (
               <Link
-                to="/questions"
-                className={location.pathname === '/questions' ? 'nav-link active' : 'nav-link'}
+                to="/wrong-questions"
+                className={location.pathname === '/wrong-questions' ? 'nav-link active' : 'nav-link'}
                 onClick={closeMobileMenu}
               >
-                题目列表
+                错题本
               </Link>
-            )}
-            {user?.role === 'admin' && (
-              <>
-                <NavDropdown title="管理" links={adminLinks} />
-                <Link
-                  to="/wrong-questions"
-                  className={location.pathname === '/wrong-questions' ? 'nav-link active' : 'nav-link'}
-                  onClick={closeMobileMenu}
-                >
-                  错题本
-                </Link>
-                <Link
-                  to="/incentive"
-                  className={location.pathname === '/incentive' ? 'nav-link active' : 'nav-link'}
-                  onClick={closeMobileMenu}
-                >
-                  学习激励
-                </Link>
-              </>
             )}
             {user?.role === 'student' && (
               <NavDropdown title="学习" links={studentLinks} />
