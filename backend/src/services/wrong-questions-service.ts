@@ -335,3 +335,19 @@ export async function getPrintExportData(
     }),
   }));
 }
+
+// ===== Admin 只读视图（决策 a：admin 完全开放只读访问任意学生错题本） =====
+
+/**
+ * 管理员查询指定学生的错题列表（只读）
+ */
+export async function getStudentWrongQuestionsForAdmin(studentId: number, filters: WrongQuestionFilters = {}) {
+  return getWrongQuestions(studentId, { ...filters, viewMode: 'all' });
+}
+
+/**
+ * 管理员查询指定学生的掌握度概览（只读）
+ */
+export async function getStudentMasteryOverviewForAdmin(studentId: number) {
+  return getMasteryOverview(studentId);
+}

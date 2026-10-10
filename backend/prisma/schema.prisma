@@ -72,7 +72,6 @@ model Class {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   students  Student[]
-  examAssignments ExamAssignment[]
 
   @@map("classes")
 }
@@ -94,10 +93,8 @@ model Student {
   reviews AIContentReview[]
   difficultyAdjustments DifficultyAdjustment[]
   examTemplates ExamTemplate[]
-  generatedExams GeneratedExam[]
-  exams         Exam[]
-  examRecords   ExamRecord[]
-  examAssignments ExamAssignment[]
+  examSessions  ExamSession[]
+  examSubmissions ExamSubmission[]
   masteryRecords MasteryRecord[]
   masteryHistory MasteryHistory[]
   learningReports LearningReport[]
@@ -106,8 +103,6 @@ model Student {
   feedbacks RecommendationFeedback[]
   practiceSessions PracticeSession[]
   learningPaths LearningPath[]
-  mockExams     MockExam[]
-  mockExamAnswers MockExamAnswer[]
   answerSheets  AnswerSheet[]
   userBadges    UserBadge[]
   checkIns      CheckIn[]
@@ -270,74 +265,65 @@ model IncentiveNotification {
 
 // ===== Mock Exam Models =====
 
-// 模拟考试
-model MockExam {
+// 统一考试会话（合并 MockExam + Exam + GeneratedExam）
+model ExamSession {
   id            Int      @id @default(autoincrement())
   title         String
-  standard      String   @default("gaokao") // gaokao, midterm, final, custom
-  questionIds   String   @map("question_ids") // JSON数组: [1, 2, 3]
-  totalScore    Int      @map("total_score") @default(150)
+  mode          String   @default("online") // whole_paper | online
+  source        String   @default("manual") // library | auto | manual
+  content       String   @default("[]") // JSON: 在线模式=题ID数组, 整卷模式=空
+  paperId       Int?     @map("paper_id") // 整卷模式关联 ExamPaper
+  totalScore    Int      @default(100) @map("total_score")
   duration      Int      @default(120) // 考试时长（分钟）
-  // 难度配置 JSON: {easy: 30, medium: 50, hard: 20}
-  difficultyRatio String @default("{}") @map("difficulty_ratio")
-  // 知识点权重 JSON: {1: 2, 2: 3}
-  knowledgePointWeights String @default("{}") @map("kp_weights")
-  status        String   @default("draft") // draft, published, in_progress, completed
-  creatorId     Int      @map("creator_id")
   startTime     DateTime? @map("start_time")
   endTime       DateTime? @map("end_time")
+  status        String   @default("draft") // draft, published, ongoing, graded
+  creatorId     Int      @map("creator_id")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
-  paperId       Int?     @map("paper_id") // 整卷模式关联 ExamPaper(purpose=whole_paper)
 
-  creator       Student @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  paper         ExamPaper? @relation("ExamPaperMockExams", fields: [paperId], references: [id], onDelete: SetNull)
-  answers       MockExamAnswer[]
+  creator       Student  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  paper         ExamPaper? @relation("ExamPaperExamSessions", fields: [paperId], references: [id], onDelete: SetNull)
+  submissions   ExamSubmission[]
+  answerSheets  AnswerSheet[]
 
-  @@index([creatorId])
-  @@index([status])
+  @@index([mode, status])
   @@index([paperId])
-  @@map("mock_exams")
+  @@index([creatorId])
+  @@map("exam_sessions")
 }
 
-// 模拟考试答题记录
-model MockExamAnswer {
+// 统一答题记录（合并 ExamRecord + AnswerRecord）
+// 整卷模式不创建 ExamSubmission（只关联 AnswerSheet）
+model ExamSubmission {
   id            Int      @id @default(autoincrement())
-  mockExamId    Int      @map("mock_exam_id")
+  examSessionId Int      @map("exam_session_id")
   studentId     Int      @map("student_id")
-  questionId    Int      @map("question_id")
-  answer        String? // 学生答案（文本）
-  imageUrl      String? @map("image_url") // 图片答案
-  isMarked      Boolean  @default(false) @map("is_marked") // 待检查标记
-  timeSpent     Int?     @map("time_spent") // 该题用时（秒）
-  score         Int? // 得分
-  maxScore      Int?     @map("max_score") // 满分
-  feedback      String? // AI批改反馈
-  isCorrect     Boolean? @map("is_correct")
+  mode          String   @default("online") // whole_paper | online
+  answers       String?  // JSON: [{questionId, answer, timeSpent?, score?, feedback?, isCorrect?}]
+  totalScore    Int?     @map("total_score")
+  status        String   @default("pending") // pending, submitted, graded
+  submittedAt   DateTime? @map("submitted_at")
   gradedAt      DateTime? @map("graded_at")
-  gradedBy      String?  @map("graded_by") // AI或管理员
+  gradedBy      Int?     @map("graded_by") // Student.id (admin)
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  mockExam      MockExam @relation(fields: [mockExamId], references: [id], onDelete: Cascade)
-  student       Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  question      Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  examSession   ExamSession @relation(fields: [examSessionId], references: [id], onDelete: Cascade)
+  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
-  @@unique([mockExamId, studentId, questionId])
-  @@index([mockExamId])
+  @@unique([examSessionId, studentId])
   @@index([studentId])
-  @@index([questionId])
-  @@map("mock_exam_answers")
+  @@index([status])
+  @@map("exam_submissions")
 }
 
 // 学生答题纸（整卷/在线测验/模拟考试结束后上传，老师离线阅卷批注）
 model AnswerSheet {
   id             Int      @id @default(autoincrement())
   studentId      Int      @map("student_id")
-  // 三种场景之一（创建时按场景填一个，其余为 null）
-  examId         Int?     @map("exam_id")        // 在线测验 (Exam.id)
-  mockExamId     Int?     @map("mock_exam_id")    // 模拟考试 (MockExam.id)
-  wholePaperId   Int?     @map("whole_paper_id") // 整卷测验 (ExamPaper.id, purpose=whole_paper)
+  // 统一关联 ExamSession（替代旧的 examId/mockExamId/wholePaperId 三字段）
+  examSessionId Int?     @map("exam_session_id")
   fileUrl        String   @map("file_url")        // 上传的原始答题纸 URL
   fileType       String   @map("file_type")       // 'image' | 'word'
   fileName       String?  @map("file_name")       // 原始文件名
@@ -353,11 +339,10 @@ model AnswerSheet {
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  examSession    ExamSession? @relation(fields: [examSessionId], references: [id], onDelete: SetNull)
 
   @@index([studentId])
-  @@index([examId])
-  @@index([mockExamId])
-  @@index([wholePaperId])
+  @@index([examSessionId])
   @@index([status])
   @@map("answer_sheets")
 }
@@ -422,7 +407,7 @@ model ExamPaper {
   rawContent  String?  @map("raw_content") // 原始OCR识别内容
   imageUrl    String?  @map("image_url") // 原始图片URL
   pdfUrl      String?  @map("pdf_url") // 原始PDF URL
-  status      String   @default("pending") // pending/processing/completed/failed
+  status      String   @default("pending") // pending, published
   totalScore  Int?     @map("total_score") // 总分
   duration    Int?     // 考试时长（分钟）
   sourceFormat String? @map("source_format") // pdf | image | word | txt
@@ -436,8 +421,7 @@ model ExamPaper {
   updatedAt   DateTime @updatedAt @map("updated_at")
   questions   Question[]
   enrichmentProposals EnrichmentProposal[]
-  exams       Exam[] @relation("ExamPaperExams")
-  mockExams   MockExam[] @relation("ExamPaperMockExams")
+  examSessions ExamSession[] @relation("ExamPaperExamSessions")
 
   @@index([year])
   @@index([region])
@@ -495,9 +479,7 @@ model Question {
   @@map("questions")
   reviews AIContentReview[]
   difficultyAdjustments DifficultyAdjustment[]
-  answers AnswerRecord[]
   recommendationItems RecommendationItem[]
-  mockExamAnswers MockExamAnswer[]
 }
 
 model StudentAnswer {
@@ -584,132 +566,8 @@ model ExamTemplate {
   updatedAt         DateTime @updatedAt @map("updated_at")
   
   creator           Student? @relation(fields: [creatorId], references: [id], onDelete: SetNull)
-  generatedExams    GeneratedExam[]
-  
-  @@index([creatorId])
-  @@index([isDefault])
+
   @@map("exam_templates")
-}
-
-// 生成的试卷
-model GeneratedExam {
-  id                Int      @id @default(autoincrement())
-  templateId        Int?     @map("template_id")
-  title             String   // 试卷标题
-  totalScore        Int      @map("total_score")
-  duration          Int?     // 考试时长（分钟）
-  
-  // 试卷内容 (JSON: [{id, questionId, questionNumber, score}])
-  questions         String   // 试题列表
-  
-  // 生成参数快照
-  parameters        String   // JSON格式的生成参数
-  
-  status            String   @default("draft") // draft, published, archived
-  creatorId         Int      @map("creator_id")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
-  
-  template          ExamTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  creator           Student @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  
-  @@index([templateId])
-  @@index([creatorId])
-  @@index([status])
-  @@map("generated_exams")
-}
-
-// 在线测验
-model Exam {
-  id            Int      @id @default(autoincrement())
-  title         String
-  description   String?
-  questionIds   String   @map("question_ids") // JSON数组: [1, 2, 3]
-  totalScore    Int      @map("total_score") @default(100)
-  duration      Int? // 考试时长（分钟）
-  startTime     DateTime? @map("start_time")
-  endTime       DateTime? @map("end_time")
-  status        String   @default("draft") // draft, published, ongoing, ended
-  creatorId     Int      @map("creator_id")
-  paperId       Int?     @map("paper_id") // 关联整卷 ExamPaper（整卷考试时非空）
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  
-  creator       Student @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  paper         ExamPaper? @relation("ExamPaperExams", fields: [paperId], references: [id], onDelete: SetNull)
-  records       ExamRecord[]
-  assignments   ExamAssignment[]
-  
-  @@index([creatorId])
-  @@index([status])
-  @@index([paperId])
-  @@map("exams")
-}
-
-// 测验分配（关联学生或班级）
-model ExamAssignment {
-  id            Int      @id @default(autoincrement())
-  examId        Int      @map("exam_id")
-  classId       Int?     @map("class_id")
-  studentId     Int?     @map("student_id")
-  createdAt     DateTime @default(now()) @map("created_at")
-  
-  exam          Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
-  class         Class? @relation(fields: [classId], references: [id], onDelete: Cascade)
-  student       Student? @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  
-  @@index([examId])
-  @@index([classId])
-  @@index([studentId])
-  @@map("exam_assignments")
-}
-
-// 答题记录
-model ExamRecord {
-  id            Int      @id @default(autoincrement())
-  examId        Int      @map("exam_id")
-  studentId     Int      @map("student_id")
-  startTime     DateTime @default(now()) @map("start_time")
-  submitTime    DateTime? @map("submit_time")
-  totalScore    Int?
-  status        String   @default("in_progress") // in_progress, submitted, graded
-  timeSpent     Int? // 总用时（秒）
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  
-  exam          Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
-  student       Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  answers       AnswerRecord[]
-  
-  @@unique([examId, studentId])
-  @@index([examId])
-  @@index([studentId])
-  @@index([status])
-  @@map("exam_records")
-}
-
-// 每题答题记录
-model AnswerRecord {
-  id            Int      @id @default(autoincrement())
-  recordId      Int      @map("record_id")
-  questionId    Int      @map("question_id")
-  answer        String? // 学生答案（文本）
-  imageUrl      String? @map("image_url") // 图片答案
-  timeSpent     Int? // 该题用时（秒）
-  score         Int?
-  feedback      String? // AI批改反馈
-  gradedAt      DateTime? @map("graded_at")
-  gradedBy      String? // AI或管理员ID
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  
-  record        ExamRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
-  question      Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  
-  @@unique([recordId, questionId])
-  @@index([recordId])
-  @@index([questionId])
-  @@map("answer_records")
 }
 
 // 掌握度记录

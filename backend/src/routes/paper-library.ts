@@ -11,7 +11,7 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth, requireAdmin } from '../middleware/permission';
-import { createMockExam, publishMockExam, MockExamInputError } from '../services/mock-exam-service';
+import * as ExamSessionService from '../services/exam-session-service';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -121,62 +121,65 @@ router.put('/:id', requireAuth, requireAdmin, async (req: Request, res: Response
 });
 
 /**
- * POST /api/paper-library/:id/publish — publish this whole paper as a MockExam
- * Creates MockExam(paperId, questionIds=[], totalScore/duration from paper meta or defaults)
- * then immediately publishes it (auto-starts, assigned to no one explicitly — students
- * see all published whole-paper exams via getMockExamHistory).
+ * POST /api/paper-library/:id/publish — publish this whole paper as an ExamSession
+ * Creates ExamSession(mode=whole_paper, source=library, paperId, questionIds=[])
+ * then immediately publishes it (students see all published whole-paper exams).
  */
 router.post('/:id/publish', requireAuth, requireAdmin, async (req: Request, res: Response) => {
-  let createdMockExamId: number | null = null;
+  let createdSessionId: number | null = null;
   try {
     const id = toInt(req.params.id);
     if (id === null) return res.status(400).json({ error: 'Invalid id' });
     const paper = await prisma.examPaper.findUnique({ where: { id } });
     if (!paper) return res.status(404).json({ error: 'Paper not found' });
-    if (paper.purpose !== 'whole_paper') return res.status(400).json({ error: 'Only whole_paper can be published as mock exam' });
+    if (paper.purpose !== 'whole_paper') return res.status(400).json({ error: 'Only whole_paper can be published as exam' });
 
     const adminId = (req as any).user?.id;
-    const mock = await createMockExam({
+    const session = await ExamSessionService.createExamSession({
       title: paper.title,
+      mode: 'whole_paper',
+      source: 'library',
+      paperId: paper.id,
       totalScore: paper.totalScore || 100,
       duration: paper.duration || 120,
+      startTime: req.body?.startTime ?? null,
+      endTime: req.body?.endTime ?? null,
       creatorId: adminId,
-      paperId: paper.id,
     });
-    createdMockExamId = mock.id;
-    await publishMockExam(mock.id, req.body?.startTime, req.body?.endTime);
-    createdMockExamId = null;
-    res.status(201).json({ success: true, mockExamId: mock.id, mockExam: { ...mock, status: 'published' } });
+    createdSessionId = session.id;
+    await ExamSessionService.publishExamSession(session.id, {});
+    createdSessionId = null;
+    // Mark the paper itself as published (2-state lifecycle: pending/published)
+    await prisma.examPaper.update({ where: { id: paper.id }, data: { status: 'published' } });
+    res.status(201).json({ success: true, mockExamId: session.id, examSessionId: session.id, examSession: { ...session, status: 'published' } });
   } catch (e: any) {
-    // Roll back the draft so a failed publish does not leave an orphan MockExam.
-    if (createdMockExamId !== null) {
+    // Roll back the draft so a failed publish does not leave an orphan session.
+    if (createdSessionId !== null) {
       try {
-        await prisma.mockExam.delete({ where: { id: createdMockExamId } });
+        await ExamSessionService.deleteExamSession(createdSessionId);
       } catch (rollbackErr) {
-        console.error('[paper-library] failed to roll back mock exam', createdMockExamId, rollbackErr);
+        console.error('[paper-library] failed to roll back exam session', createdSessionId, rollbackErr);
       }
     }
-    if (e instanceof MockExamInputError) return res.status(400).json({ error: e.message });
     res.status(500).json({ error: e.message });
   }
 });
 
 /**
- * DELETE /api/paper-library/:id/unpublish — cancel a published whole-paper mock exam
- * Deletes the MockExam and any answer sheets/records linked to it.
+ * DELETE /api/paper-library/:id/unpublish — cancel a published whole-paper exam
+ * Deletes the ExamSession and any answer sheets linked to it.
  */
 router.delete('/:id/unpublish', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
     const id = toInt(req.params.id);
     if (id === null) return res.status(400).json({ error: 'Invalid id' });
-    const mocked = await prisma.mockExam.findFirst({ where: { paperId: id } });
-    if (!mocked) return res.status(404).json({ error: 'No mock exam found for this paper' });
+    const session = await prisma.examSession.findFirst({ where: { paperId: id } });
+    if (!session) return res.status(404).json({ error: 'No exam session found for this paper' });
 
-    // Clean up answer sheets, answers, then the mock exam itself
-    await prisma.answerSheet.deleteMany({ where: { mockExamId: mocked.id } });
-    await prisma.mockExamAnswer.deleteMany({ where: { mockExamId: mocked.id } });
-    await prisma.mockExam.delete({ where: { id: mocked.id } });
-    res.json({ success: true, removedMockExamId: mocked.id });
+    await ExamSessionService.deleteExamSession(session.id);
+    // Reset paper back to pending (2-state lifecycle)
+    await prisma.examPaper.update({ where: { id }, data: { status: 'pending' } });
+    res.json({ success: true, removedMockExamId: session.id, removedExamSessionId: session.id });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -184,11 +187,11 @@ router.delete('/:id/unpublish', requireAuth, requireAdmin, async (req: Request, 
 
 /**
  * GET /api/paper-library/recovery — recovery/grading progress per published paper
- * Groups answer sheets by MockExam(paperId): uploaded/graded counts + student breakdown.
+ * Groups answer sheets by ExamSession(paperId): uploaded/graded counts + student breakdown.
  */
 router.get('/recovery/all', requireAuth, requireAdmin, async (_req: Request, res: Response) => {
   try {
-    const mocks = await prisma.mockExam.findMany({
+    const sessions = await prisma.examSession.findMany({
       where: { paperId: { not: null } },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -196,9 +199,9 @@ router.get('/recovery/all', requireAuth, requireAdmin, async (_req: Request, res
       },
     });
     const groups = [];
-    for (const mock of mocks) {
+    for (const session of sessions) {
       const sheets = await prisma.answerSheet.findMany({
-        where: { mockExamId: mock.id },
+        where: { examSessionId: session.id },
         select: { id: true, studentId: true, status: true, totalScore: true, fileUrl: true, createdAt: true },
       });
       const sheetsByStudent = new Map<number, any>();
@@ -206,10 +209,11 @@ router.get('/recovery/all', requireAuth, requireAdmin, async (_req: Request, res
         sheetsByStudent.set(s.studentId, s);
       }
       groups.push({
-        mockExamId: mock.id,
-        paper: mock.paper,
-        createdAt: mock.createdAt,
-        status: mock.status,
+        mockExamId: session.id,
+        examSessionId: session.id,
+        paper: session.paper,
+        createdAt: session.createdAt,
+        status: session.status,
         totalStudents: 0,
         uploaded: sheets.length,
         graded: sheets.filter((s) => s.status === 'graded').length,

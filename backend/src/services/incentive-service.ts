@@ -192,10 +192,18 @@ export async function updateBadgeProgress(
  * Check and update all badges for a student (called after practice/grading)
  */
 export async function checkAllBadges(studentId: number): Promise<void> {
-  // 1. Practice count - count all answered questions
-  const practiceCount = await prisma.answerRecord.count({
-    where: { record: { studentId } },
+  // 1. Practice count - count answered questions across all online submissions (answers JSON)
+  const submissions = await prisma.examSubmission.findMany({
+    where: { studentId },
+    select: { answers: true },
   });
+  let practiceCount = 0;
+  for (const s of submissions) {
+    try {
+      const answers = s.answers ? JSON.parse(s.answers) : [];
+      practiceCount += answers.filter((a: any) => a.answer).length;
+    } catch { /* skip malformed */ }
+  }
   await updateBadgeProgress(studentId, 'practice_count', practiceCount);
 
   // 2. Mastery improvement - compare earliest vs latest mastery
@@ -219,22 +227,15 @@ export async function checkAllBadges(studentId: number): Promise<void> {
     await updateBadgeProgress(studentId, 'streak_days', latestCheckIn.streakCount);
   }
 
-  // 4. Perfect score - count exams/mock exams with full score
-  const perfectScores = await prisma.mockExamAnswer.count({
-    where: {
-      studentId,
-      isCorrect: true,
-      score: { equals: undefined }, // We'll refine: score == maxScore
-    },
+  // 4. Perfect score - graded online submissions with full score
+  const gradedSubs = await prisma.examSubmission.findMany({
+    where: { studentId, status: 'graded', totalScore: { not: null } },
+    include: { examSession: { select: { totalScore: true } } },
   });
-  // Better: count mock exams where totalScore == maxScore
-  const mockExamRecords = await prisma.mockExamAnswer.findMany({
-    where: { studentId },
-    select: { score: true, maxScore: true },
-  });
-  const perfectCount = mockExamRecords.filter(r => r.score !== null && r.maxScore !== null && r.score === r.maxScore && r.maxScore > 0).length;
+  const perfectCount = gradedSubs.filter(
+    (r) => r.totalScore !== null && r.examSession?.totalScore !== null && r.totalScore === r.examSession.totalScore && (r.examSession.totalScore || 0) > 0
+  ).length;
   await updateBadgeProgress(studentId, 'perfect_score', perfectCount);
-  void perfectScores; // suppress unused warning
 
   // 5. Wrong questions mastered (student wrong questions table)
   const masteredWrong = await prisma.studentWrongQuestion.count({
@@ -270,15 +271,23 @@ export async function checkIn(studentId: number) {
 
   const streakCount = yesterdayCheckIn ? yesterdayCheckIn.streakCount + 1 : 1;
 
-  // Get today's learning summary
+  // Get today's learning summary (count answers from today's submissions)
   const todayStart = new Date(today);
   const todayEnd = new Date(now);
-  const todayAnswers = await prisma.answerRecord.count({
+  const todaySubs = await prisma.examSubmission.findMany({
     where: {
-      record: { studentId },
+      studentId,
       createdAt: { gte: todayStart, lte: todayEnd },
     },
+    select: { answers: true },
   });
+  let todayAnswers = 0;
+  for (const s of todaySubs) {
+    try {
+      const answers = s.answers ? JSON.parse(s.answers) : [];
+      todayAnswers += answers.filter((a: any) => a.answer).length;
+    } catch { /* skip malformed */ }
+  }
   const summary = JSON.stringify({
     practiceCount: todayAnswers,
     studyMinutes: 0, // Placeholder - could be computed from timeSpent
@@ -368,23 +377,25 @@ export async function hasCheckedInToday(studentId: number): Promise<boolean> {
  * Get learning statistics for a student
  */
 export async function getLearningStats(studentId: number) {
-  // Total practice count
-  const totalPractice = await prisma.answerRecord.count({
-    where: { record: { studentId } },
+  // Aggregate from ExamSubmission.answers JSON (app-layer)
+  const allSubs = await prisma.examSubmission.findMany({
+    where: { studentId },
+    select: { answers: true },
   });
-
-  // Correct rate (score > 0 means correct)
-  const correctCount = await prisma.answerRecord.count({
-    where: { record: { studentId }, score: { gt: 0 } },
-  });
+  let totalPractice = 0;
+  let correctCount = 0;
+  let totalStudySeconds = 0;
+  for (const s of allSubs) {
+    try {
+      const answers = s.answers ? JSON.parse(s.answers) : [];
+      for (const a of answers) {
+        if (a.answer) totalPractice++;
+        if (a.isCorrect === true) correctCount++;
+        totalStudySeconds += a.timeSpent || 0;
+      }
+    } catch { /* skip malformed */ }
+  }
   const correctRate = totalPractice > 0 ? (correctCount / totalPractice) * 100 : 0;
-
-  // Study time (sum of timeSpent in seconds)
-  const answers = await prisma.answerRecord.findMany({
-    where: { record: { studentId } },
-    select: { timeSpent: true },
-  });
-  const totalStudySeconds = answers.reduce((sum: number, a: { timeSpent: number | null }) => sum + (a.timeSpent || 0), 0);
   const totalStudyMinutes = Math.floor(totalStudySeconds / 60);
 
   // Badges earned
@@ -565,7 +576,7 @@ export async function getGlobalLeaderboard(anonymous: boolean = true, limit: num
  * Get achievement wall data for a student
  */
 export async function getAchievementWall(studentId: number) {
-  const [earnedBadges, checkIns, perfectScores] = await Promise.all([
+  const [earnedBadges, checkIns, gradedSubs] = await Promise.all([
     prisma.userBadge.findMany({
       where: { studentId, earned: true },
       include: { badge: true },
@@ -576,21 +587,19 @@ export async function getAchievementWall(studentId: number) {
       orderBy: { checkInDate: 'desc' },
       take: 30,
     }),
-    // Mock exams with full scores
-    prisma.mockExamAnswer.findMany({
-      where: { studentId, score: { equals: undefined } },
-      take: 5,
+    // Graded exam submissions (for perfect score detection)
+    prisma.examSubmission.findMany({
+      where: { studentId, status: 'graded', totalScore: { not: null } },
+      include: { examSession: { select: { id: true, totalScore: true } } },
+      take: 100,
     }),
   ]);
 
-  // Get perfect score mock exam records
-  const allMockAnswers = await prisma.mockExamAnswer.findMany({
-    where: { studentId },
-    select: { mockExamId: true, score: true, maxScore: true },
-  });
-  const perfectExams = allMockAnswers
-    .filter((a: { mockExamId: number; score: number | null; maxScore: number | null }) => (a.score !== null && a.maxScore !== null && a.score === a.maxScore && a.maxScore > 0))
-    .map((a: { mockExamId: number; score: number | null; maxScore: number | null }) => ({ mockExamId: a.mockExamId, score: a.score as number, maxScore: a.maxScore as number }));
+  // Get perfect score exam submissions
+  const perfectExams = gradedSubs
+    .filter((r) => r.totalScore !== null && r.examSession?.totalScore !== null && r.totalScore === r.examSession.totalScore && (r.examSession.totalScore || 0) > 0)
+    .map((r) => ({ mockExamId: r.examSessionId, examSessionId: r.examSessionId, score: r.totalScore as number, maxScore: r.examSession.totalScore as number }));
+  void gradedSubs;
 
   // Mastery improvements
   const history = await prisma.masteryHistory.findMany({

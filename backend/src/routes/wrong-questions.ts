@@ -9,7 +9,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import * as WrongQuestionsService from '../services/wrong-questions-service';
-import { requireAuth } from '../middleware/permission';
+import { requireAuth, requireAdmin } from '../middleware/permission';
 
 const router = Router();
 
@@ -143,6 +143,39 @@ router.get('/print-export', requireAuth, async (req: Request, res: Response) => 
       includeAnswerAnalysis
     );
     res.json({ success: true, items: data });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===== Admin 只读视图（查看指定学生错题本）=====
+
+// 管理员查询学生错题列表（只读）
+router.get('/student/:studentId', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const studentId = parseInt(req.params.studentId as string);
+    if (isNaN(studentId)) return res.status(400).json({ error: 'Invalid studentId' });
+    const filters: WrongQuestionsService.WrongQuestionFilters = {
+      questionType: (req.query.questionType as string) || undefined,
+      difficulty: (req.query.difficulty as string) || undefined,
+      tag: (req.query.tag as string) || undefined,
+      page: req.query.page ? parseInt(req.query.page as string) : 1,
+      limit: req.query.limit ? parseInt(req.query.limit as string) : 50,
+    };
+    const result = await WrongQuestionsService.getStudentWrongQuestionsForAdmin(studentId, filters);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 管理员查询学生掌握度概览（只读）
+router.get('/student/:studentId/mastery-overview', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const studentId = parseInt(req.params.studentId as string);
+    if (isNaN(studentId)) return res.status(400).json({ error: 'Invalid studentId' });
+    const overview = await WrongQuestionsService.getStudentMasteryOverviewForAdmin(studentId);
+    res.json(overview);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

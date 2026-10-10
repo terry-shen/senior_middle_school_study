@@ -50,13 +50,20 @@ router.post('/upload', requireAuth, sheetUpload.single('file'), async (req: Requ
       return res.status(400).json({ error: '未上传文件' });
     }
     const studentId = req.user!.id;
-    const examId = req.body.examId ? parseInt(req.body.examId) : null;
-    const mockExamId = req.body.mockExamId ? parseInt(req.body.mockExamId) : null;
-    const wholePaperId = req.body.wholePaperId ? parseInt(req.body.wholePaperId) : null;
+    // 统一考试会话（兼容旧 examId/mockExamId/wholePaperId 参数名，全部映射到 examSessionId）
+    const examSessionId = req.body.examSessionId
+      ? parseInt(req.body.examSessionId)
+      : req.body.examId
+      ? parseInt(req.body.examId)
+      : req.body.mockExamId
+      ? parseInt(req.body.mockExamId)
+      : req.body.wholePaperId
+      ? parseInt(req.body.wholePaperId)
+      : null;
 
-    if (!examId && !mockExamId && !wholePaperId) {
+    if (!examSessionId) {
       fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: '必须指定 examId / mockExamId / wholePaperId 之一' });
+      return res.status(400).json({ error: '必须指定 examSessionId（或旧的 examId/mockExamId/wholePaperId）' });
     }
 
     const originalName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
@@ -65,10 +72,7 @@ router.post('/upload', requireAuth, sheetUpload.single('file'), async (req: Requ
     const fileType = isImage ? 'image' : 'word';
 
     // Replace this student's previous answer sheet for the same scene (re-upload)
-    const where: any = { studentId };
-    if (examId) where.examId = examId;
-    if (mockExamId) where.mockExamId = mockExamId;
-    if (wholePaperId) where.wholePaperId = wholePaperId;
+    const where: any = { studentId, examSessionId };
     const existing = await prisma.answerSheet.findFirst({ where });
     if (existing) {
       // Delete previous file
@@ -88,9 +92,7 @@ router.post('/upload', requireAuth, sheetUpload.single('file'), async (req: Requ
     const sheet = await prisma.answerSheet.create({
       data: {
         studentId,
-        examId,
-        mockExamId,
-        wholePaperId,
+        examSessionId,
         fileUrl: `/uploads/answer-sheets/${req.file.filename}`,
         fileType,
         fileName: originalName,
@@ -156,18 +158,10 @@ router.get('/mine', requireAuth, async (req: Request, res: Response) => {
       sheets.map(async (s) => {
         let sceneTitle = '未知场景';
         let sceneType = '';
-        if (s.examId) {
-          const ex = await prisma.exam.findUnique({ where: { id: s.examId }, select: { title: true } });
-          sceneTitle = ex?.title || '在线测验';
-          sceneType = 'online_exam';
-        } else if (s.mockExamId) {
-          const mk = await prisma.mockExam.findUnique({ where: { id: s.mockExamId }, select: { title: true } });
-          sceneTitle = mk?.title || '模拟考试';
-          sceneType = 'mock_exam';
-        } else if (s.wholePaperId) {
-          const wp = await prisma.examPaper.findUnique({ where: { id: s.wholePaperId }, select: { title: true } });
-          sceneTitle = wp?.title || '整卷测验';
-          sceneType = 'whole_paper';
+        if (s.examSessionId) {
+          const es = await prisma.examSession.findUnique({ where: { id: s.examSessionId }, select: { title: true, mode: true } });
+          sceneTitle = es?.title || '考试';
+          sceneType = es?.mode === 'whole_paper' ? 'whole_paper' : 'online_exam';
         }
         return { ...s, sceneTitle, sceneType };
       })
@@ -204,18 +198,10 @@ router.get('/pending', requireAuth, requireAdmin, async (req: Request, res: Resp
       sheets.map(async (s) => {
         let sceneTitle = '未知场景';
         let sceneType = '';
-        if (s.examId) {
-          const ex = await prisma.exam.findUnique({ where: { id: s.examId }, select: { title: true } });
-          sceneTitle = ex?.title || '在线测验';
-          sceneType = 'online_exam';
-        } else if (s.mockExamId) {
-          const mk = await prisma.mockExam.findUnique({ where: { id: s.mockExamId }, select: { title: true } });
-          sceneTitle = mk?.title || '模拟考试';
-          sceneType = 'mock_exam';
-        } else if (s.wholePaperId) {
-          const wp = await prisma.examPaper.findUnique({ where: { id: s.wholePaperId }, select: { title: true } });
-          sceneTitle = wp?.title || '整卷测验';
-          sceneType = 'whole_paper';
+        if (s.examSessionId) {
+          const es = await prisma.examSession.findUnique({ where: { id: s.examSessionId }, select: { title: true, mode: true } });
+          sceneTitle = es?.title || '考试';
+          sceneType = es?.mode === 'whole_paper' ? 'whole_paper' : 'online_exam';
         }
         return { ...s, sceneTitle, sceneType };
       })
@@ -248,18 +234,10 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
 
     let sceneTitle = '未知场景';
     let sceneType = '';
-    if (sheet.examId) {
-      const ex = await prisma.exam.findUnique({ where: { id: sheet.examId }, select: { title: true } });
-      sceneTitle = ex?.title || '在线测验';
-      sceneType = 'online_exam';
-    } else if (sheet.mockExamId) {
-      const mk = await prisma.mockExam.findUnique({ where: { id: sheet.mockExamId }, select: { title: true } });
-      sceneTitle = mk?.title || '模拟考试';
-      sceneType = 'mock_exam';
-    } else if (sheet.wholePaperId) {
-      const wp = await prisma.examPaper.findUnique({ where: { id: sheet.wholePaperId }, select: { title: true } });
-      sceneTitle = wp?.title || '整卷测验';
-      sceneType = 'whole_paper';
+    if (sheet.examSessionId) {
+      const es = await prisma.examSession.findUnique({ where: { id: sheet.examSessionId }, select: { title: true, mode: true } });
+      sceneTitle = es?.title || '考试';
+      sceneType = es?.mode === 'whole_paper' ? 'whole_paper' : 'online_exam';
     }
     res.json({ success: true, answerSheet: { ...sheet, sceneTitle, sceneType } });
   } catch (err: any) {

@@ -36,32 +36,25 @@ const router = Router();
 const prisma = new PrismaClient();
 
 /**
- * Check if a question is referenced by any in-progress online exam or mock exam.
+ * Check if a question is referenced by any ongoing online ExamSession submission.
  * Returns { blocked: boolean, examNames: string[] }.
- * A question is blocked if it appears in an AnswerRecord whose ExamRecord.status='in_progress',
- * or in a MockExamAnswer whose MockExam.status='in_progress'.
+ * A question is blocked if it appears in an ExamSubmission (answers JSON) whose ExamSession.status='ongoing'.
  */
 async function checkQuestionInUse(questionId: number): Promise<{ blocked: boolean; examNames: string[] }> {
   const examNames = new Set<string>();
 
-  // 1) Online exams: AnswerRecord -> ExamRecord (status in_progress)
-  const onlineRefs = await prisma.answerRecord.findMany({
-    where: { questionId, record: { status: 'in_progress' } },
-    include: { record: { include: { exam: { select: { title: true } } } } },
+  // Online sessions: ExamSubmission.answers JSON contains questionId (app-layer filter)
+  const submissions = await prisma.examSubmission.findMany({
+    where: { examSession: { status: 'ongoing', mode: 'online' } },
+    include: { examSession: { select: { title: true } } },
   });
-  for (const r of onlineRefs) {
-    const title = r.record?.exam?.title;
-    if (title) examNames.add(title);
-  }
-
-  // 2) Mock exams: MockExamAnswer -> MockExam (status in_progress)
-  const mockRefs = await prisma.mockExamAnswer.findMany({
-    where: { questionId, mockExam: { status: 'in_progress' } },
-    include: { mockExam: { select: { title: true } } },
-  });
-  for (const m of mockRefs) {
-    const title = m.mockExam?.title;
-    if (title) examNames.add(title);
+  for (const s of submissions) {
+    let answers: any[] = [];
+    try { answers = s.answers ? JSON.parse(s.answers) : []; } catch { answers = []; }
+    if (answers.some((a) => a.questionId === questionId)) {
+      const title = s.examSession?.title;
+      if (title) examNames.add(title);
+    }
   }
 
   return { blocked: examNames.size > 0, examNames: Array.from(examNames) };
@@ -152,7 +145,7 @@ router.post('/import-whole', requireAuth, requireAdmin, upload.single('file'), a
         sourceFormat: req.file.mimetype.includes('pdf') ? 'pdf' : 'word',
         purpose: 'whole_paper',
         pdfUrl: `/uploads/papers/${req.file.filename}`,
-        status: 'uploaded',
+        status: 'pending',
       },
     });
 
@@ -211,7 +204,7 @@ router.post('/import-whole-multiple', requireAuth, requireAdmin, (req: Request, 
             sourceFormat: file.mimetype.includes('pdf') ? 'pdf' : (file.mimetype.includes('word') || file.originalname.toLowerCase().endsWith('.docx') || file.originalname.toLowerCase().endsWith('.doc')) ? 'word' : 'image',
             purpose: 'whole_paper',
             pdfUrl: `/uploads/papers/${file.filename}`,
-            status: 'uploaded',
+            status: 'pending',
           },
         });
 
@@ -448,7 +441,7 @@ router.post('/import', requireAuth, upload.single('file'), async (req: Request, 
         pageImages: pageImages.length > 0 ? JSON.stringify(pageImages) : null,
         parsedMarkdown,
         editedMarkdown,
-        status: 'uploaded',
+        status: 'pending',
         totalScore: autoMeta.totalScore,
         duration: autoMeta.duration,
       },
@@ -487,7 +480,7 @@ router.put('/:id/markdown', requireAdmin, async (req: Request, res: Response) =>
     }
     const paper = await prisma.examPaper.update({
       where: { id },
-      data: { editedMarkdown, status: 'editing' },
+      data: { editedMarkdown },
     });
     res.json({ success: true, paper });
   } catch (error: any) {
@@ -519,8 +512,6 @@ router.post('/:id/split-preview', requireAdmin, async (req: Request, res: Respon
     if (!result.success) {
       return res.status(400).json({ error: result.error });
     }
-    // Update status to split_preview
-    await prisma.examPaper.update({ where: { id }, data: { status: 'split_preview' } });
     res.json({ success: true, questions: result.questions, source: paper.editedMarkdown ? 'edited' : 'parsed' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -781,7 +772,7 @@ router.post('/import-multiple', requireAuth, (req: Request, res: Response) => {
             sourceFormat,
             parsedMarkdown,
             editedMarkdown,
-            status: 'uploaded',
+            status: 'pending',
             totalScore: autoMeta.totalScore,
             duration: autoMeta.duration,
           },
@@ -845,24 +836,15 @@ router.get('/:id/download-file', requireAuth, async (req: Request, res: Response
     if (!paper || !paper.pdfUrl) {
       return res.status(404).json({ error: '试卷文件不存在' });
     }
-    // Students can only download whole_paper files that are published and assigned to them
+    // Students can only download whole_paper files that are published (no assignment table — all published whole-paper sessions are visible)
     if (req.user?.role !== 'admin') {
       if (paper.purpose !== 'whole_paper') {
         return res.status(403).json({ error: '仅整卷可下载' });
       }
-      const assignedExam = await prisma.exam.findFirst({
-        where: {
-          status: 'published',
-          paperId: id, // strictly link this paper to the exam
-          OR: [
-            { assignments: { some: { studentId: req.user!.id } } },
-            { assignments: { some: { class: { students: { some: { id: req.user!.id } } } } } },
-          ],
-        },
-        include: { assignments: true },
+      const publishedSession = await prisma.examSession.findFirst({
+        where: { status: 'published', paperId: id }, // strictly link this paper to the session
       });
-      // Verify this exam is linked to this paper via paperId FK
-      if (!assignedExam) {
+      if (!publishedSession) {
         return res.status(403).json({ error: '未分配此试卷' });
       }
     }

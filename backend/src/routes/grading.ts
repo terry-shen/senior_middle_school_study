@@ -1,77 +1,85 @@
 /**
- * AI Grading Routes
- * API endpoints for automatic grading
+ * Grading Routes
+ *
+ * AI批改（选择题/填空题自动判分，解答题人工）
  */
 
 import { Router, Request, Response } from 'express';
-import {
-  gradeAnswerRecord,
-  batchGradeExamRecord,
-  adjustGrade,
-  getGradingStats,
-} from '../services/grading-service';
+import { PrismaClient } from '@prisma/client';
+import * as GradingService from '../services/grading-service';
 import { requireAuth, requireAdmin } from '../middleware/permission';
 
 const router = Router();
+const prisma = new PrismaClient();
 
-/**
- * POST /api/grading/grade/:recordId
- * Grade a single answer record
- */
-router.post('/grade/:recordId', requireAuth, async (req: Request, res: Response) => {
+// 批改统计
+router.get('/stats', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const recordId = parseInt(req.params.recordId as string);
-    const result = await gradeAnswerRecord(recordId, req.user?.id);
-    res.json(result);
-  } catch (error: any) {
-    res.status(400).json({ error: error.message });
-  }
-});
-
-/**
- * POST /api/grading/batch/:examRecordId
- * Batch grade all answers for an exam record
- */
-router.post('/batch/:examRecordId', requireAuth, async (req: Request, res: Response) => {
-  try {
-    const examRecordId = parseInt(req.params.examRecordId as string);
-    const result = await batchGradeExamRecord(examRecordId);
-    res.json(result);
-  } catch (error: any) {
-    res.status(400).json({ error: error.message });
-  }
-});
-
-/**
- * POST /api/grading/adjust/:recordId
- * Manually adjust a grade
- */
-router.post('/adjust/:recordId', requireAuth, async (req: Request, res: Response) => {
-  try {
-    const recordId = parseInt(req.params.recordId as string);
-    const { newScore, reason } = req.body;
-
-    if (newScore === undefined || !reason) {
-      return res.status(400).json({ error: 'Missing newScore or reason' });
-    }
-
-    const result = await adjustGrade(recordId, newScore, reason, req.user!.id);
-    res.json(result);
-  } catch (error: any) {
-    res.status(400).json({ error: error.message });
-  }
-});
-
-/**
- * GET /api/grading/stats
- * Get grading statistics
- */
-router.get('/stats', requireAuth, async (_req: Request, res: Response) => {
-  try {
-    const stats = await getGradingStats();
+    const examSessionId = req.query.examSessionId ? parseInt(String(req.query.examSessionId)) : undefined;
+    const stats = await GradingService.getGradingStats({ examSessionId });
     res.json(stats);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 批量判分某考试会话
+router.post('/batch/:examSessionId', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(String(req.params.examSessionId));
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+    const result = await GradingService.batchGradeExamSession(id);
+    res.json({ success: true, ...result });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 判分单个提交
+router.post('/grade/:submissionId', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(String(req.params.submissionId));
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+    const result = await GradingService.batchGradeBySubmissionId(id);
+    res.json({ success: true, ...result });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 手动调整总分（支持 submissionId 或 examSessionId+studentId 两种形式）
+router.post('/adjust', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { examSessionId, studentId, submissionId, newScore, feedback } = req.body ?? {};
+    let targetSessionId = examSessionId ? parseInt(String(examSessionId)) : 0;
+    let targetStudentId = studentId ? parseInt(String(studentId)) : 0;
+    if (submissionId && (!targetSessionId || !targetStudentId)) {
+      const sub = await prisma.examSubmission.findUnique({ where: { id: parseInt(String(submissionId)) } });
+      if (!sub) return res.status(404).json({ error: 'Submission not found' });
+      targetSessionId = sub.examSessionId;
+      targetStudentId = sub.studentId;
+    }
+    if (!targetSessionId || !targetStudentId) return res.status(400).json({ error: 'Invalid params' });
+    const result = await GradingService.adjustGrade(
+      targetSessionId, targetStudentId, Number(newScore), feedback
+    );
+    res.json({ success: true, submission: result });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 人工批改单题
+router.post('/answer', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { examSessionId, studentId, questionId, score, feedback } = req.body ?? {};
+    if (!examSessionId || !studentId || !questionId) return res.status(400).json({ error: 'Invalid params' });
+    const result = await GradingService.gradeAnswerManually(
+      parseInt(String(examSessionId)), parseInt(String(studentId)), parseInt(String(questionId)), Number(score), feedback
+    );
+    res.json({ success: true, submission: result });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 

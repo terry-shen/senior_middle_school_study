@@ -1,10 +1,9 @@
 /**
  * Exam Generation Service
- * 自动出卷服务：智能选题算法、试卷生成、导出
+ * 自动组卷选题算法 + 预览 + 模板（ExamSession 创建统一走 exam-session-service）
  */
 
 import { PrismaClient } from '@prisma/client';
-import { LLMService } from './llm-service';
 
 const prisma = new PrismaClient();
 
@@ -40,21 +39,11 @@ export interface ExamGenerationParams {
 }
 
 // 选题结果
-interface SelectedQuestion {
+export interface SelectedQuestion {
   id: number;
   questionId: number;
   questionNumber: number;
   score: number;
-}
-
-// 试卷生成结果
-export interface GeneratedExamResult {
-  id: number;
-  title: string;
-  totalScore: number;
-  duration?: number;
-  questions: SelectedQuestion[];
-  parameters: ExamGenerationParams;
 }
 
 /**
@@ -90,14 +79,6 @@ export async function selectQuestions(params: ExamGenerationParams): Promise<Sel
     multiple_choice: allQuestions.filter(q => q.questionType === 'multiple_choice'),
     fill: allQuestions.filter(q => q.questionType === 'fill'),
     essay: allQuestions.filter(q => q.questionType === 'essay'),
-  };
-
-  // 3. 按难度分类
-  const questionsByDifficulty: Record<string, typeof allQuestions> = {
-    easy: allQuestions.filter(q => q.difficulty === 'easy'),
-    medium: allQuestions.filter(q => q.difficulty === 'medium'),
-    hard: allQuestions.filter(q => q.difficulty === 'hard'),
-    very_hard: allQuestions.filter(q => q.difficulty === 'very_hard'),
   };
 
   // 4. 单选题（选择题）选题：兼容 choice / single_choice 两种键
@@ -195,33 +176,33 @@ function selectByDifficulty(
 ): any[] {
   const selected: any[] = [];
   const used = new Set<number>();
-  
+
   // 计算每种难度的题目数量
   const easyCount = Math.round(count * (distribution.easy || 0.3));
   const mediumCount = Math.round(count * (distribution.medium || 0.5));
   const hardCount = Math.round(count * (distribution.hard || 0.2));
-  
+
   // 选择简单题
   const easyQuestions = questions.filter(q => q.difficulty === 'easy' && !used.has(q.id));
   for (let i = 0; i < Math.min(easyCount, easyQuestions.length); i++) {
     selected.push(easyQuestions[i]);
     used.add(easyQuestions[i].id);
   }
-  
+
   // 选择中等题
   const mediumQuestions = questions.filter(q => q.difficulty === 'medium' && !used.has(q.id));
   for (let i = 0; i < Math.min(mediumCount, mediumQuestions.length); i++) {
     selected.push(mediumQuestions[i]);
     used.add(mediumQuestions[i].id);
   }
-  
+
   // 选择困难题
   const hardQuestions = questions.filter(q => q.difficulty === 'hard' && !used.has(q.id));
   for (let i = 0; i < Math.min(hardCount, hardQuestions.length); i++) {
     selected.push(hardQuestions[i]);
     used.add(hardQuestions[i].id);
   }
-  
+
   // 如果数量不够，补充其他题目
   while (selected.length < count) {
     const remaining = questions.filter(q => !used.has(q.id));
@@ -229,46 +210,8 @@ function selectByDifficulty(
     selected.push(remaining[0]);
     used.add(remaining[0].id);
   }
-  
-  return selected;
-}
 
-/**
- * 生成试卷
- */
-export async function generateExam(
-  params: ExamGenerationParams,
-  creatorId: number,
-  templateId?: number
-): Promise<GeneratedExamResult> {
-  // 1. 选择题目
-  const questions = await selectQuestions(params);
-  
-  // 2. 计算总分
-  const totalScore = questions.reduce((sum, q) => sum + q.score, 0);
-  
-  // 3. 保存到数据库
-  const exam = await prisma.generatedExam.create({
-    data: {
-      templateId,
-      title: params.name,
-      totalScore,
-      duration: params.duration,
-      questions: JSON.stringify(questions),
-      parameters: JSON.stringify(params),
-      status: 'draft',
-      creatorId
-    }
-  });
-  
-  return {
-    id: exam.id,
-    title: exam.title,
-    totalScore: exam.totalScore,
-    duration: exam.duration || undefined,
-    questions,
-    parameters: params
-  };
+  return selected;
 }
 
 /**
@@ -336,151 +279,25 @@ export async function previewExam(params: ExamGenerationParams): Promise<{
 }
 
 /**
- * 替换试卷中的题目
- */
-export async function replaceQuestion(
-  examId: number,
-  questionIndex: number,
-  newQuestionId: number
-): Promise<GeneratedExamResult> {
-  const exam = await prisma.generatedExam.findUnique({
-    where: { id: examId }
-  });
-  
-  if (!exam) {
-    throw new Error('Exam not found');
-  }
-  
-  const questions: SelectedQuestion[] = JSON.parse(exam.questions);
-  
-  if (questionIndex < 0 || questionIndex >= questions.length) {
-    throw new Error('Invalid question index');
-  }
-  
-  // 获取新题目信息
-  const newQuestion = await prisma.question.findUnique({
-    where: { id: newQuestionId }
-  });
-  
-  if (!newQuestion) {
-    throw new Error('Question not found');
-  }
-  
-  // 替换题目
-  questions[questionIndex] = {
-    id: newQuestion.id,
-    questionId: newQuestion.id,
-    questionNumber: questions[questionIndex].questionNumber,
-    score: questions[questionIndex].score
-  };
-  
-  // 更新数据库
-  const updated = await prisma.generatedExam.update({
-    where: { id: examId },
-    data: {
-      questions: JSON.stringify(questions)
-    }
-  });
-  
-  return {
-    id: updated.id,
-    title: updated.title,
-    totalScore: updated.totalScore,
-    duration: updated.duration || undefined,
-    questions,
-    parameters: JSON.parse(updated.parameters)
-  };
-}
-
-/**
- * 获取试卷详情
- */
-export async function getExam(examId: number): Promise<GeneratedExamResult | null> {
-  const exam = await prisma.generatedExam.findUnique({
-    where: { id: examId }
-  });
-  
-  if (!exam) return null;
-  
-  return {
-    id: exam.id,
-    title: exam.title,
-    totalScore: exam.totalScore,
-    duration: exam.duration || undefined,
-    questions: JSON.parse(exam.questions),
-    parameters: JSON.parse(exam.parameters)
-  };
-}
-
-/**
- * 获取用户的试卷列表
- */
-export async function getExams(
-  creatorId?: number,
-  status?: string,
-  page: number = 1,
-  limit: number = 20
-): Promise<{ data: any[]; total: number }> {
-  const where: any = {};
-  if (creatorId) where.creatorId = creatorId;
-  if (status) where.status = status;
-  
-  const [exams, total] = await Promise.all([
-    prisma.generatedExam.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-      include: {
-        creator: {
-          select: { id: true, name: true, studentId: true }
-        }
-      }
-    }),
-    prisma.generatedExam.count({ where })
-  ]);
-  
-  return { data: exams, total };
-}
-
-/**
- * 更新试卷状态
- */
-export async function updateExamStatus(
-  examId: number,
-  status: string
-): Promise<void> {
-  await prisma.generatedExam.update({
-    where: { id: examId },
-    data: { status }
-  });
-}
-
-/**
- * 删除试卷
- */
-export async function deleteExam(examId: number): Promise<void> {
-  await prisma.generatedExam.delete({
-    where: { id: examId }
-  });
-}
-
-/**
  * 保存为模板
  */
 export async function saveAsTemplate(
   params: ExamGenerationParams,
   creatorId: number
 ): Promise<number> {
+  const td = params.typeDistribution || {};
+  const questionCount =
+    (td.single_choice ?? td.choice ?? 0) +
+    (td.multiple_choice ?? 0) +
+    (td.fill ?? 0) +
+    (td.essay ?? 0);
+
   const template = await prisma.examTemplate.create({
     data: {
       name: params.name,
       totalScore: params.totalScore,
       duration: params.duration,
-      questionCount: 
-        (params.typeDistribution.choice || 0) +
-        (params.typeDistribution.fill || 0) +
-        (params.typeDistribution.essay || 0),
+      questionCount,
       typeDistribution: JSON.stringify(params.typeDistribution),
       difficultyDistribution: JSON.stringify(params.difficultyDistribution),
       scoreDistribution: JSON.stringify(params.scoreDistribution),
@@ -509,22 +326,21 @@ export async function getTemplates(): Promise<any[]> {
 }
 
 /**
- * 从模板生成试卷
+ * 从模板构建组卷参数（ExamSession 创建由 exam-session-service 完成）
  */
-export async function generateFromTemplate(
+export async function getTemplateParams(
   templateId: number,
-  creatorId: number,
   customParams?: Partial<ExamGenerationParams>
-): Promise<GeneratedExamResult> {
+): Promise<ExamGenerationParams> {
   const template = await prisma.examTemplate.findUnique({
     where: { id: templateId }
   });
-  
+
   if (!template) {
     throw new Error('Template not found');
   }
-  
-  const params: ExamGenerationParams = {
+
+  return {
     name: customParams?.name || template.name,
     totalScore: customParams?.totalScore || template.totalScore,
     duration: customParams?.duration || template.duration || undefined,
@@ -532,6 +348,4 @@ export async function generateFromTemplate(
     difficultyDistribution: customParams?.difficultyDistribution || JSON.parse(template.difficultyDistribution),
     scoreDistribution: customParams?.scoreDistribution || JSON.parse(template.scoreDistribution)
   };
-  
-  return generateExam(params, creatorId, templateId);
 }

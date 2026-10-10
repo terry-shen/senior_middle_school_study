@@ -11,10 +11,9 @@ import knowledgePointRoutes from './routes/knowledge-points';
 import paperRoutes from './routes/papers';
 import difficultyRoutes from './routes/difficulty';
 import examRoutes from './routes/exams';
-import onlineExamRoutes from './routes/online-exams';
+import examSessionRoutes from './routes/exam-sessions';
 import gradingRoutes from './routes/grading';
 import wrongQuestionsRoutes from './routes/wrong-questions';
-import mockExamRoutes from './routes/mock-exams';
 import incentiveRoutes from './routes/incentive';
 import answerSheetRoutes from './routes/answer-sheets';
 import paperLibraryRoutes from './routes/paper-library';
@@ -139,12 +138,12 @@ try {
   console.error('Failed to register Exam routes:', error);
 }
 
-// Online Exam routes
+// Exam Session routes (unified: whole_paper + online)
 try {
-  app.use('/api/online-exams', onlineExamRoutes);
-  console.log('Online Exam routes registered at /api/online-exams');
+  app.use('/api/exam-sessions', examSessionRoutes);
+  console.log('Exam Session routes registered at /api/exam-sessions');
 } catch (error) {
-  console.error('Failed to register Online Exam routes:', error);
+  console.error('Failed to register Exam Session routes:', error);
 }
 
 // Grading routes
@@ -161,14 +160,6 @@ try {
   console.log('Wrong Questions routes registered at /api/wrong-questions');
 } catch (error) {
   console.error('Failed to register Wrong Questions routes:', error);
-}
-
-// Mock Exam routes
-try {
-  app.use('/api/mock-exams', mockExamRoutes);
-  console.log('Mock Exam routes registered at /api/mock-exams');
-} catch (error) {
-  console.error('Failed to register Mock Exam routes:', error);
 }
 
 // Learning Incentive routes
