@@ -15,7 +15,7 @@ export interface ExamPaper {
   imageUrl?: string;
   pdfUrl?: string;
   rawContent?: string;
-  status: 'pending' | 'splitting' | 'analyzing' | 'completed' | 'failed' | 'uploaded' | 'editing' | 'split_preview';
+  status: 'pending' | 'published'; // 2-state lifecycle: pending=未发布, published=已发布为考试
   totalScore: number;
   duration: number;
   sourceFormat?: string; // pdf | image | word | txt

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { importFromImage, importFromPDF, splitQuestions, getPapers, deletePaper, importMultipleFiles, updatePaper } from '../services/papers-api';
+import { importFromImage, importFromPDF, getPapers, deletePaper, importMultipleFiles, updatePaper } from '../services/papers-api';
 import type { ExamPaper, MultiImportResult } from '../services/papers-api';
 import './QuestionBank.css';
 
@@ -12,7 +12,6 @@ export default function QuestionBank() {
   const navigate = useNavigate();
   const [files, setFiles] = useState<File[]>([]);
   const [importing, setImporting] = useState(false);
-  const [splitting, setSplitting] = useState<number | null>(null);
   const [papers, setPapers] = useState<Paper[]>([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -144,24 +143,6 @@ export default function QuestionBank() {
     setImporting(false);
   };
 
-  const handleSplit = async (paperId: number) => {
-    if (!token) return;
-    setSplitting(paperId);
-    setError('');
-    try {
-      const result = await splitQuestions(token, paperId);
-      if (result.success) {
-        setMessage(`拆分成功，共 ${result.questions?.length || 0} 道题目`);
-        await loadPapers();
-      } else {
-        setError(result.error || '拆分失败');
-      }
-    } catch (e: any) {
-      setError(e.message || '拆分失败');
-    }
-    setSplitting(null);
-  };
-
   const handleDelete = async (paperId: number) => {
     if (!token) return;
     if (!confirm('确定要删除这份试卷吗？')) return;
@@ -192,14 +173,8 @@ export default function QuestionBank() {
 
   const getStatusText = (status: string) => {
     const map: Record<string, string> = {
-      pending: '待拆分',
-      splitting: '拆分中',
-      analyzing: 'AI分析中',
-      completed: '已完成',
-      failed: '失败',
-      uploaded: '待编辑',
-      editing: '编辑中',
-      split_preview: '待确认',
+      pending: '待处理',
+      published: '已发布',
     };
     return map[status] || status;
   };
@@ -315,22 +290,13 @@ export default function QuestionBank() {
                     </span>
                   </td>
                   <td className="actions">
-                    {paper.status === 'pending' && (
-                      <button onClick={() => handleSplit(paper.id)} disabled={splitting === paper.id} className="btn-small">
-                        {splitting === paper.id ? '拆分中...' : '拆分题目'}
-                      </button>
-                    )}
-                    {(paper.status === 'uploaded' || paper.status === 'editing' || paper.status === 'completed') && (
-                      <button onClick={() => navigate(`/papers/${paper.id}/edit`)} className="btn-small">
-                        编辑校准
-                      </button>
-                    )}
-                    {(paper.status === 'uploaded' || paper.status === 'editing') && (
-                      <button onClick={() => navigate(`/papers/${paper.id}/split-preview`)} className="btn-small">
-                        预览拆分
-                      </button>
-                    )}
-                    {paper.status === 'split_preview' && (
+                    <button onClick={() => navigate(`/papers/${paper.id}/edit`)} className="btn-small">
+                      编辑校准
+                    </button>
+                    <button onClick={() => navigate(`/papers/${paper.id}/split-preview`)} className="btn-small">
+                      预览拆分
+                    </button>
+                    {paper.editedMarkdown && (
                       <button onClick={() => navigate(`/papers/${paper.id}/split-preview`)} className="btn-small">
                         确认导入
                       </button>
