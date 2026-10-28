@@ -266,6 +266,27 @@ model IncentiveNotification {
 // ===== Mock Exam Models =====
 
 // 统一考试会话（合并 MockExam + Exam + GeneratedExam）
+// 学科字典（全学科维度）
+model Subject {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique // math, chinese, english, physics...
+  name      String   // 数学
+  icon      String?  // 图标（emoji 或 icon 名）
+  color     String?  // 主题色（如 #3b82f6）
+  order     Int      @default(0) // 排序
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  papers         ExamPaper[]
+  questions      Question[]
+  examSessions   ExamSession[]
+  wrongQuestions StudentWrongQuestion[]
+  knowledgePoints KnowledgePoint[]
+
+  @@map("subjects")
+}
+
 model ExamSession {
   id            Int      @id @default(autoincrement())
   title         String
@@ -273,6 +294,7 @@ model ExamSession {
   source        String   @default("manual") // library | auto | manual
   content       String   @default("[]") // JSON: 在线模式=题ID数组, 整卷模式=空
   paperId       Int?     @map("paper_id") // 整卷模式关联 ExamPaper
+  subjectId     Int?     @map("subject_id") // 学科维度
   totalScore    Int      @default(100) @map("total_score")
   duration      Int      @default(120) // 考试时长（分钟）
   startTime     DateTime? @map("start_time")
@@ -284,12 +306,14 @@ model ExamSession {
 
   creator       Student  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   paper         ExamPaper? @relation("ExamPaperExamSessions", fields: [paperId], references: [id], onDelete: SetNull)
+  subject       Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
   submissions   ExamSubmission[]
   answerSheets  AnswerSheet[]
 
   @@index([mode, status])
   @@index([paperId])
   @@index([creatorId])
+  @@index([subjectId])
   @@map("exam_sessions")
 }
 
@@ -366,8 +390,11 @@ model KnowledgePoint {
   id              Int       @id @default(autoincrement())
   name            String // 文档标题
   contentMarkdown String?   @map("content_markdown") // Word文档转换后的Markdown内容
+  subjectId       Int?      @map("subject_id") // 学科维度
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  subject Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
 
   // 保留的下游表反向关系（仅用于schema一致性，代码不再读写）
   masteryRecords    MasteryRecord[]
@@ -412,7 +439,7 @@ model ExamPaper {
   duration    Int?     // 考试时长（分钟）
   sourceFormat String? @map("source_format") // pdf | image | word | txt
   purpose     String   @default("question_source") // whole_paper | question_source
-  subject     String?  // 学科: 语文/数学/英语/物理/化学/生物/政治/历史/地理/理综/文综/其他
+  subjectId   Int?     @map("subject_id") // 学科外键
   school      String?  // 学校（自由文本）
   pageImages  String?  @map("page_images") // JSON array of page image URLs
   parsedMarkdown String? @map("parsed_markdown") // MinerU parsed Markdown with LaTeX formulas
@@ -422,13 +449,14 @@ model ExamPaper {
   questions   Question[]
   enrichmentProposals EnrichmentProposal[]
   examSessions ExamSession[] @relation("ExamPaperExamSessions")
+  subject      Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
 
   @@index([year])
   @@index([region])
   @@index([examType])
   @@index([status])
   @@index([sourceFormat])
-  @@index([subject, year, region])
+  @@index([subjectId, year, region])
   @@map("exam_papers")
 }
 
@@ -467,15 +495,18 @@ model Question {
   options          String?   // 选择题选项（JSON格式）
   imageUrl         String?   @map("image_url") // 题目图片URL
   aiAnalyzed       Boolean   @default(false) @map("ai_analyzed") // 是否已AI分析
+  subjectId        Int?      @map("subject_id") // 学科维度
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
   paper            ExamPaper @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  subject          Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
   studentAnswers   StudentAnswer[]
 
   @@index([paperId])
   @@index([questionType])
   @@index([difficulty])
   @@index([aiAnalyzed])
+  @@index([subjectId])
   @@map("questions")
   reviews AIContentReview[]
   difficultyAdjustments DifficultyAdjustment[]
@@ -646,19 +677,22 @@ model StudentWrongQuestion {
   difficulty        String   @default("unknown") // easy/medium/hard/very_hard/unknown
   knowledgePointTags String? @map("knowledge_point_tags") // 自由文本逗号分隔
   notes             String? // 学生笔记
-  reviewStatus      String   @default("new") @map("review_status") // new/reviewing/mastered
-  wrongCount        Int      @default(1) @map("wrong_count")
+  subjectId         Int?    @map("subject_id") // 学科维度
+  reviewStatus      String  @default("new") @map("review_status") // new/reviewing/mastered
+  wrongCount        Int     @default(1) @map("wrong_count")
   createdAt         DateTime @default(now()) @map("created_at")
   lastReviewAt      DateTime? @map("last_review_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
   student           Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject           Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
 
   @@index([studentId, reviewStatus])
   @@index([studentId, questionType])
   @@index([studentId, difficulty])
   @@index([studentId, createdAt])
   @@index([studentId, lastReviewAt])
+  @@index([subjectId])
   @@map("student_wrong_questions")
 }
 
