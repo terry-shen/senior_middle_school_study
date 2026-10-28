@@ -12,6 +12,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import MathText from '../components/MathText';
+import SubjectSelect from '../components/SubjectSelect';
+import { getSelectedSubjectId } from '../services/subjects-api';
 import {
   getWrongQuestionById,
   updateWrongQuestion,
@@ -71,6 +73,7 @@ export default function WrongQuestionEdit() {
   const [knowledgePointTags, setKnowledgePointTags] = useState('');
   const [notes, setNotes] = useState('');
   const [options, setOptions] = useState<string[]>(['', '', '', '']);
+  const [subjectId, setSubjectId] = useState<number | null>(isNew ? getSelectedSubjectId() : null);
 
   // MathLive popup state
   const [showMathPopup, setShowMathPopup] = useState(false);
@@ -97,6 +100,7 @@ export default function WrongQuestionEdit() {
         setDifficulty(w.difficulty || 'unknown');
         setKnowledgePointTags(w.knowledgePointTags || '');
         setNotes(w.notes || '');
+        setSubjectId((w as any).subjectId ?? null);
         const parsed = parseOptions(w.options);
         setOptions(
           parsed.length > 0 ? parsed : ['', '', '', '']
@@ -150,6 +154,7 @@ export default function WrongQuestionEdit() {
         difficulty,
         knowledgePointTags,
         notes,
+        subjectId,
       };
       if (isChoice(questionType)) {
         const validOptions = options.filter((o) => o.trim());
@@ -290,6 +295,10 @@ export default function WrongQuestionEdit() {
       <div className="wq-edit-meta">
         <div className="wq-edit-section-title">元数据</div>
         <div className="wq-edit-meta-grid">
+          <label>
+            <span>学科</span>
+            <SubjectSelect value={subjectId} onChange={setSubjectId} allowEmpty emptyLabel="未指定学科" />
+          </label>
           <label>
             <span>题型</span>
             <select value={questionType} onChange={(e) => setQuestionType(e.target.value)}>

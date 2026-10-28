@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { importFromImage, importFromPDF, getPapers, deletePaper, importMultipleFiles, updatePaper } from '../services/papers-api';
+import { getSelectedSubjectId } from '../services/subjects-api';
+import SubjectSelect from '../components/SubjectSelect';
 import type { ExamPaper, MultiImportResult } from '../services/papers-api';
 import './QuestionBank.css';
 
@@ -16,6 +18,7 @@ export default function QuestionBank() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [multiResults, setMultiResults] = useState<MultiImportResult[]>([]);
+  const [importSubjectId, setImportSubjectId] = useState<number | null>(getSelectedSubjectId());
 
   // Metadata editing modal state
   const [editMetaPaper, setEditMetaPaper] = useState<Paper | null>(null);
@@ -77,11 +80,11 @@ export default function QuestionBank() {
   };
 
   const handleImport = async () => {
-    await runImport(files);
+    await runImport(files, importSubjectId);
   };
 
   // Shared import executor (used by single-file, multi-file and folder import)
-  const runImport = async (fileList: File[]) => {
+  const runImport = async (fileList: File[], subjectId?: number | null) => {
     if (fileList.length === 0) {
       setError('请选择文件');
       return;
@@ -102,11 +105,11 @@ export default function QuestionBank() {
         const file = fileList[0];
         let result;
         if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-          result = await importFromPDF(token, file);
+          result = await importFromPDF(token, file, subjectId);
         } else if (file.type.startsWith('image/')) {
-          result = await importFromImage(token, file);
+          result = await importFromImage(token, file, subjectId);
         } else {
-          result = await importFromPDF(token, file);
+          result = await importFromPDF(token, file, subjectId);
         }
 
         if (result.success && result.paper) {
@@ -125,7 +128,7 @@ export default function QuestionBank() {
         }
       } else {
         // Multi-file — use import-multiple endpoint
-        const result = await importMultipleFiles(token, fileList);
+        const result = await importMultipleFiles(token, fileList, subjectId);
         if (result.success && result.results) {
           setMultiResults(result.results);
           const successCount = result.results.filter(r => r.success).length;
@@ -202,6 +205,12 @@ export default function QuestionBank() {
           <label htmlFor="file-input" className="file-label">
             {files.length > 0 ? `已选择 ${files.length} 个文件: ${files.map(f => f.name).join(', ')}` : '选择文件（可多选）'}
           </label>
+        </div>
+
+        <div className="import-subject-row">
+          <label>所属学科：</label>
+          <SubjectSelect value={importSubjectId} onChange={setImportSubjectId} />
+          <span className="hint">导入的试卷与拆分出的题目将归入所选学科</span>
         </div>
 
         <button

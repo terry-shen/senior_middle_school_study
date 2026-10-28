@@ -34,6 +34,25 @@
   margin-bottom: 16px;
 }
 
+.import-subject-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.import-subject-row label { color: #555; }
+
+.import-subject-row select {
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.import-subject-row .hint { color: #999; font-size: 12px; }
+
 .file-input-wrapper input[type="file"] {
   display: none;
 }

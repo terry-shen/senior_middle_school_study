@@ -1,3 +1,4 @@
+import { withSubjectParam } from './subjects-api';
 /**
  * 学生错题本 API 服务
  */
@@ -158,7 +159,7 @@ export async function getWrongQuestions(
     if (v !== undefined && v !== null && v !== '') params.append(k, String(v));
   }
   const response = await fetch(
-    `${API_BASE}/wrong-questions?${params.toString()}`,
+    `${withSubjectParam(`${API_BASE}/wrong-questions`)}?${params.toString()}`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
   return response.json();

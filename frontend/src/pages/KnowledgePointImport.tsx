@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { uploadWordDocument } from '../services/knowledge-point-import-api';
+import { getSelectedSubjectId } from '../services/subjects-api';
+import SubjectSelect from '../components/SubjectSelect';
 import './KnowledgePointImport.css';
 
 export default function KnowledgePointImport() {
@@ -11,6 +13,7 @@ export default function KnowledgePointImport() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [subjectId, setSubjectId] = useState<number | null>(getSelectedSubjectId());
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -32,7 +35,7 @@ export default function KnowledgePointImport() {
     setError('');
     setSuccessMsg('');
     try {
-      const result = await uploadWordDocument(token, file);
+      const result = await uploadWordDocument(token, file, subjectId);
       setSuccessMsg(`文档 "${result.doc.name}" 已成功导入，即将跳转到编辑器`);
       setTimeout(() => {
         navigate(`/knowledge-points/${result.doc.id}/edit`);
@@ -69,6 +72,11 @@ export default function KnowledgePointImport() {
             <span className="file-size">({Math.round(file.size / 1024)} KB)</span>
           </div>
         )}
+        <div className="subject-row">
+          <label>所属学科：</label>
+          <SubjectSelect value={subjectId} onChange={setSubjectId} style={{ maxWidth: 180 }} />
+          <span className="subject-hint">知识点文档将归入所选学科</span>
+        </div>
         <button
           onClick={handleUpload}
           disabled={!file || uploading}

@@ -1,3 +1,4 @@
+import { withSubjectParam } from './subjects-api';
 /**
  * Exam Session API — 统一考试 API 服务
  * mode: whole_paper(整卷) | online(在线逐题)
@@ -107,7 +108,7 @@ export async function listExamSessions(token: string, filters: { status?: string
   for (const [k, v] of Object.entries(filters)) {
     if (v !== undefined && v !== null && v !== '') params.append(k, String(v));
   }
-  const res = await fetch(`${API_BASE}/exam-sessions?${params.toString()}`, {
+  const res = await fetch(withSubjectParam(`${API_BASE}/exam-sessions?${params.toString()}`), {
     headers: authHeaders(token),
   });
   return res.json();
@@ -167,7 +168,7 @@ export function getGradingStatsUrl() {
 // ===== 学生 =====
 
 export async function listExamSessionsForStudent(token: string): Promise<(ExamSession & { studentSubmission?: ExamSubmission | null; studentScore?: number | null; answered?: number })[]> {
-  const res = await fetch(`${API_BASE}/exam-sessions/student/all`, { headers: authHeaders(token) });
+  const res = await fetch(withSubjectParam(`${API_BASE}/exam-sessions/student/all`), { headers: authHeaders(token) });
   return res.json();
 }
 
@@ -225,4 +226,67 @@ export async function toggleAnswerMark(token: string, id: number, questionId: nu
     body: JSON.stringify({}),
   });
   return res.json();
+}
+
+// ===== 重做 / 查看答卷 / 取消考试 =====
+
+export interface ExamReviewQuestion {
+  id: number;
+  questionNumber?: number | null;
+  content: string;
+  questionType: string;
+  options?: string[] | string | null;
+  score?: number | null;
+  correctAnswer?: string | null;
+  analysis?: string | null;
+  myAnswer?: string | null;
+  isCorrect?: boolean | null;
+  earnedScore?: number | null;
+  feedback?: string | null;
+  timeSpent?: number | null;
+}
+
+export interface ExamReview {
+  session: { id: number; title: string; mode?: string; totalScore?: number; duration?: number };
+  mode?: string;
+  status: string;
+  score?: number | null;
+  submittedAt?: string | null;
+  gradedAt?: string | null;
+  totalQuestions: number;
+  answeredCount: number;
+  correctCount: number;
+  questions: ExamReviewQuestion[];
+}
+
+// 重做考试（学生）：清空本人答题记录，重新作答并再次提交
+export async function resetExamSession(token: string, id: number): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`${API_BASE}/exam-sessions/${id}/reset`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({}),
+  });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) return { success: false, error: d?.error || '重做失败' };
+  return { success: true };
+}
+
+// 查看答卷（学生）
+export async function getExamSessionReview(token: string, id: number): Promise<ExamReview> {
+  const res = await fetch(`${API_BASE}/exam-sessions/${id}/review`, { headers: authHeaders(token) });
+  const d = await res.json();
+  if (!res.ok) throw new Error(d?.error || '加载答卷失败');
+  return d;
+}
+
+// 取消考试（管理员）：保留数据，状态回退为草稿
+export async function cancelExamSession(token: string, id: number): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`${API_BASE}/exam-sessions/${id}/cancel`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({}),
+  });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) return { success: false, error: d?.error || '取消失败' };
+  return { success: true };
 }

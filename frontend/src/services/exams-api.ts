@@ -9,6 +9,8 @@ export interface ExamGenerationParams {
   name?: string;
   /** 指定从某一导入试卷出卷；缺省/0 表示从全部题目中抽取自由组卷 */
   paperId?: number;
+  /** 学科过滤（自动出卷强制；后端缺失时返回 400「请先选择学科」） */
+  subjectId?: number;
   typeDistribution: {
     single_choice?: number;
     multiple_choice?: number;

@@ -1,3 +1,4 @@
+import { withSubjectParam } from './subjects-api';
 const API_BASE = 'http://localhost:3000/api';
 
 export interface KPDocument {
@@ -12,9 +13,10 @@ export interface KPDocument {
  * Upload Word document (.docx/.doc) and convert to KP document.
  * Backend parses via mammoth and creates a KnowledgePoint record.
  */
-export async function uploadWordDocument(token: string, file: File): Promise<{ success: boolean; doc: KPDocument }> {
+export async function uploadWordDocument(token: string, file: File, subjectId?: number | null): Promise<{ success: boolean; doc: KPDocument }> {
   const formData = new FormData();
   formData.append('file', file);
+  if (subjectId) formData.append('subjectId', String(subjectId));
   const response = await fetch(`${API_BASE}/knowledge-points/import`, {
     method: 'POST',
     headers: {
@@ -31,7 +33,7 @@ export async function uploadWordDocument(token: string, file: File): Promise<{ s
 
 /** List all KP documents */
 export async function getKpDocuments(token: string): Promise<KPDocument[]> {
-  const response = await fetch(`${API_BASE}/knowledge-points`, {
+  const response = await fetch(withSubjectParam(`${API_BASE}/knowledge-points`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) throw new Error('Failed to load documents');

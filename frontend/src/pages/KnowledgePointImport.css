@@ -44,6 +44,25 @@
   margin-left: 8px;
 }
 
+.subject-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+.subject-row label { color: #555; }
+
+.subject-row select {
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.subject-row .subject-hint { color: #999; font-size: 12px; }
+
 .btn {
   padding: 8px 16px;
   border: none;
