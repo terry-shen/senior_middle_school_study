@@ -7,7 +7,13 @@
 
 ### Requirement: Word文档导入知识点
 
-系统 SHALL 提供基于 Word 文档（.docx/.doc）的知识点导入功能，支持教师上传已有教学大纲、章节目录等 Word 文档，系统使用 mammoth 转 Markdown 后进入在线富文本编辑器进行校准。导入流程不依赖大模型，不使用 Excel 模板。
+系统 SHALL 提供基于 Word 文档（.docx/.doc）的知识点导入功能，支持教师上传已有教学大纲、章节目录等 Word 文档，系统使用 mammoth 转 Markdown 后进入在线富文本编辑器进行校准。导入流程不依赖大模型，不使用 Excel 模板。入口为知识点列表页工具栏的「导入 Word 文档」按钮，不再作为侧边栏独立导航项。
+
+#### Scenario: 从列表页工具栏进入导入
+
+- **WHEN** 管理员在知识点列表页（/knowledge-points）点击工具栏「导入 Word 文档」按钮
+- **THEN** 导航到 /knowledge-points/import 页面
+- **AND** 不再有独立的侧边栏「知识点导入」导航入口
 
 #### Scenario: 上传 Word 文档并转换为 Markdown
 
@@ -47,4 +53,14 @@
 #### Scenario: 手动新建知识点文档
 
 - **WHEN** 管理员需要手动创建知识点文档（无 Word 源文件）
-- **THEN** 系统提供"新建文档"入口，进入空白富文本编辑器，用户可直接输入内容并保存
+- **THEN** 系统在列表页工具栏提供"新建文档"入口，进入空白富文本编辑器，用户可直接输入内容并保存
+
+### Requirement: 导入知识点学科选择
+
+系统 SHALL 在导入 Word 文档知识点时要求选择学科。
+
+#### Scenario: 导入时学科选择
+
+- **WHEN** 管理员在知识点导入页面上传 Word 文档
+- **THEN** 导入表单包含学科选择下拉（默认当前切换器选中的学科）
+- **AND** 导入完成后创建的 KnowledgePoint 记录写入所选 subjectId
