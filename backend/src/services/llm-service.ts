@@ -244,10 +244,26 @@ export class LLMService {
   }
 
   /**
+   * Resolve the effective model ID, falling back to the DB default when not set in memory.
+   * (this.defaultModelId is undefined until setDefaultModel() or the first DB load.)
+   */
+  private async resolveModelId(modelId?: number): Promise<number> {
+    const id = modelId || this.defaultModelId;
+    if (id) return id;
+    const defaultModel = await this.prisma.lLMConfig.findFirst({
+      where: { isDefault: true, status: 'active' },
+      orderBy: { id: 'asc' },
+    });
+    if (!defaultModel) throw new Error('No model configured');
+    this.defaultModelId = defaultModel.id;
+    return defaultModel.id;
+  }
+
+  /**
    * Generate completion (synchronous)
    */
   async generate(request: LLMRequest, modelId?: number): Promise<LLMResponse> {
-    const targetModelId = modelId || this.defaultModelId!;
+    const targetModelId = await this.resolveModelId(modelId);
     
     // Check cache first
     const requestHash = this.hashRequest(request, targetModelId);
@@ -292,7 +308,7 @@ export class LLMService {
     options?: Partial<LLMRequest>,
     modelId?: number
   ): Promise<LLMResponse> {
-    const targetModelId = modelId || this.defaultModelId!;
+    const targetModelId = await this.resolveModelId(modelId);
     
     return await this.executeWithRetry(async (currentModelId) => {
       const adapter = await this.getAdapter(currentModelId);
