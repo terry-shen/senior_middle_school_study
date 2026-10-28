@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubject } from '../contexts/SubjectContext';
+import { getSelectedSubjectId } from '../services/subjects-api';
+import SubjectSelect from '../components/SubjectSelect';
 import {
   getPaperLibrary,
   getPaperLibraryFilters,
@@ -9,6 +13,7 @@ import {
   getRecoveryList,
   importWholePapers,
   importWholePaper,
+  importWholePaperImages,
   downloadWholePaperFile,
   triggerBlobDownload,
   deletePaper,
@@ -18,8 +23,6 @@ import {
   type MultiImportResult,
 } from '../services/papers-api';
 import './PaperLibrary.css';
-
-const SUBJECTS = ['语文', '数学', '英语', '物理', '化学', '生物', '政治', '历史', '地理', '理综', '文综', '其他'];
 
 const getStatusText = (status?: string) => {
   const map: Record<string, string> = {
@@ -33,10 +36,14 @@ export default function PaperLibrary() {
   const { token, user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const dirInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+  const { subjects: allSubjects } = useSubject();
 
   const [tab, setTab] = useState<'library' | 'recovery'>('library');
   const [papers, setPapers] = useState<ExamPaper[]>([]);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [importSubjectId, setImportSubjectId] = useState<number | null>(getSelectedSubjectId());
   const [options, setOptions] = useState<PaperLibraryFilterOptions>({ subjects: [], years: [], regions: [], examTypes: [], schools: [] });
   const [recoveryGroups, setRecoveryGroups] = useState<RecoveryGroup[]>([]);
   const [total, setTotal] = useState(0);
@@ -46,6 +53,7 @@ export default function PaperLibrary() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [multiResults, setMultiResults] = useState<MultiImportResult[]>([]);
+  const [photoCount, setPhotoCount] = useState(0);
   const [editPaper, setEditPaper] = useState<ExamPaper | null>(null);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [publishPaper, setPublishPaper] = useState<ExamPaper | null>(null);
@@ -128,7 +136,7 @@ export default function PaperLibrary() {
     if (!file || !token) return;
     setImporting(true); setError(''); setMessage('');
     try {
-      const res = await importWholePaper(token, file, { title: '' });
+      const res = await importWholePaper(token, file, { title: '', subjectId: importSubjectId });
       if (res.success && res.paper) {
         setMessage(`导入成功: ${res.paper.title}`);
         await loadPapers(1);
@@ -140,6 +148,37 @@ export default function PaperLibrary() {
       setError(e.message || '导入失败');
     } finally {
       setImporting(false);
+    }
+  };
+
+  // ===== 拍照导入（多张照片组成一份试卷） =====
+  const handlePhotoImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = '';
+    if (picked.length === 0 || !token) return;
+
+    const images = picked.filter((f) => f.type.startsWith('image/'));
+    if (images.length === 0) {
+      setError('请选择图片文件（jpg/png/webp 等）');
+      return;
+    }
+    setPhotoCount(images.length);
+    setImporting(true); setError(''); setMessage('');
+    try {
+      const res = await importWholePaperImages(token, images, { subjectId: importSubjectId });
+      if (res.success && res.paper) {
+        setMessage(`导入成功：${res.paper.title}（${res.imageCount || images.length} 张照片）`);
+        await loadPapers(1);
+        await loadFilters();
+        navigate(`/paper-library/${res.paper.id}/view`);
+      } else {
+        setError(res.error || '照片导入失败');
+      }
+    } catch (e: any) {
+      setError(e.message || '照片导入失败');
+    } finally {
+      setImporting(false);
+      setPhotoCount(0);
     }
   };
 
@@ -163,7 +202,7 @@ export default function PaperLibrary() {
       const all: MultiImportResult[] = [];
       for (let i = 0; i < supported.length; i += CHUNK) {
         const batch = supported.slice(i, i + CHUNK);
-        const res = await importWholePapers(token, batch);
+        const res = await importWholePapers(token, batch, importSubjectId);
         if (res.success && res.results) all.push(...res.results);
         else batch.forEach((f) => all.push({ success: false, fileName: f.name, error: '批次上传失败' }));
       }
@@ -183,7 +222,7 @@ export default function PaperLibrary() {
     setEditPaper(p);
     setEditForm({
       title: p.title || '',
-      subject: p.subject || '',
+      subjectId: p.subject?.id ? String(p.subject.id) : '',
       school: p.school || '',
       year: p.year ? String(p.year) : '',
       region: p.region || '',
@@ -198,7 +237,7 @@ export default function PaperLibrary() {
     try {
       await updatePaperLibraryPaper(token, editPaper.id, {
         title: editForm.title,
-        subject: editForm.subject,
+        subjectId: editForm.subjectId === '' ? null : Number(editForm.subjectId),
         school: editForm.school,
         year: editForm.year,
         region: editForm.region,
@@ -279,12 +318,14 @@ export default function PaperLibrary() {
 
   // ===== 学科统计 =====
   const subjectStats = () => {
-    const map: Record<string, number> = {};
+    const map: Record<string, { id: number | null; name: string; count: number }> = {};
     papers.forEach((p) => {
-      const s = p.subject || '未分类';
-      map[s] = (map[s] || 0) + 1;
+      const key = p.subject ? String(p.subject.id) : 'none';
+      const name = p.subject?.name || '未分类';
+      if (!map[key]) map[key] = { id: p.subject?.id ?? null, name, count: 0 };
+      map[key].count += 1;
     });
-    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+    return Object.values(map).sort((a, b) => b.count - a.count);
   };
 
   const totalPages = Math.ceil(total / 20);
@@ -310,6 +351,14 @@ export default function PaperLibrary() {
                   单文件整卷导入
                   <input type="file" accept=".pdf,.docx,.doc,.txt,image/*" style={{ display: 'none' }} onChange={handleSingleImport} />
                 </label>
+                <label className="btn-import btn-import-photo">
+                  📷 拍照导入（多张组成一份）
+                  <input
+                    type="file" accept="image/*" multiple style={{ display: 'none' }}
+                    ref={photoInputRef}
+                    onChange={handlePhotoImport}
+                  />
+                </label>
                 <button className="btn-import" onClick={() => dirInputRef.current?.click()} disabled={importing}>
                   文件夹导入（递归全部子目录）
                 </button>
@@ -317,7 +366,9 @@ export default function PaperLibrary() {
                   type="file" multiple ref={dirInputRef} style={{ display: 'none' }}
                   onChange={handleDirChange} {...({ webkitdirectory: '' } as any)}
                 />
-                {importing && <span className="importing-hint">导入中（单文件约 2 分钟）...</span>}
+                <span className="import-subject-label">所属学科：</span>
+                <SubjectSelect value={importSubjectId} onChange={setImportSubjectId} style={{ maxWidth: 160 }} />
+                {importing && <span className="importing-hint">导入中（单文件约 2 分钟{photoCount > 0 ? `，${photoCount} 张照片上传中` : ''}）...</span>}
               </div>
               {message && <div className="message success">{message}</div>}
               {error && <div className="message error">{error}</div>}
@@ -342,9 +393,9 @@ export default function PaperLibrary() {
           )}
 
           <div className="lib-filters">
-            <select value={filters.subject || ''} onChange={(e) => handleFilterChange('subject', e.target.value)}>
+            <select value={filters.subjectId || ''} onChange={(e) => handleFilterChange('subjectId', e.target.value)}>
               <option value="">全部学科</option>
-              {(options.subjects.length ? options.subjects : SUBJECTS).map((s) => <option key={s} value={s}>{s}</option>)}
+              {options.subjects.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
             </select>
             <select value={filters.year || ''} onChange={(e) => handleFilterChange('year', e.target.value)}>
               <option value="">全部年份</option>
@@ -370,9 +421,9 @@ export default function PaperLibrary() {
             <button className="btn-search" onClick={() => loadPapers(1)}>搜索</button>
             {subjectStats().length > 0 && (
               <div className="subject-stats">
-                {subjectStats().slice(0, 6).map(([s, c]) => (
-                  <span key={s} className="stat-chip" onClick={() => handleFilterChange('subject', s === '未分类' ? '' : s)}>
-                    {s} {c}
+                {subjectStats().slice(0, 6).map((s) => (
+                  <span key={s.name} className="stat-chip" onClick={() => handleFilterChange('subjectId', s.id == null ? '' : String(s.id))}>
+                    {s.name} {s.count}
                   </span>
                 ))}
               </div>
@@ -397,8 +448,12 @@ export default function PaperLibrary() {
                     const isPublished = !!publishedMap[p.id];
                     return (
                       <tr key={p.id}>
-                        <td className="title-cell" title={p.title}>{p.title}</td>
-                        <td>{p.subject || '—'}</td>
+                        <td className="title-cell" title={p.title}>
+                          <Link to={`/paper-library/${p.id}/view`} className="paper-title-link">
+                            {p.title}
+                          </Link>
+                        </td>
+                        <td>{p.subject?.name || '—'}</td>
                         <td>{p.year || '—'}</td>
                         <td>{p.region || '—'}</td>
                         <td>{p.school || '—'}</td>
@@ -408,6 +463,7 @@ export default function PaperLibrary() {
                         <td className="actions-cell">
                           {isAdmin ? (
                             <>
+                              <Link to={`/paper-library/${p.id}/view`} className="btn-sm">查看</Link>
                               <button className="btn-sm" onClick={() => openEdit(p)}>元数据</button>
                               {isPublished ? (
                                 <button className="btn-sm btn-warn" onClick={() => doUnpublish(p)}>取消发布</button>
@@ -484,9 +540,11 @@ export default function PaperLibrary() {
             <div className="form-row"><label>标题</label><input value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} /></div>
             <div className="form-row">
               <label>学科</label>
-              <select value={editForm.subject} onChange={(e) => setEditForm({ ...editForm, subject: e.target.value })}>
+              <select value={editForm.subjectId || ''} onChange={(e) => setEditForm({ ...editForm, subjectId: e.target.value })}>
                 <option value="">未设置</option>
-                {SUBJECTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                {allSubjects.filter((s) => s.isActive).map((s) => (
+                  <option key={s.id} value={String(s.id)}>{s.icon ? `${s.icon} ` : ''}{s.name}</option>
+                ))}
               </select>
             </div>
             <div className="form-row"><label>学校</label><input value={editForm.school} onChange={(e) => setEditForm({ ...editForm, school: e.target.value })} placeholder="选填" /></div>

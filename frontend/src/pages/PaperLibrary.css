@@ -66,6 +66,8 @@
 
 .importing-hint { color: #f57c00; font-size: 13px; }
 
+.import-subject-label { font-size: 13px; color: #555; }
+
 .multi-results {
   margin-top: 12px;
   font-size: 13px;
@@ -168,6 +170,26 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 试卷标题 → 内容查看界面 */
+.paper-title-link {
+  color: #1976d2;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.paper-title-link:hover {
+  text-decoration: underline;
+  color: #0d47a1;
+}
+
+.btn-import-photo {
+  background: #7b1fa2;
+}
+
+.btn-import-photo:hover {
+  background: #4a148c;
 }
 
 .actions-cell {

@@ -2,6 +2,7 @@
  * Papers API Service
  * Handles exam paper import and question management
  */
+import { withSubjectParam } from './subjects-api';
 
 const API_BASE = 'http://localhost:3000/api';
 
@@ -20,9 +21,10 @@ export interface ExamPaper {
   duration: number;
   sourceFormat?: string; // pdf | image | word | txt
   purpose?: 'whole_paper' | 'question_source'; // whole_paper=整卷考试；question_source=拆分来源（默认）
-  subject?: string | null; // 学科（试卷库分类）：语文/数学/英语/物理/化学/生物/政治/历史/地理/理综/文综
+  subject?: { id: number; name: string; icon?: string | null } | null; // 学科（Subject 外键嵌套对象）
+  subjectId?: number | null; // 学科 ID（提交更新用）
   school?: string | null; // 学校（自由文本，试卷库分类）
-  pageImages?: string[]; // rendered page image URLs (for math/chart visual support)
+  pageImages?: string[] | string | null; // rendered page image URLs (list endpoint returns a JSON string, detail returns an array)
   parsedMarkdown?: string; // MinerU parsed Markdown with LaTeX formulas
   editedMarkdown?: string; // User-edited Markdown (calibrated version)
   createdAt: string;
@@ -67,9 +69,10 @@ export interface SplitResult {
 /**
  * Import exam paper from image
  */
-export async function importFromImage(token: string, file: File): Promise<ImportResult> {
+export async function importFromImage(token: string, file: File, subjectId?: number | null): Promise<ImportResult> {
   const formData = new FormData();
   formData.append('file', file);
+  if (subjectId) formData.append('subjectId', String(subjectId));
 
   const response = await fetch(`${API_BASE}/papers/import`, {
     method: 'POST',
@@ -86,9 +89,10 @@ export async function importFromImage(token: string, file: File): Promise<Import
 /**
  * Import exam paper from PDF
  */
-export async function importFromPDF(token: string, file: File): Promise<ImportResult> {
+export async function importFromPDF(token: string, file: File, subjectId?: number | null): Promise<ImportResult> {
   const formData = new FormData();
   formData.append('file', file);
+  if (subjectId) formData.append('subjectId', String(subjectId));
 
   const response = await fetch(`${API_BASE}/papers/import`, {
     method: 'POST',
@@ -117,7 +121,7 @@ export async function splitQuestions(token: string, paperId: number): Promise<Sp
  * Get all exam papers
  */
 export async function getPapers(token: string): Promise<ExamPaper[]> {
-  const response = await fetch(`${API_BASE}/papers`, {
+const response = await fetch(withSubjectParam(`${API_BASE}/papers`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   return response.json();
@@ -170,7 +174,7 @@ export async function getQuestions(token: string, paperId: number): Promise<Ques
  * Get all questions
  */
 export async function getAllQuestions(token: string): Promise<Question[]> {
-  const response = await fetch(`${API_BASE}/papers/questions/all`, {
+  const response = await fetch(withSubjectParam(`${API_BASE}/papers/questions/all`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   const result = await response.json();
@@ -450,9 +454,10 @@ export interface MultiImportResult {
   error?: string;
 }
 
-export async function importMultipleFiles(token: string, files: File[]): Promise<{ success: boolean; results: MultiImportResult[] }> {
+export async function importMultipleFiles(token: string, files: File[], subjectId?: number | null): Promise<{ success: boolean; results: MultiImportResult[] }> {
   const formData = new FormData();
   files.forEach(file => formData.append('files', file));
+  if (subjectId) formData.append('subjectId', String(subjectId));
   const response = await fetch(`${API_BASE}/papers/import-multiple`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
@@ -466,9 +471,10 @@ export async function importMultipleFiles(token: string, files: File[]): Promise
  * 多文件整卷导入（文件夹导入）：目录下每个文件直接保存为整卷（不解析/不拆分）
  * POST /api/papers/import-whole-multiple (multipart/form-data)
  */
-export async function importWholePapers(token: string, files: File[]): Promise<{ success: boolean; results: MultiImportResult[] }> {
+export async function importWholePapers(token: string, files: File[], subjectId?: number | null): Promise<{ success: boolean; results: MultiImportResult[] }> {
   const formData = new FormData();
   files.forEach(file => formData.append('files', file));
+  if (subjectId) formData.append('subjectId', String(subjectId));
   const response = await fetch(`${API_BASE}/papers/import-whole-multiple`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
@@ -540,7 +546,7 @@ export function triggerBlobDownload(blob: Blob, filename: string): void {
 export async function importWholePaper(
   token: string,
   file: File,
-  metadata: { title: string; year?: number; region?: string; examType?: string; totalScore?: number; duration?: number }
+  metadata: { title: string; year?: number; region?: string; examType?: string; totalScore?: number; duration?: number; subjectId?: number | null; school?: string }
 ): Promise<{ success: boolean; paper?: ExamPaper; error?: string }> {
   const formData = new FormData();
   formData.append('file', file);
@@ -550,6 +556,8 @@ export async function importWholePaper(
   if (metadata.examType) formData.append('examType', metadata.examType);
   if (metadata.totalScore !== undefined) formData.append('totalScore', String(metadata.totalScore));
   if (metadata.duration !== undefined) formData.append('duration', String(metadata.duration));
+  if (metadata.school) formData.append('school', metadata.school);
+  if (metadata.subjectId) formData.append('subjectId', String(metadata.subjectId));
 
   const response = await fetch(`${API_BASE}/papers/import-whole`, {
     method: 'POST',
@@ -559,6 +567,78 @@ export async function importWholePaper(
   const data = await response.json();
   if (!response.ok) {
     return { success: false, error: data?.error || '导入失败' };
+  }
+  return data;
+}
+
+/**
+ * 拍照导入：多张照片合并为一份整卷试卷
+ * POST /api/papers/import-whole-images (multipart/form-data, files[])
+ */
+export async function importWholePaperImages(
+  token: string,
+  files: File[],
+  metadata: { title?: string; year?: number; region?: string; examType?: string; totalScore?: number; duration?: number; subjectId?: number | null; school?: string }
+): Promise<{ success: boolean; paper?: ExamPaper; imageCount?: number; fileNames?: string[]; error?: string }> {
+  if (files.length === 0) {
+    return { success: false, error: '请至少选择一张照片' };
+  }
+  const formData = new FormData();
+  files.forEach((f) => formData.append('files', f, f.name));
+  if (metadata.title) formData.append('title', metadata.title);
+  if (metadata.year !== undefined) formData.append('year', String(metadata.year));
+  if (metadata.region) formData.append('region', metadata.region);
+  if (metadata.examType) formData.append('examType', metadata.examType);
+  if (metadata.totalScore !== undefined) formData.append('totalScore', String(metadata.totalScore));
+  if (metadata.duration !== undefined) formData.append('duration', String(metadata.duration));
+  if (metadata.school) formData.append('school', metadata.school);
+  if (metadata.subjectId) formData.append('subjectId', String(metadata.subjectId));
+
+  const response = await fetch(`${API_BASE}/papers/import-whole-images`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    return { success: false, error: data?.error || '照片导入失败' };
+  }
+  return data;
+}
+
+/** 试卷内容描述符（用于内容查看界面） */
+export interface PaperContent {
+  success: boolean;
+  paperId: number;
+  title: string;
+  contentType: 'pdf' | 'word' | 'images' | 'markdown' | 'none';
+  fileUrl: string | null;
+  pageImages: string[];
+  markdown: string | null;
+  questionCount: number;
+  sourceFormat?: string | null;
+  purpose?: string;
+  year?: number | null;
+  region?: string | null;
+  school?: string | null;
+  examType?: string | null;
+  totalScore?: number | null;
+  duration?: number | null;
+  subject?: { id: number; name: string; icon?: string | null } | null;
+  status?: string;
+}
+
+/**
+ * 获取试卷内容（用于查看界面）
+ * GET /api/papers/:id/content
+ */
+export async function getPaperContent(token: string, paperId: number): Promise<PaperContent> {
+  const response = await fetch(`${API_BASE}/papers/${paperId}/content`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.error || '加载试卷内容失败');
   }
   return data;
 }
@@ -581,7 +661,7 @@ export function getQuestionTypeLabel(type?: string | null): string {
 // ============================================================
 
 export interface PaperLibraryFilters {
-  subject?: string;
+  subjectId?: string | number;
   year?: string;
   region?: string;
   examType?: string;
@@ -593,7 +673,7 @@ export interface PaperLibraryFilters {
 }
 
 export interface PaperLibraryFilterOptions {
-  subjects: string[];
+  subjects: { id: number; name: string; color?: string | null; hasPapers?: boolean }[];
   years: string[];
   regions: string[];
   examTypes: string[];
@@ -602,7 +682,7 @@ export interface PaperLibraryFilterOptions {
 
 export interface RecoveryGroup {
   mockExamId: number;
-  paper: { id: number; title: string; subject: string | null; year: number | null; region: string | null } | null;
+  paper: { id: number; title: string; subject: { id: number; name: string } | null; year: number | null; region: string | null } | null;
   createdAt: string;
   status: string;
   totalStudents: number;
@@ -626,7 +706,7 @@ export async function getPaperLibrary(
 ): Promise<{ data: ExamPaper[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
   const params = new URLSearchParams();
   if (filters.purpose) params.set('purpose', filters.purpose);
-  if (filters.subject) params.set('subject', filters.subject);
+  if (filters.subjectId) params.set('subjectId', String(filters.subjectId));
   if (filters.year) params.set('year', filters.year);
   if (filters.region) params.set('region', filters.region);
   if (filters.examType) params.set('examType', filters.examType);
@@ -634,7 +714,7 @@ export async function getPaperLibrary(
   if (filters.keyword) params.set('keyword', filters.keyword);
   if (filters.page) params.set('page', String(filters.page));
   if (filters.limit) params.set('limit', String(filters.limit));
-  const response = await fetch(`${API_BASE}/paper-library?${params.toString()}`, {
+  const response = await fetch(withSubjectParam(`${API_BASE}/paper-library?${params.toString()}`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {
