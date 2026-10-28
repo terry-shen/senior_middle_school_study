@@ -41,6 +41,29 @@ const sheetUpload = multer({
 });
 
 /**
+ * GET /api/answer-sheets
+ * 答题纸列表（带状态过滤）。管理员可看全部，学生仅看自己的。工作台统计与列表用。
+ */
+router.get('/', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const status = req.query.status as string | undefined;
+    const where: any = {};
+    if (status) where.status = status;
+    where.studentId = req.user!.role === 'admin'
+      ? (req.query.studentId ? parseInt(String(req.query.studentId)) : undefined)
+      : req.user!.id;
+    if (where.studentId === undefined) delete where.studentId;
+    const [rows, total] = await Promise.all([
+      prisma.answerSheet.findMany({ where, orderBy: { createdAt: 'desc' }, take: 200 }),
+      prisma.answerSheet.count({ where }),
+    ]);
+    res.json({ data: rows, total });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /api/answer-sheets/upload
  * 学生上传答题纸。Body form-data: file (required), examId | mockExamId | wholePaperId (one of)
  */
