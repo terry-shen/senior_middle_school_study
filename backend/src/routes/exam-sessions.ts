@@ -55,6 +55,7 @@ router.get('/', requireAuth, requireAdmin, async (req: Request, res: Response) =
     const result = await ExamSessionService.listExamSessions({
       status: (req.query.status as string) || undefined,
       mode: (req.query.mode as string) || undefined,
+      subjectId: req.query.subjectId ? parseInt(String(req.query.subjectId)) : undefined,
       page: req.query.page ? parseInt(String(req.query.page)) : 1,
       limit: req.query.limit ? parseInt(String(req.query.limit)) : 20,
     });
@@ -169,7 +170,10 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
 // 学生可见考试列表（含作答状态）
 router.get('/student/all', requireAuth, async (req: Request, res: Response) => {
   try {
-    const sessions = await ExamSessionService.listExamSessionsForStudent((req as any).user.id);
+    const sessions = await ExamSessionService.listExamSessionsForStudent(
+    (req as any).user.id,
+    req.query.subjectId ? parseInt(String(req.query.subjectId)) : undefined,
+  );
     res.json(sessions);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -183,6 +187,42 @@ router.post('/:id/start', requireAuth, async (req: Request, res: Response) => {
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
     const result = await ExamSessionService.startExamSession(id, (req as any).user.id);
     res.json(result);
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// 重做考试（学生）：清空本人答题记录，可重新作答并再次提交
+router.post('/:id/reset', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(String(req.params.id));
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+    const submission = await ExamSessionService.resetExamSubmission(id, (req as any).user.id);
+    res.json({ success: true, submission });
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// 查看答卷（学生）：全部题目 + 本人答案 + 正确答案 + 解析
+router.get('/:id/review', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(String(req.params.id));
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+    const review = await ExamSessionService.getExamReview(id, (req as any).user.id);
+    res.json(review);
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// 取消考试（管理员）：保留数据，状态回退为草稿，学生端不再可见
+router.post('/:id/cancel', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(String(req.params.id));
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+    const session = await ExamSessionService.cancelExamSession(id);
+    res.json({ success: true, examSession: session });
   } catch (e: any) {
     res.status(400).json({ error: e.message });
   }

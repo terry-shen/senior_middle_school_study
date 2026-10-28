@@ -58,6 +58,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
       difficulty: data.difficulty ?? 'unknown',
       knowledgePointTags: data.knowledgePointTags ?? null,
       notes: data.notes ?? null,
+      subjectId: data.subjectId != null ? parseInt(String(data.subjectId)) : null,
     });
     res.status(201).json({ success: true, wrongQuestion: created });
   } catch (err: any) {
@@ -85,6 +86,7 @@ router.post('/upload-photo', requireAuth, upload.single('image'), async (req: Re
       correctAnswer: data.correctAnswer || null,
       analysis: data.analysis || null,
       notes: data.notes || null,
+      subjectId: data.subjectId != null && data.subjectId !== '' ? parseInt(String(data.subjectId)) : null,
     });
     res.status(201).json({ success: true, wrongQuestion: created });
   } catch (err: any) {
@@ -101,6 +103,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
       difficulty: (req.query.difficulty as string) || undefined,
       tag: (req.query.tag as string) || undefined,
       reviewStatus: (req.query.reviewStatus as string) || undefined,
+      subjectId: req.query.subjectId ? parseInt(String(req.query.subjectId)) : undefined,
       viewMode: (req.query.viewMode as 'unmastered' | 'all') || 'unmastered',
       sortBy: (req.query.sortBy as 'createdAt' | 'lastReviewAt') || 'createdAt',
       page: req.query.page ? parseInt(req.query.page as string) : 1,
@@ -176,6 +179,17 @@ router.get('/student/:studentId/mastery-overview', requireAuth, requireAdmin, as
     if (isNaN(studentId)) return res.status(400).json({ error: 'Invalid studentId' });
     const overview = await WrongQuestionsService.getStudentMasteryOverviewForAdmin(studentId);
     res.json(overview);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 统计（工作台卡片）
+router.get('/stats', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const studentId = req.user!.id;
+    const stats = await WrongQuestionsService.getWrongQuestionStats(studentId);
+    res.json(stats);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

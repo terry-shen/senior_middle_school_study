@@ -44,8 +44,9 @@ const kpUpload = multer({
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const docs = await prisma.knowledgePoint.findMany({
+      where: req.query.subjectId ? { subjectId: parseInt(String(req.query.subjectId)) } : {},
       orderBy: { updatedAt: 'desc' },
-      select: { id: true, name: true, contentMarkdown: true, createdAt: true, updatedAt: true }
+      select: { id: true, name: true, contentMarkdown: true, subjectId: true, createdAt: true, updatedAt: true }
     });
     res.json(docs);
   } catch (error: any) {
@@ -69,10 +70,14 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
 // POST / — create new document
 router.post('/', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { name, contentMarkdown } = req.body;
+    const { name, contentMarkdown, subjectId } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
     const doc = await prisma.knowledgePoint.create({
-      data: { name, contentMarkdown: contentMarkdown || null }
+      data: {
+        name,
+        contentMarkdown: contentMarkdown || null,
+        ...(subjectId != null && subjectId !== '' ? { subjectId: parseInt(String(subjectId)) } : {}),
+      }
     });
     res.status(201).json(doc);
   } catch (error: any) {
@@ -85,10 +90,11 @@ router.put('/:id', requireAuth, requireAdmin, async (req: Request, res: Response
   try {
     const id = parseInt(String(req.params.id));
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
-    const { name, contentMarkdown } = req.body;
+    const { name, contentMarkdown, subjectId } = req.body;
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
     if (contentMarkdown !== undefined) updateData.contentMarkdown = contentMarkdown;
+    if (subjectId !== undefined) updateData.subjectId = subjectId === '' || subjectId === null ? null : parseInt(String(subjectId));
     const doc = await prisma.knowledgePoint.update({ where: { id }, data: updateData });
     res.json(doc);
   } catch (error: any) {
@@ -117,7 +123,11 @@ router.post('/import', requireAuth, requireAdmin, kpUpload.single('file'), async
     const baseName = path.basename(originalName, path.extname(originalName));
     const markdown = await parseDocx(filePath);
     const doc = await prisma.knowledgePoint.create({
-      data: { name: baseName, contentMarkdown: markdown }
+      data: {
+        name: baseName,
+        contentMarkdown: markdown,
+        ...(req.body?.subjectId != null && req.body?.subjectId !== '' ? { subjectId: parseInt(String(req.body.subjectId)) } : {}),
+      }
     });
     try { fs.unlinkSync(filePath); } catch (e) { /* ignore */ }
     res.status(201).json({ success: true, doc });

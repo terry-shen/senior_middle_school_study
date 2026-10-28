@@ -14,14 +14,30 @@ import { requireAuth, requireAdmin } from '../middleware/permission';
 
 const router = Router();
 
+/**
+ * 自动出卷强制学科过滤（design 决策 4）：
+ * subjectId 缺失/非法 → 400「请先选择学科」，杜绝跨学科混卷。
+ */
+function requireSubjectId(body: any): number {
+  const n = parseInt(String(body?.subjectId), 10);
+  if (!n || n <= 0 || isNaN(n)) {
+    const err: any = new Error('请先选择学科');
+    err.statusCode = 400;
+    throw err;
+  }
+  return n;
+}
+
 // 自动组卷 → 创建 ExamSession（兼容旧 /api/exams/generate）
 router.post('/generate', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
     const body = req.body ?? {};
+    const subjectId = requireSubjectId(body);
     const session = await ExamSessionService.createExamSession({
       title: body.name || body.title,
       mode: 'online',
       source: 'auto',
+      subjectId,
       totalScore: body.totalScore ? Number(body.totalScore) : undefined,
       duration: body.duration ? parseInt(String(body.duration)) : undefined,
       creatorId: (req as any).user.id,
@@ -36,17 +52,18 @@ router.post('/generate', requireAuth, requireAdmin, async (req: Request, res: Re
       examSession: session,
     });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    res.status(e.statusCode || 500).json({ error: e.message });
   }
 });
 
 // 组卷预览
 router.post('/preview', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
+    requireSubjectId(req.body ?? {});
     const result = await ExamSessionService.previewExamSession(req.body ?? {});
     res.json(result);
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    res.status(e.statusCode || 500).json({ error: e.message });
   }
 });
 
