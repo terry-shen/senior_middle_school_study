@@ -1,3 +1,4 @@
+import { withSubjectParam } from './subjects-api';
 /**
  * Online Exam API — 兼容代理层
  * 内部全部转发到 /api/exam-sessions（统一考试），保留旧函数签名以减少页面改动。
@@ -17,7 +18,7 @@ export interface OnlineExam {
   title: string;
   mode?: string;
   source?: string;
-  questionIds: string; // JSON 数组字符串
+  questionIds: number[]; // parsed from backend content JSON
   paperId?: number | null;
   paper?: { id: number; title: string; pdfUrl?: string | null; purpose?: string; subject?: string | null; school?: string | null } | null;
   totalScore: number;
@@ -27,6 +28,17 @@ export interface OnlineExam {
   studentScore?: number | null;
   answered?: number;
   studentSubmission?: { id: number; status: string } | null;
+}
+
+// Backend ExamSession uses `content` (JSON string), normalize to `questionIds` (number[])
+function normalizeExam(raw: any): OnlineExam {
+  if (!raw) return raw;
+  let ids: number[] = [];
+  try {
+    const parsed = typeof raw.content === 'string' ? JSON.parse(raw.content) : raw.content;
+    if (Array.isArray(parsed)) ids = parsed;
+  } catch { /* ignore */ }
+  return { ...raw, questionIds: ids };
 }
 
 export interface ExamQuestion {
@@ -66,7 +78,7 @@ export async function createExam(token: string, data: { title: string; questionI
     }),
   });
   const d = await res.json();
-  if (d.examSession) d.exam = d.examSession;
+  if (d.examSession) d.exam = normalizeExam(d.examSession);
   return d;
 }
 
@@ -78,21 +90,21 @@ export async function publishExam(token: string, examId: number, data: { startTi
     body: JSON.stringify(data),
   });
   const d = await res.json();
-  if (d.examSession) d.exam = d.examSession;
+  if (d.examSession) d.exam = normalizeExam(d.examSession);
   return d;
 }
 
 // 管理员：列表
 export async function getExams(token: string): Promise<OnlineExam[]> {
-  const res = await fetch(`${API_BASE}/exam-sessions?limit=100&mode=online`, { headers: authHeaders(token) });
+  const res = await fetch(withSubjectParam(`${API_BASE}/exam-sessions?limit=100&mode=online`), { headers: authHeaders(token) });
   const d = await res.json();
-  return d.data || [];
+  return (d.data || []).map(normalizeExam);
 }
 
 // 详情
 export async function getExamById(token: string, examId: number): Promise<OnlineExam> {
   const res = await fetch(`${API_BASE}/exam-sessions/${examId}`, { headers: authHeaders(token) });
-  return res.json();
+  return normalizeExam(await res.json());
 }
 
 // 题目列表
@@ -123,13 +135,16 @@ export async function saveAnswer(token: string, recordId: number, questionId: nu
 }
 
 // 学生：提交
-export async function submitExam(token: string, recordId: number): Promise<{ success: boolean; totalScore?: number; error?: string }> {
+export async function submitExam(token: string, recordId: number): Promise<{ success: boolean; totalScore?: number; submission?: ExamRecord; error?: string }> {
   const res = await fetch(`${API_BASE}/exam-sessions/${recordId}/submit`, {
     method: 'POST',
     headers: authHeaders(token),
     body: JSON.stringify({}),
   });
-  return res.json();
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) return { success: false, error: d?.error || '提交失败' };
+  // 后端返回裸 submission 对象，补 success: true（status 非 failed 即视为成功）
+  return { success: true, totalScore: d?.totalScore, submission: d };
 }
 
 // 学生：获取答题记录

@@ -15,21 +15,27 @@ import {
   submitMockExam,
   getMockExamResult,
   getBenchmarkAnalysis,
+  resetMockExam,
+  getMockExamReview,
+  cancelMockExam,
   type MockExam,
   type MockExamResult,
   type BenchmarkAnalysis,
 } from '../services/mock-exams-api';
 import { generateExam, type ExamGenerationParams } from '../services/exams-api';
+import { getSelectedSubjectId } from '../services/subjects-api';
+import SubjectSelect from '../components/SubjectSelect';
 import { createExamSession } from '../services/exam-sessions-api';
 import { getPaperLibrary } from '../services/papers-api';
 import './MockExam.css';
 
-type View = 'list' | 'taking' | 'result' | 'benchmark' | 'answer-sheet';
+type View = 'list' | 'taking' | 'result' | 'benchmark' | 'answer-sheet' | 'review';
 
 /** 整卷模式：关联原始试卷（questionIds 为空） */
 function isWholePaperExam(exam: MockExam): boolean {
+  if (exam.mode === 'whole_paper') return true;
   let ids: number[] = [];
-  try { ids = JSON.parse(exam.questionIds || '[]'); } catch { ids = []; }
+  try { ids = Array.isArray(exam.questionIds) ? exam.questionIds : JSON.parse(exam.questionIds || '[]'); } catch { ids = []; }
   return ids.length === 0 && !!exam.paper;
 }
 
@@ -41,6 +47,7 @@ export default function MockExamPage() {
   const [currentExamId, setCurrentExamId] = useState<number | null>(null);
   const [result, setResult] = useState<MockExamResult | null>(null);
   const [benchmark, setBenchmark] = useState<BenchmarkAnalysis | null>(null);
+  const [review, setReview] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -71,6 +78,7 @@ export default function MockExamPage() {
     totalScore: number;
     typeDistribution?: Record<string, number>;
     paperId?: number;
+    subjectId?: number | null;
   }) => {
     if (!token) return;
     try {
@@ -81,6 +89,7 @@ export default function MockExamPage() {
           duration: payload.duration,
           typeDistribution: (payload.typeDistribution || {}) as ExamGenerationParams['typeDistribution'],
           scoreDistribution: { single_choice: 5, multiple_choice: 5, fill: 10, essay: 15 },
+          subjectId: payload.subjectId || undefined,
         });
       } else if (payload.source === 'library' && payload.paperId) {
         await createExamSession(token, {
@@ -97,6 +106,7 @@ export default function MockExamPage() {
           standard: payload.standard,
           duration: payload.duration,
           totalScore: payload.totalScore,
+          subjectId: payload.subjectId,
         });
       }
       setShowCreate(false);
@@ -179,16 +189,67 @@ export default function MockExamPage() {
     }
   };
 
+  // Student: 查看答卷（全部题目 + 我的答案 + 正确答案 + 解析）
+  const handleViewReview = async (id: number) => {
+    if (!token) return;
+    try {
+      const r = await getMockExamReview(token, id);
+      setReview(r);
+      setCurrentExamId(id);
+      setView('review');
+    } catch (e: any) {
+      setError(e.message || '加载答卷失败');
+    }
+  };
+
+  // Student: 重做已完成的考试（清空作答记录 → 重新进入答题）
+  const handleRedo = async (id: number, title?: string) => {
+    if (!token) return;
+    if (!confirm(`确定重做「${title || '该考试'}」吗？\n本次作答记录与成绩将被清空。`)) return;
+    try {
+      const r = await resetMockExam(token, id);
+      if (!r.success) {
+        setError(r.error || '重做失败');
+        return;
+      }
+      await loadExams();
+      setCurrentExamId(id);
+      setView('taking');
+    } catch (e: any) {
+      setError(e.message || '重做失败');
+    }
+  };
+
+  // Admin: 取消考试（保留数据，状态回退为草稿，学生端不再可见）
+  const handleCancelExam = async (id: number, title?: string) => {
+    if (!token) return;
+    if (!confirm(`确定取消考试「${title || ''}」吗？\n取消后学生端将不再显示该考试（数据保留）。`)) return;
+    try {
+      const r = await cancelMockExam(token, id);
+      if (!r.success) {
+        setError(r.error || '取消失败');
+        return;
+      }
+      loadExams();
+    } catch (e: any) {
+      setError(e.message || '取消失败');
+    }
+  };
+
   const statusBadge = (status: string) => {
     const colors: Record<string, string> = {
       draft: 'gray',
       published: 'blue',
+      ongoing: 'orange',
+      graded: 'green',
       in_progress: 'orange',
       completed: 'green',
     };
     const labels: Record<string, string> = {
       draft: '草稿',
       published: '已发布',
+      ongoing: '进行中',
+      graded: '已结束',
       in_progress: '进行中',
       completed: '已完成',
     };
@@ -245,26 +306,38 @@ export default function MockExamPage() {
                         {exam.status === 'draft' && (
                           <button className="btn-small" onClick={() => handlePublish(exam.id)}>发布</button>
                         )}
+                        {(exam.status === 'ongoing' || exam.status === 'graded' || exam.status === 'published') && (
+                          <>
+                            <button className="btn-small" onClick={() => handleViewResult(exam.id)}>查看结果</button>
+                            <button className="btn-small" onClick={() => handleCancelExam(exam.id, exam.title)}>取消考试</button>
+                          </>
+                        )}
                         <button className="btn-small btn-danger" onClick={() => handleDelete(exam.id)}>删除</button>
                       </td>
                     ) : (
                       <>
-                        <td>{exam.studentScore !== undefined ? `${exam.studentScore}/${exam.totalScore}` : '-'}</td>
+                        <td>{exam.studentSubmission?.status === 'graded' || exam.studentScore !== undefined ? `${exam.studentScore ?? '-'}/${exam.totalScore}` : '-'}</td>
                         <td>
-                          {exam.status === 'published' && (
+                          {(exam.status === 'published' || exam.status === 'ongoing') && !exam.studentSubmission?.status?.match(/submitted|graded/) && (
                             isWholePaperExam(exam) ? (
                               <button className="btn-small" onClick={() => handleDownloadPaper(exam)}>下载试卷</button>
                             ) : (
-                              <button className="btn-small" onClick={() => handleStart(exam.id)}>开始考试</button>
+                              <button className="btn-small" onClick={() => handleStart(exam.id)}>{exam.status === 'ongoing' ? '继续考试' : '开始考试'}</button>
                             )
                           )}
-                          {isWholePaperExam(exam) && exam.status === 'published' && (
+                          {isWholePaperExam(exam) && (exam.status === 'published' || exam.status === 'ongoing') && (
                             <button className="btn-small" onClick={() => { setCurrentExamId(exam.id); setView('answer-sheet'); }}>上传答题纸</button>
                           )}
-                          {exam.status === 'completed' && (
+                          {(exam.studentSubmission?.status === 'graded' || exam.status === 'graded' || exam.status === 'completed') && (
                             <>
                               <button className="btn-small" onClick={() => handleViewResult(exam.id)}>查看结果</button>
                               <button className="btn-small" onClick={() => handleViewBenchmark(exam.id)}>对标分析</button>
+                            </>
+                          )}
+                          {!isWholePaperExam(exam) && exam.studentSubmission?.status === 'graded' && (
+                            <>
+                              <button className="btn-small" onClick={() => handleViewReview(exam.id)}>查看答卷</button>
+                              <button className="btn-small" onClick={() => handleRedo(exam.id, exam.title)}>重做</button>
                             </>
                           )}
                         </td>
@@ -329,6 +402,136 @@ export default function MockExamPage() {
       {view === 'benchmark' && benchmark && (
         <BenchmarkView benchmark={benchmark} onBack={() => { setView('list'); setBenchmark(null); }} />
       )}
+
+      {view === 'review' && review && (
+        <ReviewView
+          review={review}
+          onBack={() => { setView('list'); setReview(null); }}
+          onRedo={() => {
+            const id = currentExamId;
+            setView('list');
+            setReview(null);
+            if (id) handleRedo(id, review?.session?.title);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ===== Review View (查看答卷) =====
+function ReviewView({ review, onBack, onRedo }: { review: any; onBack: () => void; onRedo: () => void }) {
+  const questions: any[] = Array.isArray(review?.questions) ? review.questions : [];
+
+  const typeLabel = (t: string) => ({
+    single_choice: '单选题',
+    multiple_choice: '多选题',
+    choice: '选择题',
+    fill: '填空题',
+    essay: '解答题',
+  }[t] || t || '未分类');
+
+  const parseOptions = (raw: any): string[] => {
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'string') {
+      try { const p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch { return []; }
+    }
+    return [];
+  };
+
+  const letterOf = (ans: any): string => {
+    if (ans === null || ans === undefined || ans === '') return '未作答';
+    if (Array.isArray(ans)) return ans.join(',');
+    return String(ans);
+  };
+
+  return (
+    <div className="mock-exam-page review-page">
+      <div className="header-bar">
+        <button className="btn-secondary" onClick={onBack}>返回列表</button>
+        <button className="btn-primary" onClick={onRedo}>重做本卷</button>
+      </div>
+
+      <h2>{review?.session?.title}</h2>
+
+      <div className="review-summary">
+        <span className="review-stat">总题数: <b>{review?.totalQuestions ?? 0}</b></span>
+        <span className="review-stat">已作答: <b>{review?.answeredCount ?? 0}</b></span>
+        <span className="review-stat">答对: <b>{review?.correctCount ?? 0}</b></span>
+        <span className="review-stat">得分: <b>{review?.score ?? '-'}/{review?.session?.totalScore ?? '-'}</b></span>
+      </div>
+
+      {questions.length === 0 && <p className="empty">暂无题目记录</p>}
+
+      {questions.map((q, i) => {
+        const opts = parseOptions(q.options);
+        const mine = letterOf(q.myAnswer);
+        const correct = letterOf(q.correctAnswer);
+        const judged = q.isCorrect === true;
+        const judgedWrong = q.isCorrect === false;
+        return (
+          <div key={q.id ?? i} className={`review-item ${judged ? 'correct' : judgedWrong ? 'wrong' : 'unanswered'}`}>
+            <div className="review-item-head">
+              <span className="review-index">第 {i + 1} 题</span>
+              <span className="review-type">{typeLabel(q.questionType)}</span>
+              <span className="review-score">{q.score ?? '-'} 分</span>
+              <span className={`review-verdict ${judged ? 'ok' : judgedWrong ? 'bad' : 'none'}`}>
+                {judged ? '答对' : judgedWrong ? '答错' : '未作答'}
+              </span>
+            </div>
+
+            <div className="review-content"><MathText text={q.content} /></div>
+
+            {opts.length > 0 && (
+              <div className="review-options">
+                {opts.map((opt, oi) => {
+                  const L = String.fromCharCode(65 + oi);
+                  const isMine = mine.includes(L);
+                  const isCorrect = correct.includes(L);
+                  return (
+                    <div key={oi} className={`review-option ${isCorrect ? 'is-correct' : ''} ${isMine ? 'is-mine' : ''}`}>
+                      <span className="option-label">{L}.</span>
+                      <span><MathText text={opt} /></span>
+                      {isCorrect && <span className="option-tag correct-tag">正确答案</span>}
+                      {isMine && <span className="option-tag mine-tag">我的选择</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="review-answers">
+              <div className="review-answer-line">
+                <span className="label">我的答案</span>
+                <span className="value">{mine}</span>
+              </div>
+              <div className="review-answer-line">
+                <span className="label">正确答案</span>
+                <span className="value correct-value">{correct}</span>
+              </div>
+              {q.earnedScore !== null && q.earnedScore !== undefined && (
+                <div className="review-answer-line">
+                  <span className="label">得分</span>
+                  <span className="value">{q.earnedScore}</span>
+                </div>
+              )}
+              {q.feedback && (
+                <div className="review-answer-line">
+                  <span className="label">批注</span>
+                  <span className="value">{q.feedback}</span>
+                </div>
+              )}
+            </div>
+
+            {q.analysis && (
+              <div className="review-analysis">
+                <span className="label">解析</span>
+                <div><MathText text={q.analysis} /></div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -342,6 +545,7 @@ export type CreateExamPayload = {
   totalScore: number;
   typeDistribution?: Record<string, number>;
   paperId?: number;
+  subjectId?: number | null;
 };
 
 function CreateMockExamForm({ onCreate }: { onCreate: (data: CreateExamPayload) => Promise<void> }) {
@@ -349,6 +553,7 @@ function CreateMockExamForm({ onCreate }: { onCreate: (data: CreateExamPayload) 
   const [source, setSource] = useState<'manual' | 'auto' | 'library'>('manual');
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState('');
+  const [subjectId, setSubjectId] = useState<number | null>(getSelectedSubjectId());
 
   // manual fields
   const [title, setTitle] = useState('');
@@ -395,6 +600,7 @@ function CreateMockExamForm({ onCreate }: { onCreate: (data: CreateExamPayload) 
         duration,
         totalScore,
         typeDistribution: dist,
+        subjectId,
       });
     } catch (e: any) {
       setFormError(e.message || '自动组卷失败');
@@ -429,7 +635,7 @@ function CreateMockExamForm({ onCreate }: { onCreate: (data: CreateExamPayload) 
     setCreating(true);
     setFormError('');
     try {
-      await onCreate({ source: 'manual', title, standard, duration, totalScore });
+      await onCreate({ source: 'manual', title, standard, duration, totalScore, subjectId });
     } catch (e: any) {
       setFormError(e.message || '创建失败');
     } finally {
@@ -446,6 +652,13 @@ function CreateMockExamForm({ onCreate }: { onCreate: (data: CreateExamPayload) 
         <label className={source === 'auto' ? 'active' : ''} onClick={() => { setSource('auto'); setFormError(''); }}>🤖 题库自动组卷</label>
         <label className={source === 'library' ? 'active' : ''} onClick={() => { setSource('library'); setFormError(''); }}>📚 试卷库整卷</label>
       </div>
+
+      {source !== 'library' && (
+        <div className="form-row">
+          <label>所属学科</label>
+          <SubjectSelect value={subjectId} onChange={setSubjectId} style={{ maxWidth: 200 }} />
+        </div>
+      )}
 
       {source === 'manual' && (
         <>
@@ -526,7 +739,7 @@ function CreateMockExamForm({ onCreate }: { onCreate: (data: CreateExamPayload) 
                   <option value="">请选择...</option>
                   {papers.map(p => (
                     <option key={p.id} value={p.id}>
-                      {p.title}（{p.totalScore || '?'}分/{p.duration || '?'}分钟{p.subject ? ` · ${p.subject}` : ''}{p.year ? ` · ${p.year}` : ''}）
+                      {p.title}（{p.totalScore || '?'}分/{p.duration || '?'}分钟{p.subject?.name ? ` · ${p.subject.name}` : ''}{p.year ? ` · ${p.year}` : ''}）
                     </option>
                   ))}
                 </select>

@@ -1,3 +1,4 @@
+import { withSubjectParam } from './subjects-api';
 /**
  * Mock Exam API — 兼容代理层
  * 内部全部转发到 /api/exam-sessions（统一考试），保留旧函数签名以减少页面改动。
@@ -50,21 +51,21 @@ export async function getMockExams(token: string, status?: string): Promise<Mock
   const params = new URLSearchParams();
   if (status) params.append('status', status);
   params.append('limit', '100');
-  const res = await fetch(`${API_BASE}/exam-sessions?${params.toString()}`, { headers: authHeaders(token) });
+  const res = await fetch(withSubjectParam(`${API_BASE}/exam-sessions?${params.toString()}`), { headers: authHeaders(token) });
   const d = await res.json();
   return d.data || [];
 }
 
 // 学生：历史（全部可见考试 + 作答状态）
 export async function getMockExamHistory(token: string): Promise<MockExam[]> {
-  const res = await fetch(`${API_BASE}/exam-sessions/student/all`, { headers: authHeaders(token) });
+  const res = await fetch(withSubjectParam(`${API_BASE}/exam-sessions/student/all`), { headers: authHeaders(token) });
   return res.json();
 }
 
 // 管理员：创建（在线模式，从题库选题）
 export async function createMockExam(
   token: string,
-  data: { title: string; standard?: string; questionIds?: number[]; totalScore: number; duration: number }
+  data: { title: string; standard?: string; questionIds?: number[]; totalScore: number; duration: number; subjectId?: number | null }
 ): Promise<{ success: boolean; mockExam?: MockExam; examSession?: MockExam; error?: string }> {
   const res = await fetch(`${API_BASE}/exam-sessions`, {
     method: 'POST',
@@ -76,6 +77,7 @@ export async function createMockExam(
       questionIds: data.questionIds || [],
       totalScore: data.totalScore,
       duration: data.duration,
+      subjectId: data.subjectId || undefined,
     }),
   });
   const d = await res.json();
@@ -168,7 +170,10 @@ export async function submitMockExam(token: string, id: number): Promise<{ succe
     headers: authHeaders(token),
     body: JSON.stringify({}),
   });
-  return res.json();
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) return { success: false, error: d?.error || '提交失败' };
+  // 后端返回裸 submission 对象，补 success: true
+  return { success: true, totalScore: d?.totalScore, maxScore: d?.maxScore };
 }
 
 // 结果（映射为页面 ResultView 需要的形状）
@@ -210,4 +215,36 @@ export async function getBenchmarkAnalysis(token: string, id: number): Promise<B
 export async function getMockExam(token: string, id: number): Promise<MockExam> {
   const res = await fetch(`${API_BASE}/exam-sessions/${id}`, { headers: authHeaders(token) });
   return res.json();
+}
+
+// 重做（学生）：清空本人答题记录，重新作答并再次提交
+export async function resetMockExam(token: string, id: number): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`${API_BASE}/exam-sessions/${id}/reset`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({}),
+  });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) return { success: false, error: d?.error || '重做失败' };
+  return { success: true };
+}
+
+// 查看答卷（学生）
+export async function getMockExamReview(token: string, id: number): Promise<any> {
+  const res = await fetch(`${API_BASE}/exam-sessions/${id}/review`, { headers: authHeaders(token) });
+  const d = await res.json();
+  if (!res.ok) throw new Error(d?.error || '加载答卷失败');
+  return d;
+}
+
+// 取消考试（管理员）：保留数据，状态回退为草稿
+export async function cancelMockExam(token: string, id: number): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`${API_BASE}/exam-sessions/${id}/cancel`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({}),
+  });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) return { success: false, error: d?.error || '取消失败' };
+  return { success: true };
 }

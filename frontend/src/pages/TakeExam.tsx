@@ -62,8 +62,8 @@ export default function TakeExam() {
     const questionsData = await getExamQuestions(token, parseInt(examId));
     setQuestions(questionsData?.data || []);
 
-    // 整卷考试（无在线题目）：无需查询考试记录，直接显示下载提示页
-    if (examData.questionIds && examData.questionIds.length === 0) {
+    // 整卷考试（whole_paper 模式或无在线题目）：无需查询考试记录
+    if (examData.mode === 'whole_paper' || (examData.questionIds && examData.questionIds.length === 0)) {
       setLoading(false);
       return;
     }
@@ -165,8 +165,8 @@ export default function TakeExam() {
     return <div className="loading">加载中...</div>;
   }
 
-  // 整卷考试：questionIds 为空 → 提示下载试卷线下作答
-  if (exam && exam.questionIds && exam.questionIds.length === 0) {
+  // 整卷考试：whole_paper 模式 → 提示下载试卷线下作答
+  if (exam && exam.mode === 'whole_paper') {
     return (
       <div className="take-exam start-page">
         <h1>{exam.title}</h1>

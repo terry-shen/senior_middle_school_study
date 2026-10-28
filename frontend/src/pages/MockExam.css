@@ -402,3 +402,102 @@ textarea {
   font-size: 13px;
   color: #92400e;
 }
+
+/* ===== Review View (查看答卷) ===== */
+.review-summary {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background: #f7f9fc;
+  border: 1px solid #e3e8ef;
+  border-radius: 6px;
+}
+.review-stat { font-size: 14px; color: #555; }
+.review-stat b { color: #1a73e8; margin-left: 4px; font-size: 15px; }
+
+.review-item {
+  border: 1px solid #e3e8ef;
+  border-left: 4px solid #bbb;
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  background: #fff;
+}
+.review-item.correct { border-left-color: #2e7d32; }
+.review-item.wrong { border-left-color: #dc3545; }
+.review-item.unanswered { border-left-color: #f0ad4e; }
+
+.review-item-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #666;
+}
+.review-index { font-weight: 600; color: #333; }
+.review-type {
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: #eef3fb;
+  color: #35639c;
+  font-size: 12px;
+}
+.review-score { color: #888; }
+.review-verdict { margin-left: auto; font-weight: 600; font-size: 13px; }
+.review-verdict.ok { color: #2e7d32; }
+.review-verdict.bad { color: #dc3545; }
+.review-verdict.none { color: #f0ad4e; }
+
+.review-content {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #222;
+  text-align: left;
+  margin-bottom: 8px;
+}
+
+.review-options { margin: 8px 0 10px 0; }
+.review-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-align: left;
+  font-size: 14px;
+}
+.review-option.is-correct { background: #eaf7ea; }
+.review-option.is-mine:not(.is-correct) { background: #fdeaea; }
+.review-option .option-label { font-weight: 600; color: #555; min-width: 18px; }
+.option-tag {
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.correct-tag { background: #2e7d32; color: #fff; }
+.mine-tag { background: #35639c; color: #fff; }
+
+.review-answers {
+  border-top: 1px dashed #ddd;
+  padding-top: 8px;
+  font-size: 13px;
+}
+.review-answer-line { display: flex; gap: 8px; margin-bottom: 3px; }
+.review-answer-line .label { color: #888; min-width: 64px; }
+.review-answer-line .value { color: #333; }
+.review-answer-line .correct-value { color: #2e7d32; font-weight: 600; }
+
+.review-analysis {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #ddd;
+  font-size: 13px;
+  text-align: left;
+}
+.review-analysis .label { color: #888; display: block; margin-bottom: 4px; }
