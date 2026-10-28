@@ -1,13 +1,16 @@
 import { lazy, Suspense, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { SubjectProvider } from './contexts/SubjectContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingSpinner from './components/LoadingSpinner';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import './App.css';
+import Sidebar from './components/Sidebar';
+import Workbench from './pages/Workbench';
 
 // Lazy-loaded pages for code splitting
 const ModelManagement = lazy(() => import('./components/ModelManagement'));
@@ -16,6 +19,7 @@ const AdminWrongQuestionView = lazy(() => import('./pages/AdminWrongQuestionView
 const KnowledgePointManagement = lazy(() => import('./pages/KnowledgePointManagement'));
 const KnowledgePointImport = lazy(() => import('./pages/KnowledgePointImport'));
 const PaperLibrary = lazy(() => import('./pages/PaperLibrary'));
+const PaperViewer = lazy(() => import('./pages/PaperViewer'));
 const QuestionBank = lazy(() => import('./pages/QuestionBank'));
 const PaperEdit = lazy(() => import('./pages/PaperEdit'));
 const SplitPreview = lazy(() => import('./pages/SplitPreview'));
@@ -31,92 +35,9 @@ const WrongQuestionPractice = lazy(() => import('./pages/WrongQuestionPractice')
 const WrongQuestionPrint = lazy(() => import('./pages/WrongQuestionPrint'));
 const MockExamPage = lazy(() => import('./pages/MockExam'));
 const LearningIncentive = lazy(() => import('./pages/LearningIncentive'));
-const AnswerSheetsList = lazy(() => import('./pages/AnswerSheetsList'));
-const AnswerSheetDetail = lazy(() => import('./pages/AnswerSheetDetail'));
-
-function Home() {
-  const { user, logout } = useAuth();
-
-  const adminFeatures = [
-    { icon: '📚', title: '试卷库', desc: '整卷导入/分类/发布考试', link: '/paper-library' },
-    { icon: '✂️', title: '题库管理', desc: '拆分导入/编辑校准/入库', link: '/question-bank' },
-    { icon: '📊', title: '难度管理', desc: 'AI驱动的难度评估', link: '/difficulty' },
-    { icon: '🎯', title: '模拟考试', desc: '题库组卷/整卷发布/在线测验', link: '/mock-exams' },
-    { icon: '🌐', title: '在线测验', desc: '发布和管理在线测验', link: '/online-exams' },
-    { icon: '✏️', title: 'AI批改', desc: '自动批改与人工审核', link: '/grading' },
-    { icon: '📝', title: '学生管理', desc: '管理学生账号和班级', link: '/students' },
-    { icon: '⚙️', title: '模型管理', desc: '配置大语言模型', link: '/models' },
-  ];
-
-  const studentFeatures = [
-    { icon: '❌', title: '错题本', desc: '复习错题，针对性提升', link: '/wrong-questions' },
-    { icon: '🏆', title: '模拟考试', desc: '参加考试，限时模拟', link: '/mock-exams' },
-    { icon: '🎖️', title: '学习激励', desc: '徽章、打卡、排行榜', link: '/incentive' },
-  ];
-
-  const features = user?.role === 'admin' ? adminFeatures : studentFeatures;
-
-  return (
-    <div className="home">
-      <div className="home-hero">
-        <h2>欢迎使用高中数学学习系统</h2>
-        <p>基于AI的数学学习辅助系统，帮助学生提升数学知识点掌握度，提高成绩。</p>
-      </div>
-
-      {user && (
-        <div className="user-info">
-          <p>欢迎，<strong>{user.name}</strong>（{user.role === 'admin' ? '管理员' : '学生'}）</p>
-          <button onClick={logout} className="btn btn-secondary">退出登录</button>
-        </div>
-      )}
-
-      <div className="features">
-        {features.map((f) => (
-          <Link to={f.link} key={f.link} className="feature-card">
-            <span className="feature-icon">{f.icon}</span>
-            <h3>{f.title}</h3>
-            <p>{f.desc}</p>
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-interface NavDropdownProps {
-  title: string;
-  links: { to: string; label: string }[];
-}
-
-function NavDropdown({ title, links }: NavDropdownProps) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div
-      className="nav-dropdown"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
-      <button className="nav-dropdown-toggle" onClick={() => setOpen(!open)}>
-        {title} <span className="dropdown-arrow">▾</span>
-      </button>
-      {open && (
-        <div className="nav-dropdown-menu">
-          {links.map((link) => (
-            <Link
-              key={link.to}
-              to={link.to}
-              className="nav-dropdown-item"
-              onClick={() => setOpen(false)}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+  const AnswerSheetsList = lazy(() => import('./pages/AnswerSheetsList'));
+  const AnswerSheetDetail = lazy(() => import('./pages/AnswerSheetDetail'));
+  const SubjectManagement = lazy(() => import('./pages/SubjectManagement'));
 
 function AppRoutes() {
   return (
@@ -127,7 +48,7 @@ function AppRoutes() {
         path="/"
         element={
           <ProtectedRoute>
-            <Home />
+            <Workbench />
           </ProtectedRoute>
         }
       />
@@ -184,6 +105,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <PaperLibrary />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/paper-library/:id/view"
+        element={
+          <ProtectedRoute>
+            <PaperViewer />
           </ProtectedRoute>
         }
       />
@@ -280,6 +209,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/subjects"
+        element={
+          <ProtectedRoute requireAdmin>
+            <SubjectManagement />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/wrong-questions"
         element={
           <ProtectedRoute>
@@ -341,127 +278,27 @@ function AppRoutes() {
 }
 
 function AppContent() {
-  const { isAuthenticated, user, logout } = useAuth();
-  const location = useLocation();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  const adminMenus: { title: string; links: { to: string; label: string }[] }[] = [
-    {
-      title: '试卷管理',
-      links: [
-        { to: '/paper-library', label: '试卷库' },
-        { to: '/question-bank', label: '题库管理(拆分)' },
-      ],
-    },
-    {
-      title: '题目管理',
-      links: [
-        { to: '/questions', label: '题目列表' },
-        { to: '/difficulty', label: '难度管理' },
-      ],
-    },
-    {
-      title: '学生管理',
-      links: [
-        { to: '/students', label: '学生列表' },
-        { to: '/incentive', label: '学习激励' },
-      ],
-    },
-    {
-      title: '考试管理',
-      links: [
-        { to: '/mock-exams', label: '模拟考试' },
-        { to: '/online-exams', label: '在线测验' },
-        { to: '/grading', label: 'AI批改' },
-        { to: '/answer-sheets', label: '答题纸阅卷' },
-      ],
-    },
-    {
-      title: '系统设置',
-      links: [
-        { to: '/models', label: '模型管理' },
-      ],
-    },
-  ];
-
-  const studentLinks = [
-    { to: '/wrong-questions', label: '错题本' },
-    { to: '/mock-exams', label: '模拟考试' },
-    { to: '/answer-sheets', label: '我的答题纸' },
-    { to: '/incentive', label: '学习激励' },
-  ];
-
-  const closeMobileMenu = () => setMobileMenuOpen(false);
+  const { isAuthenticated } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <>
+    <div className="app-layout">
       {isAuthenticated && (
-        <header className="app-header">
-          <div className="header-left">
-            <button
-              className="mobile-menu-toggle"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              aria-label="菜单"
-            >
-              ☰
-            </button>
-            <h1>📐 高中数学学习系统</h1>
-          </div>
-          <nav className={`app-nav ${mobileMenuOpen ? 'open' : ''}`}>
-            <Link
-              to="/"
-              className={location.pathname === '/' ? 'nav-link active' : 'nav-link'}
-              onClick={closeMobileMenu}
-            >
-              首页
-            </Link>
-            <Link
-              to="/knowledge-points"
-              className={location.pathname === '/knowledge-points' ? 'nav-link active' : 'nav-link'}
-              onClick={closeMobileMenu}
-            >
-              知识点
-            </Link>
-            {user?.role === 'admin' && (
-              <Link
-                to="/knowledge-points/import"
-                className={location.pathname === '/knowledge-points/import' ? 'nav-link active' : 'nav-link'}
-                onClick={closeMobileMenu}
-              >
-                知识点导入
-              </Link>
-            )}
-            {user?.role === 'admin' &&
-              adminMenus.map((menu) => (
-                <NavDropdown key={menu.title} title={menu.title} links={menu.links} />
-              ))}
-            {user?.role === 'admin' && (
-              <Link
-                to="/wrong-questions"
-                className={location.pathname === '/wrong-questions' ? 'nav-link active' : 'nav-link'}
-                onClick={closeMobileMenu}
-              >
-                错题本
-              </Link>
-            )}
-            {user?.role === 'student' && (
-              <NavDropdown title="学习" links={studentLinks} />
-            )}
-            <button onClick={logout} className="btn-logout">退出</button>
-          </nav>
-        </header>
+        <>
+          <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+          <button
+            className="sidebar-hamburger"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="菜单"
+          >
+            ☰
+          </button>
+        </>
       )}
-
-      <main className="app-main">
+      <main className="main-content">
         <AppRoutes />
       </main>
-
-      {isAuthenticated && (
-        <footer className="app-footer">
-          <p>© 2026 高中数学学习系统 - Powered by AI</p>
-        </footer>
-      )}
-    </>
+    </div>
   );
 }
 
@@ -469,15 +306,17 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <ToastProvider>
-          <ErrorBoundary>
-            <div className="app">
-              <Suspense fallback={<LoadingSpinner />}>
-                <AppContent />
-              </Suspense>
-            </div>
-          </ErrorBoundary>
-        </ToastProvider>
+        <SubjectProvider>
+          <ToastProvider>
+            <ErrorBoundary>
+              <div className="app">
+                <Suspense fallback={<LoadingSpinner />}>
+                  <AppContent />
+                </Suspense>
+              </div>
+            </ErrorBoundary>
+          </ToastProvider>
+        </SubjectProvider>
       </AuthProvider>
     </BrowserRouter>
   );

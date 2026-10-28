@@ -1,0 +1,66 @@
+.workbench {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.workbench-header {
+  margin-bottom: 24px;
+}
+
+.workbench-header h2 {
+  margin: 0 0 4px 0;
+  font-size: 24px;
+  color: #1a1a2e;
+}
+
+.workbench-header p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.workbench-loading {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+  font-size: 15px;
+}
+
+.workbench-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.stat-card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.stat-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.stat-icon {
+  font-size: 32px;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #666;
+}
