@@ -64,18 +64,21 @@ describe('Retry and Fallback Strategy', () => {
   });
 
   describe('integration with generate', () => {
-    it('should apply retry to generate method', () => {
-      const service = new LLMService();
-      
-      // Without models configured, it should throw
-      expect(service.generate({ prompt: 'test' })).rejects.toThrow('No model configured');
+    it('should apply retry to generate method', async () => {
+      const service = new LLMService(undefined, { maxRetries: 0, fallbackEnabled: false });
+
+      // Unknown model id → adapter resolution fails deterministically (no network call)
+      await expect(service.generate({ prompt: 'test' }, 999999)).rejects.toThrow(
+        /not found or inactive/i
+      );
     });
 
-    it('should apply retry to chat method', () => {
-      const service = new LLMService();
-      
-      // Without models configured, it should throw
-      expect(service.chat([{ role: 'user', content: 'test' }])).rejects.toThrow('No model configured');
+    it('should apply retry to chat method', async () => {
+      const service = new LLMService(undefined, { maxRetries: 0, fallbackEnabled: false });
+
+      await expect(service.chat([{ role: 'user', content: 'test' }], undefined, 999999)).rejects.toThrow(
+        /not found or inactive/i
+      );
     });
   });
 
@@ -85,9 +88,11 @@ describe('Retry and Fallback Strategy', () => {
         maxRetries: 0, // No retries
         fallbackEnabled: false,
       });
-      
-      // Should throw immediately without retries
-      await expect(service.generate({ prompt: 'test' })).rejects.toThrow();
+
+      // Unknown model id → deterministic failure, error must propagate unchanged
+      await expect(service.generate({ prompt: 'test' }, 999999)).rejects.toThrow(
+        /not found or inactive/i
+      );
     });
   });
 });
