@@ -31,7 +31,7 @@ export default function Login() {
   return (
     <div className="auth-container">
       <div className="auth-card">
-        <h1>高中数学学习系统</h1>
+        <h1>高中学习系统</h1>
         <h2>学生登录</h2>
         
         <form onSubmit={handleSubmit}>
