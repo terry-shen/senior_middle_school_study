@@ -20,6 +20,7 @@ export interface CreateExamSessionData {
   source?: 'library' | 'auto' | 'manual';
   content?: string; // JSON: 在线模式=题ID数组, 整卷=空
   paperId?: number; // 整卷关联 ExamPaper
+  subjectId?: number; // 学科维度
   totalScore?: number;
   duration?: number;
   startTime?: Date | string | null;
@@ -82,6 +83,7 @@ export async function createExamSession(data: CreateExamSessionData) {
       source,
       content,
       paperId: data.paperId || null,
+      subjectId: data.subjectId || null,
       totalScore,
       duration: data.duration || 120,
       startTime: toDateTime(data.startTime, 'startTime'),
@@ -89,7 +91,7 @@ export async function createExamSession(data: CreateExamSessionData) {
       status: 'draft',
       creatorId: data.creatorId,
     },
-    include: { paper: { select: { id: true, title: true, pdfUrl: true, purpose: true, subject: true, school: true } } },
+    include: { paper: { select: { id: true, title: true, pdfUrl: true, purpose: true, subject: { select: { id: true, name: true } }, school: true } } },
   });
 }
 
@@ -274,7 +276,7 @@ export async function getExamSessionById(id: number) {
   return prisma.examSession.findUnique({
     where: { id },
     include: {
-      paper: { select: { id: true, title: true, pdfUrl: true, purpose: true, subject: true, school: true } },
+      paper: { select: { id: true, title: true, pdfUrl: true, purpose: true, subject: { select: { id: true, name: true } }, school: true } },
       creator: { select: { id: true, name: true, studentId: true } },
       submissions: true,
       answerSheets: true,
@@ -285,12 +287,13 @@ export async function getExamSessionById(id: number) {
 /**
  * 列出考试会话
  */
-export async function listExamSessions(filters: { status?: string; mode?: string; creatorId?: number; page?: number; limit?: number } = {}) {
-  const { status, mode, creatorId, page = 1, limit = 20 } = filters;
+export async function listExamSessions(filters: { status?: string; mode?: string; creatorId?: number; subjectId?: number; page?: number; limit?: number } = {}) {
+  const { status, mode, creatorId, subjectId, page = 1, limit = 20 } = filters;
   const where: any = {};
   if (status) where.status = status;
   if (mode) where.mode = mode;
   if (creatorId) where.creatorId = creatorId;
+  if (subjectId) where.subjectId = subjectId;
 
   const [data, total] = await Promise.all([
     prisma.examSession.findMany({
@@ -299,7 +302,7 @@ export async function listExamSessions(filters: { status?: string; mode?: string
       skip: (page - 1) * limit,
       take: limit,
       include: {
-        paper: { select: { id: true, title: true, pdfUrl: true, purpose: true, subject: true, school: true } },
+        paper: { select: { id: true, title: true, pdfUrl: true, purpose: true, subject: { select: { id: true, name: true } }, school: true } },
         creator: { select: { id: true, name: true } },
       },
     }),
@@ -312,12 +315,15 @@ export async function listExamSessions(filters: { status?: string; mode?: string
 /**
  * 学生视角：列出已发布的考试
  */
-export async function listExamSessionsForStudent(studentId: number) {
+export async function listExamSessionsForStudent(studentId: number, subjectId?: number) {
   const sessions = await prisma.examSession.findMany({
-    where: { status: { in: ['published', 'ongoing', 'graded'] } },
+    where: {
+      status: { in: ['published', 'ongoing', 'graded'] },
+      ...(subjectId ? { subjectId } : {}),
+    },
     orderBy: { createdAt: 'desc' },
     include: {
-      paper: { select: { id: true, title: true, pdfUrl: true, purpose: true, subject: true, school: true } },
+      paper: { select: { id: true, title: true, pdfUrl: true, purpose: true, subject: { select: { id: true, name: true } }, school: true } },
       submissions: { where: { studentId } },
     },
   });
@@ -439,6 +445,115 @@ export async function deleteExamSession(id: number) {
  */
 export async function unpublishExamSession(id: number) {
   return deleteExamSession(id);
+}
+
+/**
+ * 取消考试（管理员）：保留考试与答题数据，仅把状态回退为 draft，
+ * 使其不再出现在学生列表中（listExamSessionsForStudent 只查 published/ongoing/graded）。
+ */
+export async function cancelExamSession(id: number) {
+  const session = await prisma.examSession.findUnique({ where: { id } });
+  if (!session) throw new Error('考试会话不存在');
+  if (session.status === 'draft') throw new Error('考试已是草稿状态');
+  return prisma.examSession.update({
+    where: { id },
+    data: { status: 'draft', startTime: null, endTime: null },
+  });
+}
+
+/**
+ * 重做考试（学生）：清空本人答题记录，回到 pending 状态，可重新作答并再次提交。
+ * - 整卷模式不支持在线重做（学生线下作答 + 上传答题纸）
+ * - 会话若已结束(graded)则回退为 ongoing，允许再次进入答题
+ */
+export async function resetExamSubmission(examSessionId: number, studentId: number) {
+  const session = await prisma.examSession.findUnique({ where: { id: examSessionId } });
+  if (!session) throw new Error('考试会话不存在');
+  if (session.mode === 'whole_paper') throw new Error('整卷考试不支持在线重做');
+  if (session.status === 'draft') throw new Error('考试未发布，无法重做');
+
+  const submission = await prisma.examSubmission.findUnique({
+    where: { examSessionId_studentId: { examSessionId, studentId } },
+  });
+
+  // 会话已结束 → 回退为 ongoing，学生才能再次进入答题
+  if (session.status === 'graded') {
+    await prisma.examSession.update({ where: { id: examSessionId }, data: { status: 'ongoing' } });
+  }
+
+  if (!submission) {
+    return prisma.examSubmission.create({
+      data: { examSessionId, studentId, mode: 'online', status: 'pending', answers: '[]' },
+    });
+  }
+
+  return prisma.examSubmission.update({
+    where: { id: submission.id },
+    data: {
+      answers: '[]',
+      status: 'pending',
+      totalScore: null,
+      submittedAt: null,
+      gradedAt: null,
+      gradedBy: null,
+    },
+  });
+}
+
+/**
+ * 查看答卷（学生）：返回全部题目 + 本人答案 + 正确答案 + 解析。
+ */
+export async function getExamReview(examSessionId: number, studentId: number) {
+  const session = await prisma.examSession.findUnique({ where: { id: examSessionId } });
+  if (!session) throw new Error('考试会话不存在');
+
+  const submission = await prisma.examSubmission.findUnique({
+    where: { examSessionId_studentId: { examSessionId, studentId } },
+  });
+  if (!submission) throw new Error('未找到答题记录');
+
+  const questions: any[] = await getExamQuestions(examSessionId);
+  const answers: any[] = submission.answers ? JSON.parse(submission.answers) : [];
+  const answerMap = new Map<number, any>();
+  for (const a of answers) answerMap.set(a.questionId, a);
+
+  const items = questions.map((q: any) => {
+    const mine = answerMap.get(q.id);
+    return {
+      id: q.id,
+      questionNumber: q.questionNumber,
+      content: q.content,
+      questionType: q.questionType,
+      options: q.options,
+      score: q.score,
+      correctAnswer: q.answer ?? null,
+      analysis: q.analysis ?? null,
+      myAnswer: mine?.answer ?? null,
+      isCorrect: mine?.isCorrect ?? null,
+      earnedScore: mine?.score ?? null,
+      feedback: mine?.feedback ?? null,
+      timeSpent: mine?.timeSpent ?? null,
+    };
+  });
+
+  return {
+    session: {
+      id: session.id,
+      title: session.title,
+      mode: session.mode,
+      totalScore: session.totalScore,
+      duration: session.duration,
+    },
+    mode: session.mode,
+    status: submission.status,
+    score: submission.totalScore ?? null,
+    submittedAt: submission.submittedAt,
+    gradedAt: submission.gradedAt,
+    totalQuestions: items.length,
+    answeredCount: answers.length,
+    correctCount: items.filter((i) => i.isCorrect === true).length,
+    questions: items,
+  };
 }
 
 // ===== 标准预设（原 mock-exam-service STANDARD_PRESETS） =====

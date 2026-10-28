@@ -34,7 +34,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     const keyword = req.query.keyword as string | undefined;
     const where: any = {
       purpose: (req.query.purpose as string) || 'whole_paper',
-      ...(req.query.subject ? { subject: req.query.subject as string } : {}),
+      ...(req.query.subjectId ? { subjectId: toInt(req.query.subjectId) ?? undefined } : {}),
       ...(req.query.year ? { year: toInt(req.query.year) ?? undefined } : {}),
       ...(req.query.region ? { region: req.query.region as string } : {}),
       ...(req.query.examType ? { examType: req.query.examType as string } : {}),
@@ -44,6 +44,9 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     const [data, total] = await Promise.all([
       prisma.examPaper.findMany({
         where,
+        include: {
+          subject: { select: { id: true, name: true, icon: true } },
+        },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -62,13 +65,18 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
  */
 router.get('/filters', requireAuth, async (_req: Request, res: Response) => {
   try {
-    const rows = await prisma.examPaper.findMany({
-      where: { purpose: 'whole_paper' },
-      select: { subject: true, year: true, region: true, examType: true, school: true },
-    });
+    const [rows, subjects] = await Promise.all([
+      prisma.examPaper.findMany({
+        where: { purpose: 'whole_paper' },
+        select: { subjectId: true, year: true, region: true, examType: true, school: true },
+      }),
+      prisma.subject.findMany({ orderBy: [{ order: 'asc' }, { id: 'asc' }] }),
+    ]);
     const uniq = (arr: (string | number | null)[]) => Array.from(new Set(arr.filter((v) => v !== null && v !== ''))).map(v => String(v));
+    const usedSubjectIds = new Set(rows.map((r) => r.subjectId).filter((v) => v !== null));
     res.json({
-      subjects: uniq(rows.map((r) => r.subject)).sort((a, b) => a.localeCompare(b, 'zh-CN')),
+      // subjects: dictionary rows (id/name/color) — mark which ones actually have papers
+      subjects: subjects.map((s) => ({ id: s.id, name: s.name, color: s.color, hasPapers: usedSubjectIds.has(s.id) })),
       years: uniq(rows.map((r) => r.year)).sort((a, b) => Number(b) - Number(a)),
       regions: uniq(rows.map((r) => r.region)).sort((a, b) => a.localeCompare(b, 'zh-CN')),
       examTypes: uniq(rows.map((r) => r.examType)).sort((a, b) => a.localeCompare(b, 'zh-CN')),
@@ -86,7 +94,10 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const id = toInt(req.params.id);
     if (id === null) return res.status(400).json({ error: 'Invalid id' });
-    const paper = await prisma.examPaper.findUnique({ where: { id } });
+    const paper = await prisma.examPaper.findUnique({
+      where: { id },
+      include: { subject: { select: { id: true, name: true, icon: true } } },
+    });
     if (!paper) return res.status(404).json({ error: 'Paper not found' });
     res.json(paper);
   } catch (e: any) {
@@ -101,7 +112,7 @@ router.put('/:id', requireAuth, requireAdmin, async (req: Request, res: Response
   try {
     const id = toInt(req.params.id);
     if (id === null) return res.status(400).json({ error: 'Invalid id' });
-    const { title, source, year, region, examType, totalScore, duration, subject, school, status } = req.body;
+    const { title, source, year, region, examType, totalScore, duration, subjectId, school, status } = req.body;
     const data: any = {};
     if (title !== undefined) data.title = title;
     if (source !== undefined) data.source = source;
@@ -110,7 +121,7 @@ router.put('/:id', requireAuth, requireAdmin, async (req: Request, res: Response
     if (examType !== undefined) data.examType = examType;
     if (totalScore !== undefined) data.totalScore = totalScore === '' || totalScore === null ? null : parseInt(String(totalScore));
     if (duration !== undefined) data.duration = duration === '' || duration === null ? null : parseInt(String(duration));
-    if (subject !== undefined) data.subject = subject === '' ? null : subject;
+    if (subjectId !== undefined) data.subjectId = subjectId === '' || subjectId === null ? null : parseInt(String(subjectId));
     if (school !== undefined) data.school = school === '' ? null : school;
     if (status !== undefined) data.status = status;
     const paper = await prisma.examPaper.update({ where: { id }, data });
@@ -140,6 +151,7 @@ router.post('/:id/publish', requireAuth, requireAdmin, async (req: Request, res:
       mode: 'whole_paper',
       source: 'library',
       paperId: paper.id,
+      subjectId: paper.subjectId ?? undefined,
       totalScore: paper.totalScore || 100,
       duration: paper.duration || 120,
       startTime: req.body?.startTime ?? null,
@@ -195,7 +207,7 @@ router.get('/recovery/all', requireAuth, requireAdmin, async (_req: Request, res
       where: { paperId: { not: null } },
       orderBy: { createdAt: 'desc' },
       include: {
-        paper: { select: { id: true, title: true, subject: true, year: true, region: true } },
+        paper: { select: { id: true, title: true, subject: { select: { id: true, name: true } }, year: true, region: true } },
       },
     });
     const groups = [];

@@ -14,6 +14,8 @@ export interface ExamGenerationParams {
   duration?: number;
   /** 指定从某一导入试卷中出卷；缺省/0 表示从全部题目中抽取 */
   paperId?: number;
+  /** 学科过滤（自动出卷强制按学科选题，杜绝跨学科混卷） */
+  subjectId?: number;
   typeDistribution: {
     choice?: number;         // 选择题数量（旧枚举别名，兼容 single_choice）
     single_choice?: number;  // 单选题数量
@@ -67,6 +69,7 @@ export async function selectQuestions(params: ExamGenerationParams): Promise<Sel
         { answer: { not: '' } }
       ],
       ...(params.paperId && params.paperId > 0 ? { paperId: params.paperId } : {}),
+      ...(params.subjectId && params.subjectId > 0 ? { subjectId: params.subjectId } : {}),
     },
     orderBy: { questionNumber: 'asc' }
   });

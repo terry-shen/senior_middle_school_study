@@ -13,7 +13,8 @@ export interface PaperMetadata {
   examType?: string | null;
   totalScore?: number | null;
   duration?: number | null;
-  subject?: string | null;
+  subjectCode?: string | null;
+  subjectId?: number | null;
 }
 
 /** Standard Chinese exam type keywords (longest-first for priority) */
@@ -36,22 +37,89 @@ const REGION_KEYWORDS = [
 ];
 
 /**
- * Subject keywords (学科) mapped from filename/content text.
- * Longest patterns first so 理综 is matched before 物/化/生 standalone words.
+ * Subject keyword table — PRIMARY source is the Subject dictionary table (dynamic,
+ * cached 60s so admin-added subjects are picked up), with a static fallback used
+ * only when the DB is unavailable. Composite subjects (理综/文综) are matched
+ * before single subjects (物理/化学/生物 standalone words).
  */
-const SUBJECT_KEYWORDS: Array<{ subject: string; patterns: RegExp[] }> = [
-  { subject: '理综', patterns: [/理综|理科综合/] },
-  { subject: '文综', patterns: [/文综|文科综合/] },
-  { subject: '数学', patterns: [/数学/] },
-  { subject: '语文', patterns: [/语文/] },
-  { subject: '英语', patterns: [/英语|英语（含听力）/] },
-  { subject: '物理', patterns: [/物理/] },
-  { subject: '化学', patterns: [/化学/] },
-  { subject: '生物', patterns: [/生物/] },
-  { subject: '政治', patterns: [/政治/] },
-  { subject: '历史', patterns: [/历史/] },
-  { subject: '地理', patterns: [/地理/] },
+const FALLBACK_SUBJECT_PATTERNS: Array<{ code: string; patterns: RegExp[] }> = [
+  { code: 'science', patterns: [/理综/] },
+  { code: 'liberal_arts', patterns: [/文综/] },
+  { code: 'math', patterns: [/数学/] },
+  { code: 'chinese', patterns: [/语文/] },
+  { code: 'english', patterns: [/英语/] },
+  { code: 'physics', patterns: [/物理/] },
+  { code: 'chemistry', patterns: [/化学/] },
+  { code: 'biology', patterns: [/生物/] },
+  { code: 'politics', patterns: [/政治/] },
+  { code: 'history', patterns: [/历史/] },
+  { code: 'geography', patterns: [/地理/] },
 ];
+
+/** Extra alias patterns per Subject.code (DB only stores the canonical name) */
+const SUBJECT_ALIAS_PATTERNS: Record<string, RegExp[]> = {
+  science: [/理科综合/],
+  liberal_arts: [/文科综合/],
+  english: [/英语（含听力）/],
+};
+
+/** Composite subjects must be tested before single subjects */
+const SUBJECT_PRIORITY = ['science', 'liberal_arts'];
+
+interface SubjectKeywordEntry {
+  code: string;
+  id: number | null;
+  patterns: RegExp[];
+}
+
+let subjectKeywordCache: SubjectKeywordEntry[] | null = null;
+let subjectKeywordCacheAt = 0;
+const SUBJECT_CACHE_TTL = 60_000;
+
+async function loadSubjectKeywords(): Promise<SubjectKeywordEntry[]> {
+  const now = Date.now();
+  if (subjectKeywordCache && now - subjectKeywordCacheAt < SUBJECT_CACHE_TTL) {
+    return subjectKeywordCache;
+  }
+  try {
+    const { PrismaClient } = require('@prisma/client');
+    const prisma = new PrismaClient();
+    try {
+      const subjects = await prisma.subject.findMany({ orderBy: [{ order: 'asc' }, { id: 'asc' }] });
+      const entries: SubjectKeywordEntry[] = subjects.map((s: any) => ({
+        code: s.code,
+        id: s.id,
+        patterns: [new RegExp(s.name), ...(SUBJECT_ALIAS_PATTERNS[s.code] || [])],
+      }));
+      // Composite subjects first, then the rest by order
+      entries.sort((a, b) => {
+        const pa = SUBJECT_PRIORITY.indexOf(a.code);
+        const pb = SUBJECT_PRIORITY.indexOf(b.code);
+        if (pa !== -1 || pb !== -1) {
+          return (pa === -1 ? 99 : pa) - (pb === -1 ? 99 : pb);
+        }
+        return 0;
+      });
+      subjectKeywordCache = entries;
+      subjectKeywordCacheAt = now;
+      return entries;
+    } finally {
+      await prisma.$disconnect();
+    }
+  } catch {
+    // DB unavailable → static fallback (no subjectId resolution)
+    if (!subjectKeywordCache) {
+      subjectKeywordCache = FALLBACK_SUBJECT_PATTERNS.map((e) => ({ ...e, id: null }));
+      subjectKeywordCacheAt = now;
+    }
+    return subjectKeywordCache;
+  }
+}
+
+export function invalidateSubjectKeywordCache() {
+  subjectKeywordCache = null;
+  subjectKeywordCacheAt = 0;
+}
 
 /** 4-digit year like 2010, 2024, 2026 */
 const YEAR_REGEX = /\b(19|20)\d{2}\b/g;
@@ -85,13 +153,15 @@ function extractYearFromText(text: string): number | null {
 }
 
 /**
- * Extract subject (学科) from text (first keyword match, longest-priority).
+ * Extract subject code from text (first keyword match, composite subjects first).
+ * Returns null when no subject keyword matches.
  */
-function extractSubjectFromText(text: string): string | null {
+async function extractSubjectFromText(text: string): Promise<SubjectKeywordEntry | null> {
   if (!text) return null;
-  for (const entry of SUBJECT_KEYWORDS) {
+  const keywords = await loadSubjectKeywords();
+  for (const entry of keywords) {
     for (const pattern of entry.patterns) {
-      if (pattern.test(text)) return entry.subject;
+      if (pattern.test(text)) return entry;
     }
   }
   return null;
@@ -184,12 +254,13 @@ function titleFromFilename(filename: string): string {
  * Main entry: extract metadata from filename + markdown content.
  * userProvided fields (explicitly given by user form) take priority.
  * Returns a complete metadata object (nulls for unknown fields).
+ * Subject resolution is dynamic from the Subject dictionary table.
  */
-export function autoExtractMetadata(params: {
+export async function autoExtractMetadata(params: {
   filename: string;
   markdown?: string | null;
   userProvided?: Partial<PaperMetadata>;
-}): PaperMetadata {
+}): Promise<PaperMetadata> {
   const { filename, markdown, userProvided } = params;
   const filenameBase = titleFromFilename(filename);
   const textPool = `${filename}\n${markdown || ''}`;
@@ -210,9 +281,22 @@ export function autoExtractMetadata(params: {
   let examType = userProvided?.examType || null;
   if (!examType) examType = extractExamTypeFromText(textPool) || 'practice';
 
-  // Subject: user > filename/content keyword match
-  let subject = userProvided?.subject || null;
-  if (!subject) subject = extractSubjectFromText(textPool);
+  // Subject: user > filename/content keyword match (dynamic from Subject table)
+  let subjectCode: string | null = null;
+  let subjectId: number | null = null;
+  if (userProvided?.subjectId != null) {
+    subjectId = userProvided.subjectId;
+    const keywords = await loadSubjectKeywords();
+    subjectCode = keywords.find((k) => k.id === subjectId)?.code ?? null;
+  } else if (userProvided?.subjectCode) {
+    subjectCode = userProvided.subjectCode;
+  } else {
+    const matched = await extractSubjectFromText(textPool);
+    if (matched) {
+      subjectCode = matched.code;
+      subjectId = matched.id;
+    }
+  }
 
   // TotalScore: user > markdown sections / 满分
   let totalScore = userProvided?.totalScore !== undefined ? userProvided.totalScore : null;
@@ -225,10 +309,11 @@ export function autoExtractMetadata(params: {
   return {
     title: title || filenameBase,
     year: year ?? null,
-    region: region ?? 'Unknown',
-    examType: examType ?? 'practice',
+    region: region ?? null,
+    examType: examType ?? null,
     totalScore: totalScore ?? null,
     duration: duration ?? null,
-    subject: subject ?? null,
+    subjectCode: subjectCode ?? null,
+    subjectId: subjectId ?? null,
   };
 }

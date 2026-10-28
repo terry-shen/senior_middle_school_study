@@ -17,6 +17,7 @@ import wrongQuestionsRoutes from './routes/wrong-questions';
 import incentiveRoutes from './routes/incentive';
 import answerSheetRoutes from './routes/answer-sheets';
 import paperLibraryRoutes from './routes/paper-library';
+import subjectRoutes from './routes/subjects';
 
 // Load environment variables
 dotenv.config();
@@ -167,6 +168,7 @@ try {
   app.use('/api/incentive', incentiveRoutes);
 app.use('/api/answer-sheets', answerSheetRoutes);
 app.use('/api/paper-library', paperLibraryRoutes);
+app.use('/api/subjects', subjectRoutes);
   console.log('Incentive routes registered at /api/incentive');
 } catch (error) {
   console.error('Failed to register Incentive routes:', error);

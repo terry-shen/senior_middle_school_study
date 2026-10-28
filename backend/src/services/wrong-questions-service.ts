@@ -21,6 +21,7 @@ export interface CreateWrongQuestionInput {
   difficulty?: string;
   knowledgePointTags?: string | null;
   notes?: string | null;
+  subjectId?: number | null; // 学科维度
 }
 
 export interface UpdateWrongQuestionInput {
@@ -34,6 +35,7 @@ export interface UpdateWrongQuestionInput {
   difficulty?: string;
   knowledgePointTags?: string | null;
   notes?: string | null;
+  subjectId?: number | null; // 学科维度
 }
 
 export interface WrongQuestionFilters {
@@ -41,6 +43,7 @@ export interface WrongQuestionFilters {
   difficulty?: string;
   tag?: string; // 模糊匹配 knowledgePointTags
   reviewStatus?: string; // new/reviewing/mastered
+  subjectId?: number; // 学科维度
   viewMode?: 'unmastered' | 'all'; // 默认 unmastered
   sortBy?: 'createdAt' | 'lastReviewAt';
   page?: number;
@@ -68,6 +71,7 @@ export async function createWrongQuestion(
       difficulty: data.difficulty ?? 'unknown',
       knowledgePointTags: data.knowledgePointTags ?? null,
       notes: data.notes ?? null,
+      subjectId: data.subjectId ?? null,
     },
   });
 }
@@ -84,13 +88,17 @@ export async function getWrongQuestions(
     difficulty,
     tag,
     reviewStatus,
+    subjectId,
     viewMode = 'unmastered',
     sortBy = 'createdAt',
     page = 1,
     limit = 20,
   } = filters;
 
-  const where: Prisma.StudentWrongQuestionWhereInput = { studentId };
+  const where: Prisma.StudentWrongQuestionWhereInput = {
+    studentId,
+    ...(subjectId ? { subjectId } : {}),
+  };
 
   if (questionType && questionType !== 'all') {
     where.questionType = questionType;
@@ -164,6 +172,7 @@ export async function updateWrongQuestion(
       ...(data.difficulty !== undefined && { difficulty: data.difficulty }),
       ...(data.knowledgePointTags !== undefined && { knowledgePointTags: data.knowledgePointTags }),
       ...(data.notes !== undefined && { notes: data.notes }),
+      ...(data.subjectId !== undefined && { subjectId: data.subjectId }),
     },
   });
 }
@@ -237,8 +246,27 @@ export async function setMastered(
  * 掌握度 = 已掌握数 / 总数 × 100%
  * 未打标签的错题归入「未分类」行
  */
-export async function getMasteryOverview(studentId: number) {
-  const all = await prisma.studentWrongQuestion.findMany({
+/**
+ * 错题统计（工作台卡片用）：按复习状态聚合计数
+ */
+export async function getWrongQuestionStats(studentId: number) {
+  const rows = await prisma.studentWrongQuestion.groupBy({
+    by: ['reviewStatus'],
+    where: { studentId },
+    _count: { _all: true },
+  });
+  const stats = { total: 0, new: 0, reviewing: 0, mastered: 0 };
+  for (const r of rows) {
+    const c = r._count._all;
+    stats.total += c;
+    if (r.reviewStatus === 'new') stats.new = c;
+    else if (r.reviewStatus === 'reviewing') stats.reviewing = c;
+    else if (r.reviewStatus === 'mastered') stats.mastered = c;
+  }
+  return stats;
+}
+
+export async function getMasteryOverview(studentId: number) {  const all = await prisma.studentWrongQuestion.findMany({
     where: { studentId },
     select: {
       knowledgePointTags: true,

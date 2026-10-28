@@ -31,6 +31,7 @@ import { convertImage, ensureQuestionImagesDir, resizeImage } from '../services/
 import { parseDocx, parseDocLegacy, getWordFormat, parseDocxEnhanced } from '../services/word-service';
 import { parseText } from '../services/text-service';
 import { autoExtractMetadata } from '../services/paper-metadata-service';
+import { parsePageImages, resolvePaperDownloadFile } from '../services/paper-images-service';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -117,7 +118,7 @@ router.post('/import-whole', requireAuth, requireAdmin, upload.single('file'), a
     const originalFileName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
 
     // Auto-extract metadata from filename (whole-paper import has no Markdown)
-    const autoMeta = autoExtractMetadata({
+    const autoMeta = await autoExtractMetadata({
       filename: originalFileName,
       markdown: null,
       userProvided: {
@@ -127,10 +128,10 @@ router.post('/import-whole', requireAuth, requireAdmin, upload.single('file'), a
         ...(req.body.examType ? { examType: req.body.examType as string } : {}),
         ...(req.body.totalScore ? { totalScore: parseInt(req.body.totalScore) } : {}),
         ...(req.body.duration ? { duration: parseInt(req.body.duration) } : {}),
-        ...(req.body.subject ? { subject: req.body.subject as string } : {}),
         ...(req.body.school ? { school: req.body.school as string } : {}),
       },
     });
+    const resolvedSubjectId = req.body.subjectId ? parseInt(req.body.subjectId) : autoMeta.subjectId ?? undefined;
 
     const paper = await prisma.examPaper.create({
       data: {
@@ -140,7 +141,7 @@ router.post('/import-whole', requireAuth, requireAdmin, upload.single('file'), a
         examType: autoMeta.examType,
         totalScore: autoMeta.totalScore,
         duration: autoMeta.duration,
-        subject: autoMeta.subject,
+        subjectId: resolvedSubjectId,
         school: req.body.school as string | undefined,
         sourceFormat: req.file.mimetype.includes('pdf') ? 'pdf' : 'word',
         purpose: 'whole_paper',
@@ -178,7 +179,7 @@ router.post('/import-whole-multiple', requireAuth, requireAdmin, (req: Request, 
       try {
         const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
         // Auto-extract metadata from filename (whole-paper has no parsed markdown)
-        const autoMeta = autoExtractMetadata({
+        const autoMeta = await autoExtractMetadata({
           filename: originalName,
           markdown: null,
           userProvided: {
@@ -186,10 +187,10 @@ router.post('/import-whole-multiple', requireAuth, requireAdmin, (req: Request, 
             ...(req.body.year ? { year: parseInt(req.body.year) } : {}),
             ...(req.body.region ? { region: req.body.region as string } : {}),
             ...(req.body.examType ? { examType: req.body.examType as string } : {}),
-            ...(req.body.subject ? { subject: req.body.subject as string } : {}),
             ...(req.body.school ? { school: req.body.school as string } : {}),
           },
         });
+        const fileSubjectId = req.body.subjectId ? parseInt(req.body.subjectId) : autoMeta.subjectId ?? undefined;
 
         const paper = await prisma.examPaper.create({
           data: {
@@ -199,7 +200,7 @@ router.post('/import-whole-multiple', requireAuth, requireAdmin, (req: Request, 
             examType: autoMeta.examType,
             totalScore: autoMeta.totalScore,
             duration: autoMeta.duration,
-            subject: autoMeta.subject,
+            subjectId: fileSubjectId,
             school: req.body.school as string | undefined,
             sourceFormat: file.mimetype.includes('pdf') ? 'pdf' : (file.mimetype.includes('word') || file.originalname.toLowerCase().endsWith('.docx') || file.originalname.toLowerCase().endsWith('.doc')) ? 'word' : 'image',
             purpose: 'whole_paper',
@@ -226,6 +227,172 @@ router.post('/import-whole-multiple', requireAuth, requireAdmin, (req: Request, 
 
     res.status(201).json({ success: true, results });
   });
+});
+
+/**
+ * POST /api/papers/import-whole-images
+ * Import ONE exam paper composed of MULTIPLE photos (e.g. taken with a phone).
+ *
+ * All photos are stored under uploads/papers/ and recorded in ExamPaper.pageImages
+ * as a JSON array of public URLs. The first photo is also stored in imageUrl.
+ * Metadata can be supplied via form fields (title/year/region/...) and is
+ * auto-extracted from the first file name when omitted.
+ */
+const imageMultiUpload = upload.array('files', 30);
+
+router.post('/import-whole-images', requireAuth, requireAdmin, (req: Request, res: Response) => {
+  imageMultiUpload(req, res, async (err: any) => {
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    const files = (req.files as Express.Multer.File[]) || [];
+    if (files.length === 0) {
+      return res.status(400).json({ error: '未选择照片' });
+    }
+
+    const images = files.filter((f) => f.mimetype.startsWith('image/'));
+    if (images.length === 0) {
+      for (const f of files) {
+        try { fs.unlinkSync(f.path); } catch { /* ignore */ }
+      }
+      return res.status(400).json({ error: '仅支持图片文件（jpg/png/webp 等）' });
+    }
+    if (images.length !== files.length) {
+      for (const f of files) {
+        if (!f.mimetype.startsWith('image/')) {
+          try { fs.unlinkSync(f.path); } catch { /* ignore */ }
+        }
+      }
+    }
+
+    try {
+      const originalNames = images.map((f) => Buffer.from(f.originalname, 'latin1').toString('utf8'));
+      const pageImages = images.map((f) => `/uploads/papers/${f.filename}`);
+
+      const autoMeta = await autoExtractMetadata({
+        filename: originalNames[0],
+        markdown: null,
+        userProvided: {
+          ...(req.body.title ? { title: req.body.title as string } : {}),
+          ...(req.body.year ? { year: parseInt(req.body.year) } : {}),
+          ...(req.body.region ? { region: req.body.region as string } : {}),
+          ...(req.body.examType ? { examType: req.body.examType as string } : {}),
+          ...(req.body.totalScore ? { totalScore: parseInt(req.body.totalScore) } : {}),
+          ...(req.body.duration ? { duration: parseInt(req.body.duration) } : {}),
+          ...(req.body.school ? { school: req.body.school as string } : {}),
+        },
+      });
+      const resolvedSubjectId = req.body.subjectId ? parseInt(req.body.subjectId) : autoMeta.subjectId ?? undefined;
+
+      const paper = await prisma.examPaper.create({
+        data: {
+          title: autoMeta.title || req.body.title || originalNames[0].replace(/\.[^.]+$/, ''),
+          year: autoMeta.year,
+          region: autoMeta.region,
+          examType: autoMeta.examType,
+          totalScore: autoMeta.totalScore,
+          duration: autoMeta.duration,
+          subjectId: resolvedSubjectId,
+          school: req.body.school as string | undefined,
+          sourceFormat: 'image',
+          purpose: 'whole_paper',
+          imageUrl: pageImages[0],
+          pageImages: JSON.stringify(pageImages),
+          status: 'pending',
+        },
+      });
+
+      res.status(201).json({
+        success: true,
+        paper,
+        imageCount: pageImages.length,
+        fileNames: originalNames,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+});
+
+/**
+ * GET /api/papers/:id/content
+ * Return a viewable content descriptor for a paper.
+ *
+ * contentType:
+ *   - 'pdf'     → an actual PDF file (pdfUrl ending with .pdf), rendered by the browser iframe
+ *   - 'word'    → a Word document (.doc/.docx), NOT iframe-renderable → download only
+ *   - 'images'  → one or more photos (pageImages), rendered as a pager
+ *   - 'markdown'→ parsed/edited Markdown (question_source papers), rendered with KaTeX
+ *   - 'none'    → nothing viewable
+ */
+router.get('/:id/content', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid paper ID' });
+    }
+
+    const paper = await prisma.examPaper.findUnique({
+      where: { id },
+      include: {
+        subject: { select: { id: true, name: true, icon: true } },
+        _count: { select: { questions: true } },
+      },
+    });
+    if (!paper) {
+      return res.status(404).json({ error: '试卷不存在' });
+    }
+
+    const pageImages = parsePageImages(paper.pageImages);
+    const markdown = paper.editedMarkdown || paper.parsedMarkdown || paper.rawContent || '';
+
+    let contentType: 'pdf' | 'word' | 'images' | 'markdown' | 'none' = 'none';
+    let fileUrl: string | null = null;
+
+    const rawUrl = paper.pdfUrl || null;
+    const ext = rawUrl ? (rawUrl.split('.').pop() || '').toLowerCase() : '';
+    const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+
+    if (pageImages.length > 0) {
+      contentType = 'images';
+    } else if (rawUrl && (ext === 'doc' || ext === 'docx' || ext === 'rtf' || ext === 'odt')) {
+      // Word documents cannot be rendered inline by the browser → download only
+      contentType = 'word';
+      fileUrl = rawUrl;
+    } else if (rawUrl && IMAGE_EXTS.includes(ext)) {
+      // Single image stored as the original file → render as a one-page viewer
+      contentType = 'images';
+      pageImages.push(rawUrl);
+    } else if (rawUrl) {
+      contentType = 'pdf';
+      fileUrl = rawUrl;
+    } else if (markdown) {
+      contentType = 'markdown';
+    }
+
+    res.json({
+      success: true,
+      paperId: paper.id,
+      title: paper.title,
+      contentType,
+      fileUrl,
+      pageImages,
+      markdown: contentType === 'markdown' ? markdown : null,
+      questionCount: paper._count.questions,
+      sourceFormat: paper.sourceFormat,
+      purpose: paper.purpose,
+      year: paper.year,
+      region: paper.region,
+      school: paper.school,
+      examType: paper.examType,
+      totalScore: paper.totalScore,
+      duration: paper.duration,
+      subject: paper.subject,
+      status: paper.status,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 /**
@@ -414,7 +581,7 @@ router.post('/import', requireAuth, upload.single('file'), async (req: Request, 
     }
 
     // Create paper record (auto-extract metadata from filename + parsed markdown)
-    const autoMeta = autoExtractMetadata({
+    const autoMeta = await autoExtractMetadata({
       filename: originalName,
       markdown: parsedMarkdown || rawContent,
       userProvided: {
@@ -426,6 +593,7 @@ router.post('/import', requireAuth, upload.single('file'), async (req: Request, 
         ...(duration ? { duration: parseInt(duration) } : {}),
       },
     });
+    const resolvedSubjectId = req.body.subjectId ? parseInt(req.body.subjectId) : autoMeta.subjectId ?? undefined;
 
     const paper = await prisma.examPaper.create({
       data: {
@@ -444,6 +612,7 @@ router.post('/import', requireAuth, upload.single('file'), async (req: Request, 
         status: 'pending',
         totalScore: autoMeta.totalScore,
         duration: autoMeta.duration,
+        subjectId: resolvedSubjectId,
       },
     });
 
@@ -747,7 +916,7 @@ router.post('/import-multiple', requireAuth, (req: Request, res: Response) => {
         }
 
         // Auto-extract metadata per file (filename + this file's parsed markdown)
-        const autoMeta = autoExtractMetadata({
+        const autoMeta = await autoExtractMetadata({
           filename: originalName,
           markdown: parsedMarkdown || rawContent,
           userProvided: {
@@ -759,6 +928,7 @@ router.post('/import-multiple', requireAuth, (req: Request, res: Response) => {
             ...(duration ? { duration: parseInt(duration) } : {}),
           },
         });
+        const fileSubjectId = req.body.subjectId ? parseInt(req.body.subjectId) : autoMeta.subjectId ?? undefined;
 
         const paper = await prisma.examPaper.create({
           data: {
@@ -775,6 +945,7 @@ router.post('/import-multiple', requireAuth, (req: Request, res: Response) => {
             status: 'pending',
             totalScore: autoMeta.totalScore,
             duration: autoMeta.duration,
+            subjectId: fileSubjectId,
           },
         });
 
@@ -833,7 +1004,7 @@ router.get('/:id/download-file', requireAuth, async (req: Request, res: Response
       return res.status(400).json({ error: 'Invalid paper ID' });
     }
     const paper = await prisma.examPaper.findUnique({ where: { id } });
-    if (!paper || !paper.pdfUrl) {
+    if (!paper || (!paper.pdfUrl && !paper.pageImages)) {
       return res.status(404).json({ error: '试卷文件不存在' });
     }
     // Students can only download whole_paper files that are published (no assignment table — all published whole-paper sessions are visible)
@@ -848,11 +1019,12 @@ router.get('/:id/download-file', requireAuth, async (req: Request, res: Response
         return res.status(403).json({ error: '未分配此试卷' });
       }
     }
-    const filePath = path.join(process.cwd(), paper.pdfUrl.replace(/^\//, ''));
-    if (!fs.existsSync(filePath)) {
+    // Single original file, or a merged PDF generated from the paper's photos
+    const resolved = await resolvePaperDownloadFile(paper);
+    if (!resolved) {
       return res.status(404).json({ error: '试卷文件不存在' });
     }
-    res.download(filePath, paper.title + path.extname(filePath));
+    res.download(resolved.filePath, resolved.filename);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -894,7 +1066,7 @@ router.post('/:id/split', requireAdmin, async (req: Request, res: Response) => {
  */
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
-    const { status, source, year, purpose } = req.query;
+    const { status, source, year, purpose, subjectId } = req.query;
 
     const where: any = {};
     if (status) {
@@ -909,10 +1081,16 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     if (purpose) {
       where.purpose = purpose as string;
     }
+    if (subjectId) {
+      where.subjectId = parseInt(subjectId as string);
+    }
 
     const papers = await prisma.examPaper.findMany({
       where,
       include: {
+        subject: {
+          select: { id: true, name: true, icon: true },
+        },
         _count: {
           select: { questions: true },
         },
@@ -940,6 +1118,9 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
     const paper = await prisma.examPaper.findUnique({
       where: { id },
       include: {
+        subject: {
+          select: { id: true, name: true, icon: true },
+        },
         questions: {
           orderBy: { questionNumber: 'asc' },
         },
@@ -1008,7 +1189,10 @@ router.get('/:id/questions', requireAuth, async (req: Request, res: Response) =>
     }
 
     const questions = await prisma.question.findMany({
-      where: { paperId: id },
+      where: {
+        paperId: id,
+        ...(req.query.subjectId ? { subjectId: parseInt(req.query.subjectId as string) } : {}),
+      },
       orderBy: { questionNumber: 'asc' },
     });
 
@@ -1029,7 +1213,7 @@ router.put('/:id', requireAdmin, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid paper ID' });
     }
 
-    const { title, source, year, region, examType, totalScore, duration, status } = req.body;
+    const { title, source, year, region, examType, totalScore, duration, status, subjectId } = req.body;
 
     const paper = await prisma.examPaper.update({
       where: { id },
@@ -1042,6 +1226,10 @@ router.put('/:id', requireAdmin, async (req: Request, res: Response) => {
         ...(totalScore && { totalScore: parseInt(totalScore) }),
         ...(duration && { duration: parseInt(duration) }),
         ...(status && { status }),
+        // subjectId: 数字=设置学科；空字符串/null=清除学科
+        ...(subjectId !== undefined && {
+          subjectId: subjectId === '' || subjectId === null ? null : parseInt(subjectId),
+        }),
       },
     });
 
@@ -1103,7 +1291,7 @@ router.delete('/:id', requireAdmin, async (req: Request, res: Response) => {
  */
 router.get('/questions/all', requireAuth, async (req: Request, res: Response) => {
   try {
-    const { questionType, difficulty, paperId, aiAnalyzed, keyword, minScore, maxScore, page, limit } = req.query;
+    const { questionType, difficulty, paperId, aiAnalyzed, keyword, minScore, maxScore, subjectId, page, limit } = req.query;
 
     const where: any = {};
     if (questionType) {
@@ -1114,6 +1302,9 @@ router.get('/questions/all', requireAuth, async (req: Request, res: Response) =>
     }
     if (paperId) {
       where.paperId = parseInt(paperId as string);
+    }
+    if (subjectId) {
+      where.subjectId = parseInt(subjectId as string);
     }
     if (aiAnalyzed !== undefined) {
       where.aiAnalyzed = aiAnalyzed === 'true';
