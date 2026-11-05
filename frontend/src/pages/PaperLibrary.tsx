@@ -57,7 +57,8 @@ export default function PaperLibrary() {
   const [editPaper, setEditPaper] = useState<ExamPaper | null>(null);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [publishPaper, setPublishPaper] = useState<ExamPaper | null>(null);
-  const [publishForm, setPublishForm] = useState<{ totalScore: string; duration: string; startTime: string; endTime: string }>({ totalScore: '', duration: '', startTime: '', endTime: '' });
+  const [publishForm, setPublishForm] = useState<{ totalScore: string; duration: string; startTime: string; endTime: string; classIds: number[] }>({ totalScore: '', duration: '', startTime: '', endTime: '', classIds: [] });
+  const [allClasses, setAllClasses] = useState<{ id: number; name: string; grade: string }[]>([]);
   // paperId -> published mockExamId
   const [publishedMap, setPublishedMap] = useState<Record<number, number>>({});
 
@@ -261,15 +262,27 @@ export default function PaperLibrary() {
       totalScore: p.totalScore ? String(p.totalScore) : '100',
       duration: p.duration ? String(p.duration) : '120',
       startTime: '', endTime: '',
+      classIds: [],
     });
+    if (allClasses.length === 0) {
+      fetch('http://localhost:3000/api/classes/list')
+        .then((r) => r.json())
+        .then((d) => setAllClasses(Array.isArray(d?.classes) ? d.classes : []))
+        .catch(() => {});
+    }
   };
 
   const doPublish = async () => {
     if (!token || !publishPaper) return;
+    if (publishForm.classIds.length === 0) {
+      setError('请至少选择一个参考班级');
+      return;
+    }
     try {
       const res = await publishPaperAsMockExam(token, publishPaper.id, {
         startTime: publishForm.startTime || undefined,
         endTime: publishForm.endTime || undefined,
+        classIds: publishForm.classIds,
       });
       setMessage(`已发布为模拟考试（ID: ${res.mockExamId}），学生可在"模拟考试"中下载作答`);
       setPublishPaper(null);
@@ -571,6 +584,32 @@ export default function PaperLibrary() {
             <div className="form-row"><label>时长(分钟)</label><input value={publishForm.duration} onChange={(e) => setPublishForm({ ...publishForm, duration: e.target.value })} /></div>
             <div className="form-row"><label>开始时间</label><input type="datetime-local" value={publishForm.startTime} onChange={(e) => setPublishForm({ ...publishForm, startTime: e.target.value })} /></div>
             <div className="form-row"><label>截止时间</label><input type="datetime-local" value={publishForm.endTime} onChange={(e) => setPublishForm({ ...publishForm, endTime: e.target.value })} /></div>
+            <div className="form-row">
+              <label>参考班级（必选，已选 {publishForm.classIds.length} 个）</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '140px', overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: '6px', padding: '8px' }}>
+                {allClasses.length === 0 ? (
+                  <span style={{ color: '#999', fontSize: '13px' }}>加载中...</span>
+                ) : (
+                  allClasses.map((c) => (
+                    <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={publishForm.classIds.includes(c.id)}
+                        onChange={() => {
+                          setPublishForm((prev) => ({
+                            ...prev,
+                            classIds: prev.classIds.includes(c.id)
+                              ? prev.classIds.filter((id) => id !== c.id)
+                              : [...prev.classIds, c.id],
+                          }));
+                        }}
+                      />
+                      <span>{c.grade} {c.name}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
             <div className="modal-actions">
               <button onClick={() => setPublishPaper(null)}>取消</button>
               <button className="btn-primary" onClick={doPublish}>发布</button>

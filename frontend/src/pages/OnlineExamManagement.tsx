@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import ExamAssignDialog from '../components/ExamAssignDialog';
 import {
   createExam,
   publishExam,
   getExams,
+  getStudentExams,
 } from '../services/online-exams-api';
 import MathText from '../components/MathText';
 import type { OnlineExam, ExamQuestion } from '../services/online-exams-api';
@@ -19,6 +21,7 @@ export default function OnlineExamManagement() {
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
+  const [assignTarget, setAssignTarget] = useState<{ id: number; title: string } | null>(null);
 
   // Whole-paper (整卷) mode from ?paperId=
   const [wholePaperId, setWholePaperId] = useState<number | null>(null);
@@ -74,8 +77,8 @@ export default function OnlineExamManagement() {
       // @ts-ignore
       setQuestions(questionsData || []);
     } else {
-      // Students only see exams assigned to them (backend filters by studentId)
-      const examsData = await getExams(token);
+      // Students only see exams assigned to them
+      const examsData = await getStudentExams(token);
       setExams(examsData);
     }
     setLoading(false);
@@ -137,15 +140,24 @@ export default function OnlineExamManagement() {
     }
   };
 
-  const handlePublishExam = async (examId: number) => {
-    if (!token) return;
-    const result = await publishExam(token, examId, {});
-    if (result.exam) {
-      alert('测验已发布');
-      loadData();
-    } else {
-      alert(result.error || '发布失败');
+  const handlePublishExam = (examId: number) => {
+    const exam = exams.find((e) => e.id === examId);
+    if (exam) setAssignTarget({ id: exam.id, title: exam.title });
+  };
+
+  const handleAssignConfirm = async (payload: { classIds: number[]; studentIds: number[]; startTime?: string; endTime?: string }) => {
+    if (!token || !assignTarget) return;
+    const result = await publishExam(token, assignTarget.id, {
+      classIds: payload.classIds,
+      studentIds: payload.studentIds,
+      startTime: payload.startTime,
+      endTime: payload.endTime,
+    });
+    if (!result.exam && !result.success) {
+      throw new Error(result.error || '发布失败');
     }
+    alert('测验已发布');
+    loadData();
   };
 
   // Whole-paper download: must use fetch + Authorization header (plain <a href> drops the token → 401)
@@ -384,6 +396,14 @@ export default function OnlineExamManagement() {
           </button>
         </div>
       )}
+
+      <ExamAssignDialog
+        visible={!!assignTarget}
+        title={`发布测验：${assignTarget?.title || ''}`}
+        confirmLabel="发布"
+        onClose={() => setAssignTarget(null)}
+        onConfirm={handleAssignConfirm}
+      />
     </div>
   );
 }

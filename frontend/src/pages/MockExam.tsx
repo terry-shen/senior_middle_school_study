@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import MathText from '../components/MathText';
 import AnswerSheetUpload from '../components/AnswerSheetUpload';
+import ExamAssignDialog from '../components/ExamAssignDialog';
 import { downloadWholePaperFile, triggerBlobDownload } from '../services/papers-api';
 import {
   getMockExams,
@@ -51,6 +52,7 @@ export default function MockExamPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [assignTarget, setAssignTarget] = useState<{ id: number; title: string } | null>(null);
 
   const loadExams = useCallback(async () => {
     if (!token) return;
@@ -116,15 +118,24 @@ export default function MockExamPage() {
     }
   };
 
-  // Admin: Publish
-  const handlePublish = async (id: number) => {
-    if (!token) return;
-    try {
-      await publishMockExam(token, id);
-      loadExams();
-    } catch (e: any) {
-      setError(e.message);
+  // Admin: Publish — open assign dialog (class selection required)
+  const handlePublish = (id: number) => {
+    const exam = exams.find((e) => e.id === id);
+    if (exam) setAssignTarget({ id: exam.id, title: exam.title });
+  };
+
+  const handleAssignConfirm = async (payload: { classIds: number[]; studentIds: number[]; startTime?: string; endTime?: string }) => {
+    if (!token || !assignTarget) return;
+    const result = await publishMockExam(token, assignTarget.id, {
+      classIds: payload.classIds,
+      studentIds: payload.studentIds,
+      startTime: payload.startTime,
+      endTime: payload.endTime,
+    });
+    if (!result.success && !result.examSession && !result.mockExam) {
+      throw new Error(result.error || '发布失败');
     }
+    loadExams();
   };
 
   // Admin: Delete
@@ -415,6 +426,14 @@ export default function MockExamPage() {
           }}
         />
       )}
+
+      <ExamAssignDialog
+        visible={!!assignTarget}
+        title={`发布考试：${assignTarget?.title || ''}`}
+        confirmLabel="发布"
+        onClose={() => setAssignTarget(null)}
+        onConfirm={handleAssignConfirm}
+      />
     </div>
   );
 }

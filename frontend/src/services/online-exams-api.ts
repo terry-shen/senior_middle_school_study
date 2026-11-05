@@ -83,7 +83,7 @@ export async function createExam(token: string, data: { title: string; questionI
 }
 
 // 发布
-export async function publishExam(token: string, examId: number, data: { startTime?: string | null; endTime?: string | null } = {}): Promise<{ success: boolean; exam?: OnlineExam; error?: string }> {
+export async function publishExam(token: string, examId: number, data: { startTime?: string | null; endTime?: string | null; classIds?: number[]; studentIds?: number[] } = {}): Promise<{ success: boolean; exam?: OnlineExam; error?: string }> {
   const res = await fetch(`${API_BASE}/exam-sessions/${examId}/publish`, {
     method: 'POST',
     headers: authHeaders(token),
@@ -99,6 +99,14 @@ export async function getExams(token: string): Promise<OnlineExam[]> {
   const res = await fetch(withSubjectParam(`${API_BASE}/exam-sessions?limit=100&mode=online`), { headers: authHeaders(token) });
   const d = await res.json();
   return (d.data || []).map(normalizeExam);
+}
+
+// 学生：被分配的在线测验列表
+export async function getStudentExams(token: string): Promise<OnlineExam[]> {
+  const res = await fetch(withSubjectParam(`${API_BASE}/exam-sessions/student/all`), { headers: authHeaders(token) });
+  const d = await res.json();
+  const arr = Array.isArray(d) ? d : (d.data || []);
+  return arr.map(normalizeExam).filter((e: any) => e.mode === 'online');
 }
 
 // 详情

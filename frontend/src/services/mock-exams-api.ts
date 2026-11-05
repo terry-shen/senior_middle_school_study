@@ -113,7 +113,7 @@ export interface BenchmarkAnalysis {
 }
 
 // 发布
-export async function publishMockExam(token: string, id: number, data: { startTime?: string | null; endTime?: string | null } = {}): Promise<{ success: boolean; mockExam?: MockExam; examSession?: MockExam; error?: string }> {
+export async function publishMockExam(token: string, id: number, data: { startTime?: string | null; endTime?: string | null; classIds?: number[]; studentIds?: number[] } = {}): Promise<{ success: boolean; mockExam?: MockExam; examSession?: MockExam; error?: string }> {
   const res = await fetch(`${API_BASE}/exam-sessions/${id}/publish`, {
     method: 'POST',
     headers: authHeaders(token),

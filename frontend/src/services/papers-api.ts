@@ -758,7 +758,7 @@ export async function updatePaperLibraryPaper(
 export async function publishPaperAsMockExam(
   token: string,
   paperId: number,
-  payload: { startTime?: string; endTime?: string } = {}
+  payload: { startTime?: string; endTime?: string; classIds?: number[]; studentIds?: number[] } = {}
 ): Promise<{ success: boolean; mockExamId: number; error?: string }> {
   const response = await fetch(`${API_BASE}/paper-library/${paperId}/publish`, {
     method: 'POST',
