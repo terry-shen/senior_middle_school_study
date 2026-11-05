@@ -177,6 +177,7 @@
   padding: 7px 10px;
   border-bottom: 1px solid #eef1f7;
   color: #2c3554;
+  text-align: left;
 }
 
 .nb-table tr:last-child td {

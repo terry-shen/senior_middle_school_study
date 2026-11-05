@@ -36,3 +36,4 @@
 .vl-btn-play { width: 100%; padding: 14px; background: #e53935; color: #fff; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
 .vl-btn-play:hover { background: #c62828; }
 .vl-no-share { color: #f57f17; text-align: center; padding: 12px; background: #fff8e1; border-radius: 6px; }
+.vl-sub { color: #666; font-size: 13.5px; margin: 4px 0 14px; }
