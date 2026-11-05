@@ -95,6 +95,7 @@ model Student {
   examTemplates ExamTemplate[]
   examSessions  ExamSession[]
   examSubmissions ExamSubmission[]
+  examSessionAssignments ExamSessionAssignment[]
   masteryRecords MasteryRecord[]
   masteryHistory MasteryHistory[]
   learningReports LearningReport[]
@@ -309,12 +310,29 @@ model ExamSession {
   subject       Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
   submissions   ExamSubmission[]
   answerSheets  AnswerSheet[]
+  assignments   ExamSessionAssignment[]
 
   @@index([mode, status])
   @@index([paperId])
   @@index([creatorId])
   @@index([subjectId])
   @@map("exam_sessions")
+}
+
+// 考试会话分配（班级/学生归属）
+model ExamSessionAssignment {
+  id             Int         @id @default(autoincrement())
+  examSessionId  Int         @map("exam_session_id")
+  studentId      Int         @map("student_id")
+  classId        Int?        @map("class_id")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  examSession    ExamSession @relation(fields: [examSessionId], references: [id], onDelete: Cascade)
+  student        Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([examSessionId, studentId])
+  @@index([studentId])
+  @@map("exam_session_assignments")
 }
 
 // 统一答题记录（合并 ExamRecord + AnswerRecord）
