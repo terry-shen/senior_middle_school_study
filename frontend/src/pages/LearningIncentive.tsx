@@ -268,11 +268,6 @@ export default function LearningIncentive() {
               <div className="stat-label">累计打卡天数</div>
             </div>
             <div className="stat-card">
-              <div className="stat-icon">📈</div>
-              <div className="stat-value">+{stats.masteryImprovement}</div>
-              <div className="stat-label">30天掌握度提升</div>
-            </div>
-            <div className="stat-card">
               <div className="stat-icon">🏆</div>
               <div className="stat-value">{stats.longestStreak}</div>
               <div className="stat-label">最长连续打卡</div>
@@ -288,7 +283,7 @@ export default function LearningIncentive() {
                 初始化徽章系统
               </button>
             )}
-            {['practice', 'progress', 'persistence', 'perfect_score', 'breakthrough'].map(type => {
+            {['practice', 'persistence', 'perfect_score', 'breakthrough'].map(type => {
               const typeBadges = badges.filter(b => b.type === type);
               if (typeBadges.length === 0) return null;
               const typeNames: Record<string, string> = {
@@ -469,22 +464,6 @@ export default function LearningIncentive() {
                       <div className="badge-earned-date">
                         {new Date(ub.earnedAt!).toLocaleDateString('zh-CN')}
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="achievement-section">
-              <h3>📈 掌握度提升</h3>
-              <div className="improvement-list">
-                {achievements.masteryImprovements.length === 0 ? (
-                  <p className="empty">暂无进步记录</p>
-                ) : (
-                  achievements.masteryImprovements.map((imp, idx) => (
-                    <div key={idx} className="improvement-item">
-                      <span>记录 #{imp.knowledgePointId}</span>
-                      <span className="improvement-value">+{imp.improvement}</span>
                     </div>
                   ))
                 )}
