@@ -61,7 +61,7 @@ router.post('/unbind', requireAuth, requireAdmin, async (_req, res) => {
 router.get('/files', requireAuth, requireAdmin, async (req, res) => {
   try {
     const dir = (req.query.dir as string) || '/';
-    res.json({ files: await netdisk.listFiles(dir) });
+    res.json({ success: true, dir, files: await netdisk.listFiles(dir) });
   } catch (e: unknown) { res.status(toStatusCode(e)).json({ error: (e as Error).message }); }
 });
 

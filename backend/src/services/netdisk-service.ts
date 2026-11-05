@@ -174,7 +174,7 @@ async function apiGet(url: string, params: Record<string, string | number>, _con
 
 // ============ 目录浏览 ============
 export interface NetdiskFileEntry {
-  fsId: number; path: string; name: string; isDir: boolean;
+  fsId: number; path: string; name: string; isDir: 0 | 1;
   size: number; modifyTime: string;
 }
 interface XpanListResponse { list?: { fs_id: number; path: string; server_filename: string; isdir: number; size: number; local_mtime: number }[]; error?: string; error_description?: string }
@@ -193,7 +193,7 @@ export async function listFiles(dir: string): Promise<NetdiskFileEntry[]> {
   if (data.error) throw new Error(`目录浏览失败: ${data.error} ${data.error_description || ''}`);
   return (data.list ?? []).map(f => ({
     fsId: Number(f.fs_id), path: f.path, name: f.server_filename,
-    isDir: f.isdir === 1, size: f.size, modifyTime: new Date(f.local_mtime * 1000).toISOString(),
+    isDir: f.isdir === 1 ? 1 : 0, size: f.size, modifyTime: new Date(f.local_mtime * 1000).toISOString(),
   }));
 }
 
