@@ -12,6 +12,8 @@ import paperRoutes from './routes/papers';
 import difficultyRoutes from './routes/difficulty';
 import examRoutes from './routes/exams';
 import examSessionRoutes from './routes/exam-sessions';
+import netdiskRoutes from './routes/netdisk';
+import videoLibraryRoutes from './routes/video-library';
 import gradingRoutes from './routes/grading';
 import wrongQuestionsRoutes from './routes/wrong-questions';
 import incentiveRoutes from './routes/incentive';
@@ -145,6 +147,15 @@ try {
   console.log('Exam Session routes registered at /api/exam-sessions');
 } catch (error) {
   console.error('Failed to register Exam Session routes:', error);
+}
+
+// Netdisk + Video Library routes
+try {
+  app.use('/api/netdisk', netdiskRoutes);
+  app.use('/api/video-resources', videoLibraryRoutes);
+  console.log('Netdisk + Video Library routes registered');
+} catch (error) {
+  console.error('Failed to register Netdisk/Video routes:', error);
 }
 
 // Grading routes
