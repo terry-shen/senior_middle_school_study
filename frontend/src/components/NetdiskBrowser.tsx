@@ -1,22 +1,27 @@
 import { useState, useEffect, useCallback } from 'react';
 import { listNetdiskFiles, getNetdiskStatus } from '../services/netdisk-api';
 import type { NetdiskFile } from '../services/netdisk-api';
-import { importResources } from '../services/video-library-api';
 import './NetdiskBrowser.css';
+
+const API_BASE = 'http://localhost:3000/api';
 
 interface Props {
   token: string;
-  canImport: boolean;
-  onImported?: () => void;
 }
 
 const VIDEO_EXTS = ['mp4', 'mkv', 'mov', 'avi', 'flv', 'ts', 'm3u8', 'rmvb', 'wmv'];
+const IMG_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
 const DOC_EXTS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'zip'];
+
+function extOf(f: NetdiskFile): string {
+  return (f.filename.split('.').pop() || '').toLowerCase();
+}
 
 function extIcon(f: NetdiskFile): string {
   if (f.isDir === 1) return '📁';
-  const ext = (f.filename.split('.').pop() || '').toLowerCase();
+  const ext = extOf(f);
   if (VIDEO_EXTS.includes(ext)) return '🎬';
+  if (IMG_EXTS.includes(ext)) return '🖼️';
   if (DOC_EXTS.includes(ext)) return '📄';
   return '📎';
 }
@@ -29,15 +34,20 @@ function fmtSize(size?: number | string): string {
   return (n / 1024).toFixed(0) + ' KB';
 }
 
-export default function NetdiskBrowser({ token, canImport, onImported }: Props) {
+type Viewer =
+  | { kind: 'video'; f: NetdiskFile }
+  | { kind: 'image'; f: NetdiskFile }
+  | { kind: 'doc'; f: NetdiskFile };
+
+export default function NetdiskBrowser({ token }: Props) {
   const [bound, setBound] = useState<boolean | null>(null);
   const [dir, setDir] = useState('/apps/高中学习系统');
   const [files, setFiles] = useState<NetdiskFile[]>([]);
-  const [selected, setSelected] = useState<Map<number, NetdiskFile>>(new Map());
   const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState('');
-  const [importResult, setImportResult] = useState('');
+  const [error, setError] = useState('');
   const [collapsed, setCollapsed] = useState(false);
+  const [viewer, setViewer] = useState<Viewer | null>(null);
+  const [inlineDoc, setInlineDoc] = useState<NetdiskFile | null>(null);
 
   useEffect(() => {
     getNetdiskStatus(token).then((s) => setBound(!!s.bound)).catch(() => setBound(false));
@@ -46,14 +56,13 @@ export default function NetdiskBrowser({ token, canImport, onImported }: Props) 
   const load = useCallback(async (d: string) => {
     if (!token) return;
     setLoading(true);
-    setImportResult('');
+    setError('');
     try {
       const r = await listNetdiskFiles(token, d);
       setDir(r.dir || d);
       setFiles(r.files || []);
-      setSelected(new Map());
     } catch (e: any) {
-      setImportResult('⚠️ ' + (e.message || '加载失败'));
+      setError('⚠️ ' + (e.message || '加载失败'));
     } finally {
       setLoading(false);
     }
@@ -66,49 +75,18 @@ export default function NetdiskBrowser({ token, canImport, onImported }: Props) 
   const crumbs = dir.split('/').filter(Boolean);
   const crumbPath = (i: number) => '/' + crumbs.slice(0, i + 1).join('/');
 
-  const toggleSelect = (f: NetdiskFile) => {
-    const next = new Map(selected);
-    if (next.has(f.fsId)) next.delete(f.fsId);
-    else next.set(f.fsId, f);
-    setSelected(next);
+  const streamUrl = (f: NetdiskFile) => `${API_BASE}/netdisk/stream?fsId=${f.fsId}&token=${encodeURIComponent(token)}`;
+  const fileUrl = (f: NetdiskFile, mode: 'inline' | 'attachment') =>
+    `${API_BASE}/netdisk/file?fsId=${f.fsId}&mode=${mode}&token=${encodeURIComponent(token)}`;
+
+  const openFile = (f: NetdiskFile) => {
+    const ext = extOf(f);
+    if (VIDEO_EXTS.includes(ext)) setViewer({ kind: 'video', f });
+    else if (IMG_EXTS.includes(ext)) setViewer({ kind: 'image', f });
+    else setViewer({ kind: 'doc', f });
   };
 
-  const toggleAll = () => {
-    if (selected.size === files.filter((f) => f.isDir !== 1).length) {
-      setSelected(new Map());
-    } else {
-      const m = new Map<number, NetdiskFile>();
-      files.filter((f) => f.isDir !== 1).forEach((f) => m.set(f.fsId, f));
-      setSelected(m);
-    }
-  };
-
-  const handleImport = async () => {
-    if (selected.size === 0 || !canImport) return;
-    setBusy('正在导入（含自动分享/下载，大文件可能耗时较长）...');
-    setImportResult('');
-    try {
-      const items = Array.from(selected.values()).map((f) => ({
-        fsId: Number(f.fsId),
-        path: f.path,
-        size: f.size,
-      }));
-      const r = await importResources(token, items, { downloadDocuments: true });
-      const failed = r.shareFailed.length + r.downloadFailed.length;
-      setImportResult(
-        `✅ 导入完成：新建 ${r.created} / 跳过 ${r.skipped}` +
-        (r.shareFailed.length ? ` / 分享失败 ${r.shareFailed.length}` : '') +
-        (r.downloadFailed.length ? ` / 下载失败 ${r.downloadFailed.length}` : '') +
-        (r.success && !failed ? '' : '（部分操作失败，详见资源管理页）')
-      );
-      setSelected(new Map());
-      onImported?.();
-    } catch (e: any) {
-      setImportResult('⚠️ 导入失败：' + (e.message || e));
-    } finally {
-      setBusy('');
-    }
-  };
+  const closeViewer = () => setViewer(null);
 
   if (bound === null) return null;
   if (!bound) {
@@ -146,20 +124,9 @@ export default function NetdiskBrowser({ token, canImport, onImported }: Props) 
             </button>
           </div>
 
-          {canImport && (
-            <div className="nb-toolbar">
-              <label className="nb-check-all">
-                <input type="checkbox" onChange={toggleAll} checked={selected.size > 0 && selected.size === files.filter((f) => f.isDir !== 1).length} />
-                全选（{selected.size}）
-              </label>
-              <button className="nb-btn nb-btn-primary" onClick={handleImport} disabled={selected.size === 0 || !!busy}>
-                📥 批量导入资源库（{selected.size}）
-              </button>
-              {busy && <span className="nb-busy">{busy}</span>}
-            </div>
-          )}
+          <div className="nb-hint">💡 点击视频直接播放；点击文档可在线查看或下载</div>
 
-          {importResult && <div className="nb-import-result">{importResult}</div>}
+          {error && <div className="nb-import-result">{error}</div>}
 
           {loading ? (
             <div className="nb-loading">加载中...</div>
@@ -169,7 +136,6 @@ export default function NetdiskBrowser({ token, canImport, onImported }: Props) 
             <table className="nb-table">
               <thead>
                 <tr>
-                  {canImport && <th className="nb-col-check"></th>}
                   <th>名称</th>
                   <th className="nb-col-size">大小</th>
                 </tr>
@@ -177,18 +143,15 @@ export default function NetdiskBrowser({ token, canImport, onImported }: Props) 
               <tbody>
                 {files.map((f) => (
                   <tr key={f.fsId} className={f.isDir === 1 ? 'nb-row-dir' : ''}>
-                    {canImport && (
-                      <td className="nb-col-check">
-                        {f.isDir !== 1 && <input type="checkbox" checked={selected.has(f.fsId)} onChange={() => toggleSelect(f)} />}
-                      </td>
-                    )}
                     <td className="nb-col-name">
                       {f.isDir === 1 ? (
                         <a className="nb-dir-link" onClick={() => load(f.path)} title={f.path}>
                           {extIcon(f)} {f.filename}
                         </a>
                       ) : (
-                        <span title={f.path}>{extIcon(f)} {f.filename}</span>
+                        <a className="nb-file-link" onClick={() => openFile(f)} title={`点击打开 ${f.filename}`}>
+                          {extIcon(f)} {f.filename}
+                        </a>
                       )}
                     </td>
                     <td className="nb-col-size">{f.isDir === 1 ? '-' : fmtSize(f.size)}</td>
@@ -198,6 +161,85 @@ export default function NetdiskBrowser({ token, canImport, onImported }: Props) 
             </table>
           )}
         </>
+      )}
+
+      {/* 视频播放弹窗 */}
+      {viewer?.kind === 'video' && (
+        <div className="nb-modal-overlay" onClick={closeViewer}>
+          <div className="nb-modal nb-modal-video" onClick={(e) => e.stopPropagation()}>
+            <div className="nb-modal-head">
+              <b>🎬 {viewer.f.filename}</b>
+              <button className="nb-btn" onClick={closeViewer}>✕ 关闭</button>
+            </div>
+            <video
+              className="nb-video"
+              src={streamUrl(viewer.f)}
+              controls
+              autoPlay
+              preload="metadata"
+            />
+            <div className="nb-modal-foot">
+              <span className="nb-size-tag">{fmtSize(viewer.f.size)}</span>
+              <a className="nb-btn" href={fileUrl(viewer.f, 'attachment')}>⬇ 下载到本地</a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 图片查看弹窗 */}
+      {viewer?.kind === 'image' && (
+        <div className="nb-modal-overlay" onClick={closeViewer}>
+          <div className="nb-modal nb-modal-image" onClick={(e) => e.stopPropagation()}>
+            <div className="nb-modal-head">
+              <b>🖼️ {viewer.f.filename}</b>
+              <button className="nb-btn" onClick={closeViewer}>✕ 关闭</button>
+            </div>
+            <img className="nb-image" src={fileUrl(viewer.f, 'inline')} alt={viewer.f.filename} />
+          </div>
+        </div>
+      )}
+
+      {/* 文档操作弹窗：在线查看 / 下载 */}
+      {viewer?.kind === 'doc' && (
+        <div className="nb-modal-overlay" onClick={closeViewer}>
+          <div className="nb-modal nb-modal-doc" onClick={(e) => e.stopPropagation()}>
+            <div className="nb-modal-head">
+              <b>📄 {viewer.f.filename}</b>
+              <button className="nb-btn" onClick={closeViewer}>✕ 关闭</button>
+            </div>
+            <div className="nb-doc-body">
+              <p>文件大小：{fmtSize(viewer.f.size)}</p>
+              {extOf(viewer.f) === 'pdf' ? (
+                <p className="nb-doc-tip">PDF 支持浏览器内在线查看，也可下载到本地。</p>
+              ) : (
+                <p className="nb-doc-tip">该格式不支持浏览器内预览，建议下载后用对应软件打开。</p>
+              )}
+              <div className="nb-doc-actions">
+                {extOf(viewer.f) === 'pdf' && (
+                  <button className="nb-btn nb-btn-primary" onClick={() => { setInlineDoc(viewer.f); setViewer(null); }}>
+                    👁 在线查看
+                  </button>
+                )}
+                <a className="nb-btn nb-btn-primary" href={fileUrl(viewer.f, 'attachment')}>
+                  ⬇ 下载文件
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PDF 在线查看（iframe） */}
+      {inlineDoc && (
+        <div className="nb-modal-overlay" onClick={() => setInlineDoc(null)}>
+          <div className="nb-modal nb-modal-pdf" onClick={(e) => e.stopPropagation()}>
+            <div className="nb-modal-head">
+              <b>👁 {inlineDoc.filename}</b>
+              <button className="nb-btn" onClick={() => setInlineDoc(null)}>✕ 关闭</button>
+            </div>
+            <iframe className="nb-pdf-frame" src={fileUrl(inlineDoc, 'inline')} title={inlineDoc.filename} />
+          </div>
+        </div>
       )}
     </div>
   );

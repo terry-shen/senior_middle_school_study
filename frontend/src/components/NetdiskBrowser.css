@@ -211,3 +211,23 @@
   white-space: nowrap;
   text-align: right;
 }
+
+/* ===== 点击播放 / 查看 / 下载 弹窗 ===== */
+.nb-file-link { cursor: pointer; }
+.nb-file-link:hover { color: #1976d2; text-decoration: underline; }
+.nb-hint { font-size: 12px; color: #888; margin: 4px 0 8px; }
+.nb-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+.nb-modal { background: #fff; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,.3); display: flex; flex-direction: column; max-height: 92vh; }
+.nb-modal-video { width: 860px; max-width: 95vw; }
+.nb-modal-image { width: auto; max-width: 92vw; }
+.nb-modal-doc { width: 420px; }
+.nb-modal-pdf { width: 90vw; height: 92vh; }
+.nb-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid #eee; font-size: 14px; }
+.nb-video { width: 100%; max-height: 70vh; background: #000; }
+.nb-image { max-width: 88vw; max-height: 80vh; display: block; margin: 0 auto; padding: 10px; }
+.nb-modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 8px 14px; border-top: 1px solid #eee; }
+.nb-size-tag { font-size: 12px; color: #888; margin-right: auto; }
+.nb-doc-body { padding: 16px; font-size: 14px; }
+.nb-doc-tip { color: #666; font-size: 13px; }
+.nb-doc-actions { display: flex; gap: 10px; margin-top: 14px; }
+.nb-pdf-frame { flex: 1; width: 100%; border: 0; }

@@ -6,7 +6,7 @@ import NetdiskBrowser from '../components/NetdiskBrowser';
 import './VideoLibrary.css';
 
 export default function VideoLibrary() {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const [items, setItems] = useState<VideoResource[]>([]);
   const [loading, setLoading] = useState(true);
   const [type, setType] = useState<'all' | 'video' | 'document'>('all');
@@ -65,11 +65,7 @@ export default function VideoLibrary() {
       <h1>📺 学习资源</h1>
 
       {token && (
-        <NetdiskBrowser
-          token={token}
-          canImport={user?.role === 'admin'}
-          onImported={() => { setPage(1); load(1); }}
-        />
+        <NetdiskBrowser token={token} />
       )}
 
       <div className="vl-filter-bar">
