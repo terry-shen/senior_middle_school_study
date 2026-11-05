@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { listResources, recordPlay } from '../services/video-library-api';
 import type { VideoResource } from '../services/video-library-api';
+import NetdiskBrowser from '../components/NetdiskBrowser';
 import './VideoLibrary.css';
 
 export default function VideoLibrary() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [items, setItems] = useState<VideoResource[]>([]);
   const [loading, setLoading] = useState(true);
   const [type, setType] = useState<'all' | 'video' | 'document'>('all');
@@ -62,6 +63,14 @@ export default function VideoLibrary() {
   return (
     <div className="video-library">
       <h1>📺 学习资源</h1>
+
+      {token && (
+        <NetdiskBrowser
+          token={token}
+          canImport={user?.role === 'admin'}
+          onImported={() => { setPage(1); load(1); }}
+        />
+      )}
 
       <div className="vl-filter-bar">
         <div className="vl-type-tabs">

@@ -2,6 +2,7 @@
 import { useAuth } from '../contexts/AuthContext';
 import { listResources, deleteResource, updateResource, importResources, createResource } from '../services/video-library-api';
 import type { VideoResource } from '../services/video-library-api';
+import { listNetdiskFiles } from '../services/netdisk-api';
 import { useSubject } from '../contexts/SubjectContext';
 import './VideoManagement.css';
 
@@ -149,7 +150,6 @@ function ImportDialog({ token, subjects, onClose, onDone }: {
   onClose: () => void; onDone: () => void;
 }) {
   const [dir, setDir] = useState('/apps/高中学习系统');
-  const [createShare, setCreateShare] = useState(true);
   const [downloadDocuments, setDownloadDocuments] = useState(true);
   const [subjectId, setSubjectId] = useState<number>(0);
   const [grade, setGrade] = useState('');
@@ -159,10 +159,26 @@ function ImportDialog({ token, subjects, onClose, onDone }: {
 
   const handleImport = async () => {
     setImporting(true);
+    setResult('正在读取目录清单...');
     try {
-      const r = await importResources(token, dir, { createShare, downloadDocuments });
+      const listing = await listNetdiskFiles(token, dir);
+      const files = (listing.files || []).filter((f) => f.isDir !== 1);
+      if (files.length === 0) {
+        setResult('该目录下没有可导入的文件');
+        setImporting(false);
+        return;
+      }
+      setResult(`共发现 ${files.length} 个文件，正在导入...`);
+      const r = await importResources(token, files.map((f) => ({ fsId: Number(f.fsId), path: f.path, size: f.size })), {
+        subjectId: subjectId || null,
+        grade: grade || undefined,
+        chapter: chapter || undefined,
+        downloadDocuments,
+      });
       if (r.success) {
-        setResult(`✅ 导入完成：新增 ${r.created}，跳过 ${r.skipped}，分享 ${r.shared}，下载 ${r.downloaded}${r.errors.length > 0 ? `，失败 ${r.errors.length}` : ''}`);
+        setResult(`✅ 导入完成：新增 ${r.created}，跳过 ${r.skipped}` +
+          (r.shareFailed.length ? `，分享失败 ${r.shareFailed.length}` : '') +
+          (r.downloadFailed.length ? `，下载失败 ${r.downloadFailed.length}` : ''));
       } else {
         setResult(`❌ 导入失败`);
       }
@@ -187,11 +203,9 @@ function ImportDialog({ token, subjects, onClose, onDone }: {
         <div className="vm-form-row"><label>年级</label><input value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="如：高一" /></div>
         <div className="vm-form-row"><label>章节</label><input value={chapter} onChange={(e) => setChapter(e.target.value)} placeholder="如：函数" /></div>
         <div className="vm-form-row">
-          <label><input type="checkbox" checked={createShare} onChange={(e) => setCreateShare(e.target.checked)} /> 视频自动生成分享链接</label>
-        </div>
-        <div className="vm-form-row">
           <label><input type="checkbox" checked={downloadDocuments} onChange={(e) => setDownloadDocuments(e.target.checked)} /> 教辅自动下载到本地</label>
         </div>
+        <p className="vm-form-hint">将导入该目录下全部视频与文档，已存在的会自动跳过；视频自动生成分享链接。</p>
         {result && <div className="vm-result">{result}</div>}
         <div className="vm-dialog-actions">
           <button className="vm-btn-primary" onClick={handleImport} disabled={importing}>{importing ? '导入中...' : '开始导入'}</button>
