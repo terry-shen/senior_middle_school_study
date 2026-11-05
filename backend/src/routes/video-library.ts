@@ -16,6 +16,16 @@ function detectType(filename: string): 'video' | 'document' | null {
   return null;
 }
 
+// fsId/fileSize 为 BigInt，res.json 无法序列化 → 转字符串
+function stripBigInt(r: any) {
+  if (!r) return r;
+  return {
+    ...r,
+    fsId: r.fsId != null ? String(r.fsId) : r.fsId,
+    fileSize: r.fileSize != null ? String(r.fileSize) : r.fileSize,
+  };
+}
+
 // ============ 列表 ============
 router.get('/', requireAuth, async (req, res) => {
   try {
@@ -41,7 +51,7 @@ router.get('/', requireAuth, async (req, res) => {
         include: { subject: { select: { id: true, name: true, icon: true } } },
       }),
     ]);
-    res.json({ data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+    res.json({ data: data.map(stripBigInt), pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   } catch (e: unknown) { res.status(500).json({ error: (e as Error).message }); }
 });
 
@@ -55,7 +65,7 @@ router.get('/:id', requireAuth, async (req, res) => {
       include: { subject: { select: { id: true, name: true, icon: true } } },
     });
     if (!r) return res.status(404).json({ error: '资源不存在' });
-    res.json(r);
+    res.json(stripBigInt(r));
   } catch (e: unknown) { res.status(500).json({ error: (e as Error).message }); }
 });
 
@@ -77,7 +87,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
         sort: sort ? Number(sort) : 0,
       },
     });
-    res.json({ success: true, resource: r });
+    res.json({ success: true, resource: stripBigInt(r) });
   } catch (e: unknown) {
     if ((e as { code?: string }).code === 'P2002') return res.status(409).json({ error: '该网盘路径已存在（重复导入）' });
     res.status(500).json({ error: (e as Error).message });
@@ -100,7 +110,7 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
     if (shareUrl !== undefined) data.shareUrl = shareUrl ? String(shareUrl) : null;
     if (fileUrl !== undefined) data.fileUrl = fileUrl ? String(fileUrl) : null;
     const r = await prisma.videoResource.update({ where: { id }, data });
-    res.json({ success: true, resource: r });
+    res.json({ success: true, resource: stripBigInt(r) });
   } catch (e: unknown) { res.status(500).json({ error: (e as Error).message }); }
 });
 
