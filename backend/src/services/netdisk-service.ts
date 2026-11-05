@@ -213,6 +213,26 @@ export async function createShare(fsIds: number[]) {
 // ============ 下载到本地 ============
 const TEACHING_DIR = 'uploads/teaching-materials';
 
+/** 获取文件 dlink 直链（须带 UA pan.baidu.com 访问；目录无 dlink） */
+export async function getFileDlink(fsId: number): Promise<{ dlink: string; name: string; size: number }> {
+  const c = await getConfig();
+  if (!c?.accessToken) throw Object.assign(new Error('网盘账号未绑定'), { statusCode: 400 });
+  const token = await ensureToken();
+  const meta = await axios.get('https://pan.baidu.com/rest/2.0/xpan/multimedia', {
+    params: { method: 'filemetas', access_token: token, fsids: `[${fsId}]`, dlink: 1 }, timeout: 15000,
+  });
+  const file = meta.data?.list?.[0];
+  if (!file) throw new Error('网盘文件不存在');
+  if (String(file.path || '').startsWith('/apps/') !== true && !String(file.path || '').includes('/apps/')) {
+    throw Object.assign(new Error('该文件不在应用可访问目录，请先移动到 /apps/{appname}'), { statusCode: 400 });
+  }
+  if (file.isdir === 1) throw Object.assign(new Error('目录不支持此操作'), { statusCode: 400 });
+  // 官方要求：dlink 使用需拼接 access_token，且 UA 必须为 pan.baidu.com
+  const raw = file.dlink as string;
+  const dlink = raw.includes('access_token=') ? raw : raw + (raw.includes('?') ? '&' : '?') + 'access_token=' + token;
+  return { dlink, name: (file.server_filename || file.filename || `file-${fsId}`) as string, size: Number(file.size || 0) };
+}
+
 export async function saveLocalFile(fsId: number, filename: string) {
   const c = await getConfig();
   if (!c?.accessToken) throw Object.assign(new Error('网盘账号未绑定'), { statusCode: 400 });

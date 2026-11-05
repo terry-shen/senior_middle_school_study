@@ -1,5 +1,6 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
+import axios from 'axios';
 import { requireAuth, requireAdmin } from '../middleware/permission';
 import * as netdisk from '../services/netdisk-service';
 
@@ -100,6 +101,65 @@ router.post('/download', requireAuth, requireAdmin, async (req, res) => {
       } catch (e: unknown) { results.push({ id: r.id, error: (e as Error).message }); }
     }
     res.json({ success: true, results });
+  } catch (e: unknown) { res.status(toStatusCode(e)).json({ error: (e as Error).message }); }
+});
+
+// ============ 媒体流代理（video/iframe 无法带 Authorization 头 → 支持 ?token=） ============
+async function mediaAuth(req: Request, res: Response, next: NextFunction) {
+  const header = req.headers.authorization;
+  const headerToken = header?.startsWith('Bearer ') ? header.substring(7) : undefined;
+  const queryToken = typeof req.query.token === 'string' ? req.query.token : undefined;
+  const token = headerToken ?? queryToken;
+  if (!token) return res.status(401).json({ error: 'Authentication required' });
+  const session = await prisma.session.findFirst({ where: { token, expiresAt: { gt: new Date() } }, include: { student: true } });
+  if (!session) return res.status(401).json({ error: 'Invalid or expired token' });
+  req.user = { id: session.student.id, studentId: session.student.studentId, name: session.student.name, role: session.student.role };
+  next();
+}
+
+async function proxyDlink(req: Request, res: Response, fsId: number, disposition: 'inline' | 'attachment', filename?: string) {
+  const { dlink, name, size } = await netdisk.getFileDlink(fsId);
+  const range = req.headers.range;
+  const upstream = await axios.get(dlink, {
+    headers: {
+      'User-Agent': 'pan.baidu.com',
+      'Referer': 'https://pan.baidu.com/',
+      ...(range ? { Range: range } : {}),
+    },
+    responseType: 'stream', timeout: 600000, maxContentLength: Infinity, maxBodyLength: Infinity,
+    validateStatus: () => true,
+  });
+  if (upstream.status >= 400) {
+    return res.status(502).json({ error: `网盘源返回 ${upstream.status}` });
+  }
+  res.status(upstream.status);
+  const h = upstream.headers as Record<string, unknown>;
+  for (const k of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
+    if (h[k]) res.setHeader(k, String(h[k]));
+  }
+  const fname = (filename || name || `file-${fsId}`);
+  res.setHeader('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(fname)}`);
+  if (!h['content-length'] && size) res.setHeader('X-File-Size', String(size));
+  (upstream.data as NodeJS.ReadableStream).pipe(res);
+}
+
+// GET /api/netdisk/stream?fsId=&token= — 视频流（浏览器 <video> 直接播放，支持 Range 拖动）
+router.get('/stream', mediaAuth, async (req, res) => {
+  try {
+    const fsId = parseInt(String(req.query.fsId ?? ''), 10);
+    if (!fsId) return res.status(400).json({ error: 'fsId 必填' });
+    await proxyDlink(req, res, fsId, 'inline');
+  } catch (e: unknown) { res.status(toStatusCode(e)).json({ error: (e as Error).message }); }
+});
+
+// GET /api/netdisk/file?fsId=&mode=inline|attachment&token= — 文件查看（inline PDF/图片）或下载
+router.get('/file', mediaAuth, async (req, res) => {
+  try {
+    const fsId = parseInt(String(req.query.fsId ?? ''), 10);
+    if (!fsId) return res.status(400).json({ error: 'fsId 必填' });
+    const mode = req.query.mode === 'attachment' ? 'attachment' : 'inline';
+    const name = typeof req.query.name === 'string' ? req.query.name : undefined;
+    await proxyDlink(req, res, fsId, mode, name);
   } catch (e: unknown) { res.status(toStatusCode(e)).json({ error: (e as Error).message }); }
 });
 
