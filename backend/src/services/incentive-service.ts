@@ -10,7 +10,7 @@ const prisma = new PrismaClient();
 // ===== Badge Types =====
 
 export interface BadgeCondition {
-  type: 'practice_count' | 'mastery_improvement' | 'streak_days' | 'perfect_score' | 'wrong_mastered';
+  type: 'practice_count' | 'streak_days' | 'perfect_score' | 'wrong_mastered';
   value: number;
 }
 
@@ -37,10 +37,6 @@ const DEFAULT_BADGES = [
   { name: 'practice_50', displayName: '勤学苦练', description: '完成50道练习题', type: 'practice', conditionType: 'practice_count', conditionValue: 50, rarity: 'rare' },
   { name: 'practice_100', displayName: '百题斩将', description: '完成100道练习题', type: 'practice', conditionType: 'practice_count', conditionValue: 100, rarity: 'epic' },
   { name: 'practice_500', displayName: '千锤百炼', description: '完成500道练习题', type: 'practice', conditionType: 'practice_count', conditionValue: 500, rarity: 'legendary' },
-  // 进步徽章
-  { name: 'progress_10', displayName: '稳步提升', description: '掌握度提升10分', type: 'progress', conditionType: 'mastery_improvement', conditionValue: 10, rarity: 'common' },
-  { name: 'progress_30', displayName: '突飞猛进', description: '掌握度提升30分', type: 'progress', conditionType: 'mastery_improvement', conditionValue: 30, rarity: 'rare' },
-  { name: 'progress_50', displayName: '蜕变成长', description: '掌握度提升50分', type: 'progress', conditionType: 'mastery_improvement', conditionValue: 50, rarity: 'epic' },
   // 毅力徽章
   { name: 'streak_7', displayName: '一周坚持', description: '连续打卡7天', type: 'persistence', conditionType: 'streak_days', conditionValue: 7, rarity: 'common' },
   { name: 'streak_30', displayName: '月度毅力', description: '连续打卡30天', type: 'persistence', conditionType: 'streak_days', conditionValue: 30, rarity: 'rare' },
@@ -205,18 +201,6 @@ export async function checkAllBadges(studentId: number): Promise<void> {
     } catch { /* skip malformed */ }
   }
   await updateBadgeProgress(studentId, 'practice_count', practiceCount);
-
-  // 2. Mastery improvement - compare earliest vs latest mastery
-  const history = await prisma.masteryHistory.findMany({
-    where: { studentId },
-    orderBy: { recordedAt: 'asc' },
-  });
-  if (history.length >= 2) {
-    const earliest = history[0];
-    const latest = history[history.length - 1];
-    const improvement = Math.max(0, latest.masteryLevel - earliest.masteryLevel);
-    await updateBadgeProgress(studentId, 'mastery_improvement', improvement);
-  }
 
   // 3. Streak days - current streak count
   const latestCheckIn = await prisma.checkIn.findFirst({
@@ -422,20 +406,6 @@ export async function getLearningStats(studentId: number) {
     orderBy: { streakCount: 'desc' },
   });
 
-  // Mastery improvement (last 30 days)
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const recentHistory = await prisma.masteryHistory.findMany({
-    where: { studentId, recordedAt: { gte: thirtyDaysAgo } },
-    orderBy: { recordedAt: 'asc' },
-  });
-  let masteryImprovement = 0;
-  if (recentHistory.length >= 2) {
-    masteryImprovement = Math.max(
-      0,
-      recentHistory[recentHistory.length - 1].masteryLevel - recentHistory[0].masteryLevel
-    );
-  }
-
   return {
     totalPractice,
     correctCount,
@@ -445,39 +415,9 @@ export async function getLearningStats(studentId: number) {
     checkInDays,
     currentStreak,
     longestStreak: longestStreak?.streakCount || 0,
-    masteryImprovement,
   };
 }
 
-/**
- * Get mastery progress curve for visualization
- */
-export async function getMasteryProgressCurve(studentId: number, days: number = 30) {
-  const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-
-  const history = await prisma.masteryHistory.findMany({
-    where: { studentId, recordedAt: { gte: startDate } },
-    orderBy: { recordedAt: 'asc' },
-    include: { knowledgePoint: { select: { id: true, name: true } } },
-  });
-
-  // Group by date
-  const byDate = new Map<string, { date: string; avgMastery: number; count: number }>();
-  for (const h of history) {
-    const dateKey = h.recordedAt.toISOString().split('T')[0];
-    if (!byDate.has(dateKey)) {
-      byDate.set(dateKey, { date: dateKey, avgMastery: 0, count: 0 });
-    }
-    const entry = byDate.get(dateKey)!;
-    entry.avgMastery += h.masteryLevel;
-    entry.count += 1;
-  }
-
-  return Array.from(byDate.values()).map(e => ({
-    date: e.date,
-    avgMastery: Math.round((e.avgMastery / e.count) * 100) / 100,
-  }));
-}
 
 // ===== Leaderboard =====
 
@@ -601,33 +541,11 @@ export async function getAchievementWall(studentId: number) {
     .map((r) => ({ mockExamId: r.examSessionId, examSessionId: r.examSessionId, score: r.totalScore as number, maxScore: r.examSession.totalScore as number }));
   void gradedSubs;
 
-  // Mastery improvements
-  const history = await prisma.masteryHistory.findMany({
-    where: { studentId },
-    orderBy: { recordedAt: 'asc' },
-  });
-  const masteryImprovements: Array<{ knowledgePointId: number; improvement: number }> = [];
-  const byKp = new Map<number, { first: number; latest: number }>();
-  for (const h of history) {
-    if (!byKp.has(h.knowledgePointId)) {
-      byKp.set(h.knowledgePointId, { first: h.masteryLevel, latest: h.masteryLevel });
-    } else {
-      byKp.get(h.knowledgePointId)!.latest = h.masteryLevel;
-    }
-  }
-  for (const [kpId, data] of byKp.entries()) {
-    const improvement = data.latest - data.first;
-    if (improvement > 0) {
-      masteryImprovements.push({ knowledgePointId: kpId, improvement });
-    }
-  }
-  masteryImprovements.sort((a, b) => b.improvement - a.improvement);
-
   return {
     earnedBadges,
     recentCheckIns: checkIns,
     perfectScores: perfectExams,
-    masteryImprovements: masteryImprovements.slice(0, 10),
+    masteryImprovements: [],
     totalBadges: earnedBadges.length,
     totalCheckIns: await prisma.checkIn.count({ where: { studentId } }),
     totalPerfectScores: perfectExams.length,

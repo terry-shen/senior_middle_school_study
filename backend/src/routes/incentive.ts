@@ -116,19 +116,6 @@ router.get('/stats', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-// Get mastery progress curve
-router.get('/stats/mastery-curve', requireAuth, async (req: Request, res: Response) => {
-  try {
-    const studentId = parseInt(String(req.query.studentId)) || (req as any).user.id;
-    const days = parseInt(String(req.query.days)) || 30;
-    const curve = await incentiveService.getMasteryProgressCurve(studentId, days);
-    res.json(curve);
-  } catch (error) {
-    console.error('Error fetching mastery curve:', error);
-    res.status(500).json({ error: 'Failed to fetch curve' });
-  }
-});
-
 // ===== Leaderboard =====
 
 // Get class leaderboard
