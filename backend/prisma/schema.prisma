@@ -269,6 +269,7 @@ model Subject {
   examSessions   ExamSession[]
   wrongQuestions StudentWrongQuestion[]
   knowledgePoints KnowledgePoint[]
+  videoResources VideoResource[]
 
   @@map("subjects")
 }
@@ -574,12 +575,49 @@ model StudentWrongQuestion {
   @@map("student_wrong_questions")
 }
 
-// ===== Personalized Recommendation Models =====
+// ===== Netdisk Integration =====
+model NetdiskConfig {
+  id            Int       @id @default(autoincrement())
+  appKey        String    @map("app_key")
+  appSecret     String    @map("app_secret")
+  signKey       String?   @map("sign_key")
+  accessToken   String?   @map("access_token")
+  refreshToken  String?   @map("refresh_token")
+  tokenExpireAt DateTime? @map("token_expire_at")
+  netdiskUk     String?   @map("netdisk_uk")
+  status        String    @default("unconfigured") // unconfigured | unbound | bound | expired
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
-// 推荐策略配置
-// 推荐记录（每日推荐/专项突破等一批推荐）
-// 推荐题目项
-// 推荐反馈（命中率跟踪、满意度）
-// 练习会话（进度保存/恢复）
-// 学习路径
-// 学习路径知识点项
+  @@map("netdisk_config")
+}
+
+// ===== Video / Teaching Resource Library =====
+model VideoResource {
+  id            Int       @id @default(autoincrement())
+  title         String
+  subjectId     Int?      @map("subject_id")
+  grade         String?
+  chapter       String?
+  resourceType  String    @default("video") @map("resource_type") // video | document
+  netdiskPath   String    @unique @map("netdisk_path")
+  fsId          BigInt?   @map("fs_id")
+  shareUrl      String?   @map("share_url")
+  fileUrl       String?   @map("file_url")
+  fileSize      BigInt?   @map("file_size")
+  duration      Int?
+  coverUrl      String?   @map("cover_url")
+  description   String?
+  playCount     Int       @default(0) @map("play_count")
+  viewCount     Int       @default(0) @map("view_count")
+  sort          Int       @default(0)
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  subject Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@index([subjectId])
+  @@index([resourceType, isActive])
+  @@map("video_resources")
+}
