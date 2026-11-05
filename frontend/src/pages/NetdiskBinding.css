@@ -36,3 +36,10 @@
 .nd-file-table td { padding: 8px 10px; font-size: 14px; border-bottom: 1px solid #f0f0f0; }
 .nd-dir-link { color: #1976d2; cursor: pointer; text-decoration: none; }
 .nd-dir-link:hover { text-decoration: underline; }
+
+.nd-callback-notice { margin: 12px 0 0; padding: 12px 14px; background: #fff8e1; border: 1px solid #f0c36d; border-radius: 6px; }
+.nd-callback-notice strong { color: #b26a00; }
+.nd-callback-notice p { margin: 6px 0; font-size: 13px; line-height: 1.6; }
+.nd-callback-box { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px dashed #f0c36d; border-radius: 4px; padding: 8px 10px; }
+.nd-callback-box code { flex: 1; font-size: 12px; word-break: break-all; user-select: all; }
+.nd-callback-err { color: #b26a00; font-size: 12px; }

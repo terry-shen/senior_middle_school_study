@@ -12,25 +12,26 @@ function authHeaders(token: string) {
 }
 
 export interface NetdiskConfigStatus {
-    status?: 'unconfigured' | 'unbound' | 'bound' | 'expired' | 'error';
-    configured: boolean;
-    bound: boolean;
-    hasAppKey: boolean;
-    hasAppSecret?: boolean;
-    hasSignKey: boolean;
-    appKey?: string | null;
-    appSecret?: string | null;
-    signKey?: string | null;
-    accessTokenPreview?: string | null;
-    netdiskUk?: number | null;
-    tokenExpireAt?: string | null;
-    lastError?: string;
-  }
+  status: 'unconfigured' | 'unbound' | 'bound' | 'expired' | 'error';
+  configured: boolean;
+  bound: boolean;
+  hasAppKey?: boolean;
+  hasAppSecret?: boolean;
+  hasSignKey?: boolean;
+  appKey?: string | null;
+  appSecret?: string | null;
+  signKey?: string | null;
+  redirectUri?: string | null;
+  netdiskUk?: string | null;
+  tokenExpireAt?: string | null;
+  accessTokenPreview?: string | null;
+}
 
 export interface NetdiskConfigInput {
   appKey: string;
   appSecret: string;
   signKey?: string;
+  redirectUri?: string;
 }
 
 export interface NetdiskFile {

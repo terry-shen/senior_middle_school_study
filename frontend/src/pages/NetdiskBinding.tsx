@@ -15,6 +15,7 @@ export default function NetdiskBinding() {
   const [appKey, setAppKey] = useState('');
   const [appSecret, setAppSecret] = useState('');
   const [signKey, setSignKey] = useState('');
+  const [redirectUri, setRedirectUri] = useState('');
   const [saving, setSaving] = useState(false);
 
   const loadStatus = useCallback(async () => {
@@ -26,6 +27,7 @@ export default function NetdiskBinding() {
       if (s.appKey) setAppKey(s.appKey);
       if (s.appSecret) setAppSecret(s.appSecret);
       if (s.signKey) setSignKey(s.signKey);
+      if (s.redirectUri) setRedirectUri(s.redirectUri);
     } catch (e: any) {
       setMessage('加载状态失败: ' + (e.message || e));
     } finally {
@@ -44,7 +46,7 @@ export default function NetdiskBinding() {
     }
     setSaving(true);
     try {
-      await saveNetdiskConfig(token, { appKey, appSecret, signKey: signKey || undefined });
+      await saveNetdiskConfig(token, { appKey, appSecret, signKey: signKey || undefined, redirectUri: redirectUri || undefined });
       setMessage('凭证已保存');
       await loadStatus();
     } catch (e: any) {
@@ -139,12 +141,28 @@ export default function NetdiskBinding() {
           </div>
           <div className="nd-form-row">
             <label>SignKey</label>
-            <input type="password" value={signKey} onChange={(e) => setSignKey(e.target.value)} placeholder="可选（计算 sign 用）" />
+            <input type="password" value={signKey} onChange={(e) => setSignKey(e.target.value)} placeholder="可选，仅在后台开启 sign 校验时需要" />
           </div>
-          <button className="nd-btn-primary" onClick={handleSaveConfig} disabled={saving}>
-            {saving ? '保存中...' : '保存凭证'}
-          </button>
+          <div className="nd-form-row">
+            <label>授权回调页</label>
+            <input type="text" value={redirectUri} onChange={(e) => setRedirectUri(e.target.value)} placeholder="留空使用默认 http://localhost:3000/api/netdisk/callback" />
+          </div>
         </div>
+        <div className="nd-callback-notice">
+          <strong>⚠️ 关键：授权前必须完成此步骤</strong>
+          <p>到百度开放平台（pan.baidu.com/union）→ 应用管理 → 安全设置 → <strong>授权回调页</strong>，把下方地址<strong>原样</strong>添加进去（每行一条，必须与之一字不差，含 http:// 和端口）：</p>
+          <div className="nd-callback-box">
+            <code>{status?.redirectUri || 'http://localhost:3000/api/netdisk/callback'}</code>
+            <button type="button" className="btn-sm" onClick={() => {
+              const uri = status?.redirectUri || 'http://localhost:3000/api/netdisk/callback';
+              navigator.clipboard?.writeText(uri).then(() => setMessage('回调地址已复制到剪贴板'));
+            }}>复制</button>
+          </div>
+          <p className="nd-callback-err">配置不一致会导致点击授权时报「redirect_uri_mismatch」。</p>
+        </div>
+        <button className="nd-btn-primary" onClick={handleSaveConfig} disabled={saving}>
+          {saving ? '保存中...' : '保存凭证'}
+        </button>
       </div>
 
       <div className="nd-card">
