@@ -2,9 +2,9 @@
 import { useAuth } from '../contexts/AuthContext';
 import {
   getNetdiskStatus, saveNetdiskConfig, getNetdiskAuthorizeUrl, unbindNetdisk,
-  listNetdiskFiles, createNetdiskShare, downloadNetdiskFile,
 } from '../services/netdisk-api';
-import type { NetdiskConfigStatus, NetdiskFile } from '../services/netdisk-api';
+import type { NetdiskConfigStatus } from '../services/netdisk-api';
+import NetdiskBrowser from '../components/NetdiskBrowser';
 import './NetdiskBinding.css';
 
 export default function NetdiskBinding() {
@@ -172,7 +172,7 @@ export default function NetdiskBinding() {
         ) : status?.bound ? (
           <div className="nd-actions">
             <button className="nd-btn-danger" onClick={handleUnbind}>解除绑定</button>
-            <FileBrowser token={token!} />
+            <NetdiskBrowser token={token!} canImport={false} />
           </div>
         ) : (
           <div>
@@ -181,100 +181,6 @@ export default function NetdiskBinding() {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function FileBrowser({ token }: { token: string }) {
-  const [show, setShow] = useState(false);
-  const [dir, setDir] = useState('/apps/高中学习系统');
-  const [files, setFiles] = useState<NetdiskFile[]>([]);
-  const [selected, setSelected] = useState<Map<number, NetdiskFile>>(new Map());
-  const [busy, setBusy] = useState('');
-
-  const load = useCallback(async (d: string) => {
-    try {
-      const r = await listNetdiskFiles(token, d);
-      setDir(r.dir);
-      setFiles(r.files);
-      setSelected(new Map());
-    } catch (e: any) {
-      alert('加载失败: ' + (e.message || e));
-    }
-  }, [token]);
-
-  const toggleSelect = (f: NetdiskFile) => {
-    const next = new Map(selected);
-    if (next.has(f.fsId)) next.delete(f.fsId);
-    else next.set(f.fsId, f);
-    setSelected(next);
-  };
-
-  const handleShare = async () => {
-    if (selected.size === 0) return;
-    setBusy('正在创建分享...');
-    try {
-      const items = Array.from(selected.values()).map((f) => ({ fsId: Number(f.fsId), path: f.path }));
-      const r = await createNetdiskShare(token, items);
-      const ok = r.results.filter((x) => x.shareUrl).length;
-      alert(`分享完成：成功 ${ok} 个，失败 ${r.results.length - ok} 个`);
-    } finally {
-      setBusy('');
-    }
-  };
-
-  const handleDownload = async () => {
-    if (selected.size === 0) return;
-    setBusy('正在下载（大文件可能需要几分钟）...');
-    try {
-      const items = Array.from(selected.values()).map((f) => ({ fsId: Number(f.fsId), path: f.path }));
-      const r = await downloadNetdiskFile(token, items);
-      const ok = r.results.filter((x) => x.localPath).length;
-      alert(`下载完成：成功 ${ok} 个，失败 ${r.results.length - ok} 个`);
-    } finally {
-      setBusy('');
-    }
-  };
-
-  return (
-    <div className="nd-file-browser">
-      <button className="nd-btn-secondary" onClick={() => { setShow(!show); if (!show) load(dir); }}>
-        {show ? '收起目录浏览' : '📂 浏览网盘目录'}
-      </button>
-      {show && (
-        <div className="nd-browser-panel">
-          <div className="nd-browser-toolbar">
-            <input type="text" value={dir} onChange={(e) => setDir(e.target.value)} />
-            <button onClick={() => load(dir)}>进入</button>
-            <button onClick={() => load(dir.split('/').slice(0, -1).join('/') || '/')} disabled={dir === '/'}>⬆ 上级</button>
-            <span className="nd-selected-count">已选 {selected.size} 项</span>
-            <button onClick={handleShare} disabled={selected.size === 0 || !!busy}>🔗 批量分享</button>
-            <button onClick={handleDownload} disabled={selected.size === 0 || !!busy}>⬇ 批量下载</button>
-          </div>
-          {busy && <div className="nd-busy">{busy}</div>}
-          <table className="nd-file-table">
-            <thead>
-              <tr><th></th><th>文件名</th><th>类型</th><th>大小</th></tr>
-            </thead>
-            <tbody>
-              {files.map((f) => (
-                <tr key={f.fsId}>
-                  <td><input type="checkbox" checked={selected.has(f.fsId)} onChange={() => toggleSelect(f)} /></td>
-                  <td>
-                    {f.isDir === 1 ? (
-                      <a onClick={() => load(f.path)} className="nd-dir-link">📁 {f.filename}</a>
-                    ) : (
-                      <span>📄 {f.filename}</span>
-                    )}
-                  </td>
-                  <td>{f.isDir === 1 ? '目录' : (f.filename.split('.').pop() || '').toLowerCase()}</td>
-                  <td>{f.size ? (f.size / 1024 / 1024).toFixed(1) + ' MB' : '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 }

@@ -104,24 +104,34 @@ export async function deleteResource(token: string, id: number): Promise<{ succe
   return res.json();
 }
 
-export interface ImportResult {
-  success: boolean;
-  total: number;
-  created: number;
-  skipped: number;
-  shared: number;
-  downloaded: number;
-  errors: { path: string; error: string }[];
-  items?: VideoResource[];
+export interface ImportItem {
+  fsId: number | string;
+  path: string;
+  size?: number | string;
 }
 
-export async function importResources(token: string, dir: string, opts: { createShare?: boolean; downloadDocuments?: boolean } = {}): Promise<ImportResult> {
+export interface ImportResult {
+  success: boolean;
+  created: number;
+  skipped: number;
+  shareFailed: number[];
+  downloadFailed: number[];
+  resources: number[];
+}
+
+export async function importResources(
+  token: string,
+  items: ImportItem[],
+  opts: { subjectId?: number | null; grade?: string; chapter?: string; downloadDocuments?: boolean } = {}
+): Promise<ImportResult> {
   const res = await fetch(`${API_BASE}/video-resources/import`, {
     method: 'POST',
     headers: authHeaders(token),
     body: JSON.stringify({
-      dir,
-      createShare: opts.createShare !== false,
+      items,
+      subjectId: opts.subjectId ?? null,
+      grade: opts.grade ?? null,
+      chapter: opts.chapter ?? null,
       downloadDocuments: opts.downloadDocuments !== false,
     }),
   });

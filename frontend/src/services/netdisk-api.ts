@@ -37,9 +37,10 @@ export interface NetdiskConfigInput {
 export interface NetdiskFile {
   fsId: number;
   path: string;
-  filename: string;
+  name?: string; // 后端返回的显示名
+  filename: string; // 规范化：接口返回时由 name 兜底填充
   isDir: number;
-  size?: number;
+  size?: number | string;
   mtime?: number;
 }
 
@@ -95,6 +96,10 @@ export async function listNetdiskFiles(token: string, dir?: string): Promise<Net
   const res = await fetch(`${API_BASE}/netdisk/files${qs}`, { headers: authHeaders(token) });
   const d = await res.json();
   if (!res.ok) throw new Error(d.error || '获取目录失败');
+  // 规范化：filename 兜底用 name（后端返回 name 字段）
+  if (Array.isArray(d.files)) {
+    d.files = d.files.map((f: any) => ({ ...f, filename: f.filename || f.name || f.path?.split('/').pop() || '' }));
+  }
   return d;
 }
 
