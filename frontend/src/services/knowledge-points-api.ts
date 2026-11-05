@@ -16,15 +16,6 @@ export interface KnowledgePoint {
   children?: KnowledgePoint[];
 }
 
-export interface KnowledgePointRelation {
-  id: number;
-  sourceId: number;
-  targetId: number;
-  relationType: 'prerequisite' | 'related';
-  source?: KnowledgePoint;
-  target?: KnowledgePoint;
-}
-
 /**
  * Get all knowledge points
  */
@@ -107,32 +98,4 @@ export async function deleteKnowledgePoint(
 export async function getAncestors(id: number): Promise<KnowledgePoint[]> {
   const response = await fetch(`${API_BASE}/knowledge-points/${id}/ancestors`);
   return response.json();
-}
-
-/**
- * Create a relation between knowledge points
- */
-export async function createRelation(
-  sourceId: number,
-  targetId: number,
-  relationType: 'prerequisite' | 'related'
-): Promise<KnowledgePointRelation> {
-  const response = await fetch(`${API_BASE}/knowledge-points/${sourceId}/relations`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ targetId, relationType }),
-  });
-  return response.json();
-}
-
-/**
- * Delete a relation
- */
-export async function deleteRelation(
-  sourceId: number,
-  relationId: number
-): Promise<void> {
-  await fetch(`${API_BASE}/knowledge-points/${sourceId}/relations/${relationId}`, {
-    method: 'DELETE',
-  });
 }
