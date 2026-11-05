@@ -20,21 +20,22 @@ router.get('/status', requireAuth, requireAdmin, async (_req, res) => {
 // PUT /api/netdisk/config (admin)
 router.put('/config', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { appKey, appSecret, signKey } = req.body ?? {};
+    const { appKey, appSecret, signKey, redirectUri } = req.body ?? {};
     if (!appKey || !appSecret) return res.status(400).json({ error: 'AppKey/AppSecret 必填' });
-    const row = await netdisk.saveConfig(String(appKey), String(appSecret), signKey ? String(signKey) : null);
+    const clean = redirectUri && String(redirectUri).trim() ? String(redirectUri).trim() : null;
+    const row = await netdisk.saveConfig(String(appKey), String(appSecret), signKey ? String(signKey) : null, clean);
     res.json({ success: true, status: row.status });
   } catch (e: unknown) { res.status(500).json({ error: (e as Error).message }); }
 });
 
 // GET /api/netdisk/authorize-url (admin)
-router.get('/authorize-url', requireAuth, requireAdmin, async (req, res) => {
+router.get('/authorize-url', requireAuth, requireAdmin, async (_req, res) => {
   try {
-    const redirectUri = (req.query.redirect_uri as string) || `${req.protocol}://${req.get('host')}/api/netdisk/callback`;
+    const redirectUri = await netdisk.getEffectiveRedirectUri();
     const cfg = await netdisk.getConfig();
     if (!cfg) return res.status(400).json({ error: '请先配置应用凭证' });
     const url = netdisk.buildAuthorizeUrl(redirectUri).replace('{appKey}', cfg.appKey);
-    res.json({ authorizeUrl: url });
+    res.json({ authorizeUrl: url, redirectUri });
   } catch (e: unknown) { res.status(500).json({ error: (e as Error).message }); }
 });
 
@@ -44,7 +45,7 @@ router.get('/callback', async (req, res) => {
     const { code, error } = req.query as { code?: string; error?: string };
     if (error) return res.status(400).json({ error: `授权失败: ${error}` });
     if (!code) return res.status(400).json({ error: '缺少 code 参数' });
-    const redirectUri = `${req.protocol}://${req.get('host')}/api/netdisk/callback`;
+    const redirectUri = await netdisk.getEffectiveRedirectUri();
     const result = await netdisk.handleCallback(code, redirectUri);
     res.json({ ...result });
   } catch (e: unknown) { res.status(toStatusCode(e)).json({ error: (e as Error).message }); }

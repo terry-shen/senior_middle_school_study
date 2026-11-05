@@ -585,6 +585,7 @@ model NetdiskConfig {
   refreshToken  String?   @map("refresh_token")
   tokenExpireAt DateTime? @map("token_expire_at")
   netdiskUk     String?   @map("netdisk_uk")
+  redirectUri   String?   @map("redirect_uri") // 授权回调页，必须与百度开放平台安全设置登记完全一致；空则用默认 http://localhost:3000/api/netdisk/callback
   status        String    @default("unconfigured") // unconfigured | unbound | bound | expired
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")

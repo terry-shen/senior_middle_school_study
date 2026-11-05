@@ -18,6 +18,7 @@ export interface NetdiskConfigRow {
   refreshToken: string | null;
   tokenExpireAt: Date | null;
   netdiskUk: string | null;
+  redirectUri: string | null;
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -48,11 +49,18 @@ export async function getConfig(): Promise<NetdiskConfigRow | null> {
   return prisma.netdiskConfig.findUnique({ where: { id: CONF_ID } }) as Promise<NetdiskConfigRow | null>;
 }
 
-export async function saveConfig(appKey: string, appSecret: string, signKey?: string | null) {
+export const DEFAULT_REDIRECT_URI = 'http://localhost:3000/api/netdisk/callback';
+
+export async function getEffectiveRedirectUri(): Promise<string> {
+  const c = await getConfig();
+  return (c?.redirectUri && c.redirectUri.trim()) || DEFAULT_REDIRECT_URI;
+}
+
+export async function saveConfig(appKey: string, appSecret: string, signKey?: string | null, redirectUri?: string | null) {
   return prisma.netdiskConfig.upsert({
     where: { id: CONF_ID },
-    update: { appKey, appSecret, signKey: signKey ?? null, accessToken: null, refreshToken: null, tokenExpireAt: null, netdiskUk: null, status: 'unbound' },
-    create: { id: CONF_ID, appKey, appSecret, signKey: signKey ?? null, status: 'unbound' },
+    update: { appKey, appSecret, signKey: signKey ?? null, redirectUri: redirectUri ?? null, accessToken: null, refreshToken: null, tokenExpireAt: null, netdiskUk: null, status: 'unbound' },
+    create: { id: CONF_ID, appKey, appSecret, signKey: signKey ?? null, redirectUri: redirectUri ?? null, status: 'unbound' },
   });
 }
 
@@ -67,6 +75,7 @@ export async function getStatus() {
     appKey: c?.appKey ?? null,
     appSecret: c?.appSecret ?? null,
     signKey: c?.signKey ?? null,
+    redirectUri: (c?.redirectUri && c.redirectUri.trim()) || DEFAULT_REDIRECT_URI,
     netdiskUk: c?.netdiskUk ?? null,
     tokenExpireAt: c?.tokenExpireAt ?? null,
     accessTokenPreview: c?.accessToken ? `${c.accessToken.slice(0, 8)}...(${c.accessToken.length}字符)` : null,
