@@ -22,6 +22,10 @@ export default function NetdiskBinding() {
     try {
       const s = await getNetdiskStatus(token);
       setStatus(s);
+      // 回填已保存凭证（admin-only 接口返回明文，便于查看/修改）
+      if (s.appKey) setAppKey(s.appKey);
+      if (s.appSecret) setAppSecret(s.appSecret);
+      if (s.signKey) setSignKey(s.signKey);
     } catch (e: any) {
       setMessage('加载状态失败: ' + (e.message || e));
     } finally {
@@ -87,7 +91,7 @@ export default function NetdiskBinding() {
 
   const statusLabel: Record<string, string> = {
     unconfigured: '未配置凭证',
-    unbound: '未绑定账号',
+    unbound: '凭证已保存 · 待授权',
     bound: '已绑定',
     expired: 'Token 已过期',
     error: '连接异常',
@@ -123,7 +127,7 @@ export default function NetdiskBinding() {
 
       <div className="nd-card">
         <h2>应用凭证</h2>
-        <p className="nd-hint">在百度网盘开放平台（pan.baidu.com/union）创建「个人使用」应用后，将 AppKey / SecretKey / SignKey 填入：</p>
+        <p className="nd-hint">在百度网盘开放平台（pan.baidu.com/union）创建「个人使用」应用后，将 AppKey / SecretKey / SignKey 填入并保存（保存后刷新页面会自动回填）：</p>
         <div className="nd-form">
           <div className="nd-form-row">
             <label>AppKey</label>

@@ -58,8 +58,21 @@ export async function saveConfig(appKey: string, appSecret: string, signKey?: st
 
 export async function getStatus() {
   const c = await getConfig();
-  if (!c) return { status: 'unconfigured', appKey: null, netdiskUk: null, netdiskName: null };
-  return { status: c.status, appKey: c.appKey, netdiskUk: c.netdiskUk };
+  const base = {
+    configured: !!c,
+    bound: c?.status === 'bound',
+    hasAppKey: !!c?.appKey,
+    hasAppSecret: !!c?.appSecret,
+    hasSignKey: !!c?.signKey,
+    appKey: c?.appKey ?? null,
+    appSecret: c?.appSecret ?? null,
+    signKey: c?.signKey ?? null,
+    netdiskUk: c?.netdiskUk ?? null,
+    tokenExpireAt: c?.tokenExpireAt ?? null,
+    accessTokenPreview: c?.accessToken ? `${c.accessToken.slice(0, 8)}...(${c.accessToken.length}字符)` : null,
+  };
+  if (!c) return { status: 'unconfigured' as const, ...base };
+  return { status: c.status as 'unbound' | 'bound' | 'expired' | 'error', ...base };
 }
 
 export async function unbind() {

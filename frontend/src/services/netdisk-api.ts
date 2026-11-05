@@ -12,16 +12,20 @@ function authHeaders(token: string) {
 }
 
 export interface NetdiskConfigStatus {
-  configured: boolean;
-  bound: boolean;
-  hasAppKey: boolean;
-  hasSignKey: boolean;
-  accessTokenPreview?: string;
-  netdiskUk?: number;
-  tokenExpireAt?: string;
-  status?: 'unconfigured' | 'unbound' | 'bound' | 'expired' | 'error';
-  lastError?: string;
-}
+    status?: 'unconfigured' | 'unbound' | 'bound' | 'expired' | 'error';
+    configured: boolean;
+    bound: boolean;
+    hasAppKey: boolean;
+    hasAppSecret?: boolean;
+    hasSignKey: boolean;
+    appKey?: string | null;
+    appSecret?: string | null;
+    signKey?: string | null;
+    accessTokenPreview?: string | null;
+    netdiskUk?: number | null;
+    tokenExpireAt?: string | null;
+    lastError?: string;
+  }
 
 export interface NetdiskConfigInput {
   appKey: string;

@@ -11,7 +11,8 @@ function toStatusCode(e: unknown): number {
 }
 
 // GET /api/netdisk/status
-router.get('/status', requireAuth, async (_req, res) => {
+// GET /api/netdisk/status (admin — 返回完整凭证用于表单回填)
+router.get('/status', requireAuth, requireAdmin, async (_req, res) => {
   try { res.json(await netdisk.getStatus()); }
   catch (e: unknown) { res.status(toStatusCode(e)).json({ error: (e as Error).message }); }
 });
