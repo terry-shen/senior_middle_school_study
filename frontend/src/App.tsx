@@ -38,6 +38,9 @@ const LearningIncentive = lazy(() => import('./pages/LearningIncentive'));
   const AnswerSheetsList = lazy(() => import('./pages/AnswerSheetsList'));
   const AnswerSheetDetail = lazy(() => import('./pages/AnswerSheetDetail'));
   const SubjectManagement = lazy(() => import('./pages/SubjectManagement'));
+const NetdiskBinding = lazy(() => import('./pages/NetdiskBinding'));
+const VideoLibrary = lazy(() => import('./pages/VideoLibrary'));
+const VideoManagement = lazy(() => import('./pages/VideoManagement'));
 
 function AppRoutes() {
   return (
@@ -213,6 +216,30 @@ function AppRoutes() {
         element={
           <ProtectedRoute requireAdmin>
             <SubjectManagement />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings/netdisk"
+        element={
+          <ProtectedRoute requireAdmin>
+            <NetdiskBinding />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/resources"
+        element={
+          <ProtectedRoute>
+            <VideoLibrary />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/resources/manage"
+        element={
+          <ProtectedRoute requireAdmin>
+            <VideoManagement />
           </ProtectedRoute>
         }
       />

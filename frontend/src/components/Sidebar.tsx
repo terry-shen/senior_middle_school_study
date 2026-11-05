@@ -51,6 +51,7 @@ const adminGroups: NavGroup[] = [
     title: '考试管理',
     items: [
       { to: '/mock-exams', label: '模拟考试', icon: '🎯' },
+  { to: '/resources', label: '学习资源', icon: '📺' },
       { to: '/online-exams', label: '在线测验', icon: '🌐' },
       { to: '/grading', label: 'AI批改', icon: '✏️' },
       { to: '/answer-sheets', label: '答题纸阅卷', icon: '📝' },
@@ -60,6 +61,8 @@ const adminGroups: NavGroup[] = [
     title: '系统设置',
     items: [
       { to: '/subjects', label: '学科管理', icon: '🗂️' },
+      { to: '/settings/netdisk', label: '网盘绑定', icon: '☁️' },
+      { to: '/resources/manage', label: '资源管理', icon: '🎛️' },
       { to: '/models', label: '模型管理', icon: '⚙️' },
     ],
   },
