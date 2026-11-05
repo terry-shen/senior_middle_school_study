@@ -108,7 +108,7 @@ router.post('/:id/publish', requireAuth, requireAdmin, async (req: Request, res:
     const session = await ExamSessionService.publishExamSession(id, req.body ?? {});
     res.json({ success: true, examSession: session });
   } catch (e: any) {
-    res.status(400).json({ error: e.message });
+    res.status(e.statusCode || 400).json({ error: e.message });
   }
 });
 
@@ -188,7 +188,7 @@ router.post('/:id/start', requireAuth, async (req: Request, res: Response) => {
     const result = await ExamSessionService.startExamSession(id, (req as any).user.id);
     res.json(result);
   } catch (e: any) {
-    res.status(400).json({ error: e.message });
+    res.status(e.statusCode || 400).json({ error: e.message });
   }
 });
 

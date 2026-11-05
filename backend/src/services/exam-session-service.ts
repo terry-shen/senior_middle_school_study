@@ -110,28 +110,50 @@ export async function publishExamSession(id: number, data: PublishData = {}) {
   const startTime = toDateTime(data.startTime, 'startTime');
   const endTime = toDateTime(data.endTime, 'endTime');
 
-  // 未指定学生 → 分配全部学生
-  let studentIds = data.studentIds;
-  if (!studentIds || studentIds.length === 0) {
-    if (data.classIds && data.classIds.length > 0) {
-      const students = await prisma.student.findMany({
-        where: { classId: { in: data.classIds }, role: 'student' },
-        select: { id: true },
-      });
-      studentIds = students.map((s) => s.id);
-    } else {
-      const students = await prisma.student.findMany({
-        where: { role: 'student' },
-        select: { id: true },
-      });
-      studentIds = students.map((s) => s.id);
+  // 必须指定班级或学生
+  if ((!data.studentIds || data.studentIds.length === 0) && (!data.classIds || data.classIds.length === 0)) {
+    const err = new Error('请选择参考班级或学生');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  // 展开班级为学生
+  let studentIds = data.studentIds || [];
+  let studentClassMap: Record<number, number | null> = {};
+  if (data.classIds && data.classIds.length > 0) {
+    const students = await prisma.student.findMany({
+      where: { classId: { in: data.classIds }, role: 'student' },
+      select: { id: true, classId: true },
+    });
+    for (const s of students) {
+      if (!studentIds.includes(s.id)) studentIds.push(s.id);
+      studentClassMap[s.id] = s.classId;
+    }
+  }
+  // 对于直接指定的学生，补充其班级信息
+  if (data.studentIds && data.studentIds.length > 0) {
+    const directStudents = await prisma.student.findMany({
+      where: { id: { in: data.studentIds } },
+      select: { id: true, classId: true },
+    });
+    for (const s of directStudents) {
+      if (!(s.id in studentClassMap)) studentClassMap[s.id] = s.classId;
     }
   }
 
-  // 为每个学生创建空的 ExamSubmission（在线模式）
   const session = await prisma.examSession.findUnique({ where: { id } });
   if (!session) throw new Error('Exam session not found');
 
+  // 创建分配记录
+  for (const sid of studentIds) {
+    await prisma.examSessionAssignment.upsert({
+      where: { examSessionId_studentId: { examSessionId: id, studentId: sid } },
+      create: { examSessionId: id, studentId: sid, classId: studentClassMap[sid] || null },
+      update: {},
+    });
+  }
+
+  // 在线模式：为每个学生创建空的 ExamSubmission
   if (session.mode === 'online') {
     for (const sid of studentIds) {
       await prisma.examSubmission.upsert({
@@ -161,6 +183,16 @@ export async function startExamSession(id: number, studentId: number) {
   if (!session) throw new Error('考试会话不存在');
   if (session.status !== 'published' && session.status !== 'ongoing') {
     throw new Error(`考试当前状态为 ${session.status}，无法开始`);
+  }
+
+  // 校验学生是否被分配该考试
+  const assignment = await prisma.examSessionAssignment.findUnique({
+    where: { examSessionId_studentId: { examSessionId: id, studentId } },
+  });
+  if (!assignment) {
+    const err = new Error('未分配该考试');
+    (err as any).statusCode = 403;
+    throw err;
   }
 
   // 更新考试状态为 ongoing
@@ -325,16 +357,19 @@ export async function listExamSessionsForStudent(studentId: number, subjectId?: 
     include: {
       paper: { select: { id: true, title: true, pdfUrl: true, purpose: true, subject: { select: { id: true, name: true } }, school: true } },
       submissions: { where: { studentId } },
+      assignments: { where: { studentId } },
     },
   });
 
-  // 附加学生作答状态
-  return sessions.map((s) => ({
-    ...s,
-    studentSubmission: s.submissions[0] || null,
-    studentScore: s.submissions[0]?.totalScore ?? null,
-    answered: !!s.submissions[0],
-  }));
+  // 只保留有分配的考试，附加学生作答状态
+  return sessions
+    .filter((s) => s.assignments.length > 0)
+    .map((s) => ({
+      ...s,
+      studentSubmission: s.submissions[0] || null,
+      studentScore: s.submissions[0]?.totalScore ?? null,
+      answered: !!s.submissions[0],
+    }));
 }
 
 /**
