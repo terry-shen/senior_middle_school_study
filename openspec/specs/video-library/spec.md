@@ -5,6 +5,7 @@
 学习资源库统一收录视频教学与教辅文档两类内容：视频经网盘分享链接跳转播放，教辅下载到本地后系统内在线查看/下载，支持从网盘目录批量导入清单并按学科/年级/章节分类，学生端全科可见。
 
 ## Requirements
+
 ### Requirement: 资源目录管理
 
 系统 SHALL 提供教学资源目录（VideoResource 表），字段含 title/subjectId/grade/chapter/resourceType(video|document)/netdiskPath/fsId/shareUrl/fileUrl/fileSize/duration/sort/isActive，管理端支持增删改查、上架/下架、排序调整。
@@ -93,3 +94,32 @@ document 类资源 SHALL 支持：PDF 在系统内 iframe 在线查看；所有 
 
 - GIVEN 学生点击视频播放
 - THEN 该资源 playCount +1（同一学生 5 分钟内重复点击只计 1 次）
+
+### Requirement: 视频资源章节维度
+
+视频资源 SHALL 支持归属到教材章节（Section），并在章节详情页按章节取用；播放仍通过网盘流式代理，不把视频文件保存到本地。
+
+#### Scenario: 资源挂章节
+- **WHEN** 管理员在资源管理中为某视频或讲义设置章节
+- **THEN** 资源 `sectionId` 写入该节 id
+- **AND** 资源列表显示所属章节
+
+#### Scenario: 章节页取视频
+- **WHEN** 学生打开某节详情页
+- **THEN** 「视频」分组返回该节下 `isActive=true` 且已确认的视频资源
+- **AND** 视频按 `sort` 升序排列
+
+#### Scenario: 按章节筛选资源
+- **WHEN** 管理员在资源管理中按章节筛选
+- **THEN** 只返回所选节的资源
+- **AND** 支持叠加视频/教辅类型与上下架状态筛选
+
+#### Scenario: 播放不落本地
+- **WHEN** 学生播放某视频资源
+- **THEN** 播放器通过网盘流式接口按需拉取内容
+- **AND** 系统不把视频文件完整下载到服务器磁盘
+
+#### Scenario: 旧资源兼容
+- **WHEN** 历史视频资源 `sectionId` 为空
+- **THEN** 仍可在「学习资源」中通过网盘目录浏览访问
+- **AND** 不出现在任何章节的默认资源列表

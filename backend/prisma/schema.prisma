@@ -87,6 +87,7 @@ model Student {
   examTemplates ExamTemplate[]
   examSessions  ExamSession[]
   examSubmissions ExamSubmission[]
+  learningProgress StudentLearningProgress?
   examSessionAssignments ExamSessionAssignment[]
   studentWrongQuestions StudentWrongQuestion[]
   answerSheets  AnswerSheet[]
@@ -270,6 +271,7 @@ model Subject {
   wrongQuestions StudentWrongQuestion[]
   knowledgePoints KnowledgePoint[]
   videoResources VideoResource[]
+  textbooks      Textbook[]
 
   @@map("subjects")
 }
@@ -422,6 +424,7 @@ model ExamPaper {
   sourceFormat String? @map("source_format") // pdf | image | word | txt
   purpose     String   @default("question_source") // whole_paper | question_source
   subjectId   Int?     @map("subject_id") // 学科外键
+  sectionId   Int?     @map("section_id") // 章节维度（M5 闭环挂载）
   school      String?  // 学校（自由文本）
   pageImages  String?  @map("page_images") // JSON array of page image URLs
   parsedMarkdown String? @map("parsed_markdown") // MinerU parsed Markdown with LaTeX formulas
@@ -432,8 +435,10 @@ model ExamPaper {
   enrichmentProposals EnrichmentProposal[]
   examSessions ExamSession[] @relation("ExamPaperExamSessions")
   subject      Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  section      Section? @relation("SectionPapers", fields: [sectionId], references: [id], onDelete: SetNull)
 
   @@index([year])
+  @@index([sectionId])
   @@index([region])
   @@index([examType])
   @@index([status])
@@ -557,6 +562,7 @@ model StudentWrongQuestion {
   knowledgePointTags String? @map("knowledge_point_tags") // 自由文本逗号分隔
   notes             String? // 学生笔记
   subjectId         Int?    @map("subject_id") // 学科维度
+  sectionId         Int?    @map("section_id") // 章节维度（错题聚合）
   reviewStatus      String  @default("new") @map("review_status") // new/reviewing/mastered
   wrongCount        Int     @default(1) @map("wrong_count")
   createdAt         DateTime @default(now()) @map("created_at")
@@ -565,8 +571,10 @@ model StudentWrongQuestion {
 
   student           Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   subject           Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  section           Section? @relation("SectionWrongQuestions", fields: [sectionId], references: [id], onDelete: SetNull)
 
   @@index([studentId, reviewStatus])
+  @@index([sectionId])
   @@index([studentId, questionType])
   @@index([studentId, difficulty])
   @@index([studentId, createdAt])
@@ -598,6 +606,7 @@ model VideoResource {
   id            Int       @id @default(autoincrement())
   title         String
   subjectId     Int?      @map("subject_id")
+  sectionId     Int?      @map("section_id") // 章节维度（视频/教辅）
   grade         String?
   chapter       String?
   resourceType  String    @default("video") @map("resource_type") // video | document
@@ -617,8 +626,131 @@ model VideoResource {
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
   subject Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  section Section? @relation("SectionVideoResources", fields: [sectionId], references: [id], onDelete: SetNull)
 
   @@index([subjectId])
+  @@index([sectionId])
   @@index([resourceType, isActive])
   @@map("video_resources")
+}
+
+// ===== Chapter Taxonomy: 教材 -> 章 -> 节 =====
+model Textbook {
+  id        Int      @id @default(autoincrement())
+  subjectId Int      @map("subject_id")
+  name      String   // 必修第一册 / 必修第二册 / 选择性必修第一册 ...
+  edition   String   @default("人教A")
+  grade     String?  // 高一上 / 高一下 / 高二上 ...
+  order     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subject  Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  chapters Chapter[]
+
+  @@unique([subjectId, edition, name])
+  @@index([subjectId, order])
+  @@map("textbooks")
+}
+
+model Chapter {
+  id         Int      @id @default(autoincrement())
+  textbookId Int      @map("textbook_id")
+  order      Int      @default(0)
+  title      String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  textbook Textbook  @relation(fields: [textbookId], references: [id], onDelete: Cascade)
+  sections Section[]
+
+  @@unique([textbookId, order])
+  @@index([textbookId, order])
+  @@map("chapters")
+}
+
+model Section {
+  id        Int      @id @default(autoincrement())
+  chapterId Int      @map("chapter_id")
+  order     Int      @default(0)
+  title     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  chapter Chapter   @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  papers         ExamPaper[]           @relation("SectionPapers")
+  videoResources VideoResource[]       @relation("SectionVideoResources")
+  wrongQuestions StudentWrongQuestion[] @relation("SectionWrongQuestions")
+  netdiskAssets  NetdiskAsset[]        @relation("SectionNetdiskAssets")
+  learningProgress StudentLearningProgress[] @relation("SectionLearningProgress")
+
+  @@unique([chapterId, order])
+  @@index([chapterId, order])
+  @@map("sections")
+}
+
+// ===== 网盘资源索引（M3）=====
+model NetdiskAsset {
+  id                Int       @id @default(autoincrement())
+  fsId              BigInt?   @map("fs_id")
+  path              String    @unique
+  name              String
+  ext               String?
+  size              BigInt?
+  mtime             DateTime?
+  assetKind         String    @default("other") @map("asset_kind") // lecture|ppt|answer|practice|exam|plan|audio|video|image|junk|other
+  audience          String    @default("both")   // student|teacher|both
+  year              Int?
+  region            String?
+  series            String?
+  sectionId         Int?      @map("section_id")
+  mapSource         String    @default("none") @map("map_source") // auto|manual|none
+  mapConfirmed      Boolean   @default(false) @map("map_confirmed")
+  isPinned          Boolean   @default(false) @map("is_pinned")
+  status            String    @default("active") // active|archive|ignored
+  candidateSections String?   @map("candidate_sections") // JSON [{sectionId, title, score}]
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  section Section? @relation("SectionNetdiskAssets", fields: [sectionId], references: [id], onDelete: SetNull)
+  learningProgress StudentLearningProgress[] @relation("AssetLearningProgress")
+
+  @@index([sectionId])
+  @@index([assetKind])
+  @@index([audience])
+  @@index([status])
+  @@index([mapConfirmed])
+  @@map("netdisk_assets")
+}
+
+// ===== 网盘扫描状态（单行，用于断点续扫）=====
+model NetdiskScanState {
+  id          Int      @id @default(1)
+  status      String   @default("idle") // idle|running|paused|done|error
+  queue       String   @default("[]")   // JSON: 待扫描目录列表
+  currentDir  String?  @map("current_dir")
+  scannedDirs Int      @default(0) @map("scanned_dirs")
+  totalFiles  Int      @default(0) @map("total_files")
+  lastError   String?  @map("last_error")
+  startedAt   DateTime? @map("started_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("netdisk_scan_state")
+}
+
+// ===== 学生学习进度（M4：最近学习的节与资源）=====
+model StudentLearningProgress {
+  id        Int      @id @default(autoincrement())
+  studentId Int      @unique @map("student_id")
+  sectionId Int      @map("section_id")
+  assetId   Int?     @map("asset_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  student Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  section Section       @relation("SectionLearningProgress", fields: [sectionId], references: [id], onDelete: Cascade)
+  asset   NetdiskAsset? @relation("AssetLearningProgress", fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([sectionId])
+  @@map("student_learning_progress")
 }

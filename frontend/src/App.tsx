@@ -16,18 +16,16 @@ import Workbench from './pages/Workbench';
 const ModelManagement = lazy(() => import('./components/ModelManagement'));
 const StudentManagement = lazy(() => import('./pages/StudentManagement'));
 const AdminWrongQuestionView = lazy(() => import('./pages/AdminWrongQuestionView'));
-const KnowledgePointManagement = lazy(() => import('./pages/KnowledgePointManagement'));
-const KnowledgePointImport = lazy(() => import('./pages/KnowledgePointImport'));
 const PaperLibrary = lazy(() => import('./pages/PaperLibrary'));
+const ChapterManagement = lazy(() => import('./pages/ChapterManagement'));
+const ChapterMap = lazy(() => import('./pages/ChapterMap'));
+const ChapterDetail = lazy(() => import('./pages/ChapterDetail'));
+const NetdiskMapping = lazy(() => import('./pages/NetdiskMapping'));
 const PaperViewer = lazy(() => import('./pages/PaperViewer'));
 const QuestionBank = lazy(() => import('./pages/QuestionBank'));
 const PaperEdit = lazy(() => import('./pages/PaperEdit'));
 const SplitPreview = lazy(() => import('./pages/SplitPreview'));
 const QuestionList = lazy(() => import('./pages/QuestionList'));
-const KPEdit = lazy(() => import('./pages/KPEdit'));
-const DifficultyManagement = lazy(() => import('./pages/DifficultyManagement'));
-const OnlineExamManagement = lazy(() => import('./pages/OnlineExamManagement'));
-const TakeExam = lazy(() => import('./pages/TakeExam'));
 const GradingReview = lazy(() => import('./pages/GradingReview'));
 const WrongQuestionBook = lazy(() => import('./pages/WrongQuestionBook'));
 const WrongQuestionEdit = lazy(() => import('./pages/WrongQuestionEdit'));
@@ -80,30 +78,6 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/knowledge-points"
-        element={
-          <ProtectedRoute>
-            <KnowledgePointManagement />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/knowledge-points/import"
-        element={
-          <ProtectedRoute requireAdmin>
-            <KnowledgePointImport />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/knowledge-points/:id/edit"
-        element={
-          <ProtectedRoute>
-            <KPEdit />
-          </ProtectedRoute>
-        }
-      />
-      <Route
         path="/paper-library"
         element={
           <ProtectedRoute>
@@ -116,6 +90,38 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <PaperViewer />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/chapters"
+        element={
+          <ProtectedRoute requireAdmin>
+            <ChapterManagement />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/learning"
+        element={
+          <ProtectedRoute>
+            <ChapterMap />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/learning/section/:id"
+        element={
+          <ProtectedRoute>
+            <ChapterDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/netdisk-index"
+        element={
+          <ProtectedRoute requireAdmin>
+            <NetdiskMapping />
           </ProtectedRoute>
         }
       />
@@ -160,32 +166,16 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/difficulty"
-        element={
-          <ProtectedRoute requireAdmin>
-            <DifficultyManagement />
-          </ProtectedRoute>
-        }
-      />
-      <Route
         path="/exams"
         element={<Navigate to="/mock-exams" replace />}
       />
       <Route
         path="/online-exams"
-        element={
-          <ProtectedRoute>
-            <OnlineExamManagement />
-          </ProtectedRoute>
-        }
+        element={<Navigate to="/mock-exams" replace />}
       />
       <Route
         path="/take-exam/:examId"
-        element={
-          <ProtectedRoute>
-            <TakeExam />
-          </ProtectedRoute>
-        }
+        element={<Navigate to="/mock-exams" replace />}
       />
       <Route
         path="/grading"

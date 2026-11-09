@@ -26,6 +26,7 @@ router.post('/', requireAuth, requireAdmin, async (req: Request, res: Response) 
       source: body.source,
       content: body.questionIds ? JSON.stringify(body.questionIds) : body.content,
       paperId: body.paperId ? parseInt(String(body.paperId)) : undefined,
+      subjectId: body.subjectId ? parseInt(String(body.subjectId)) : undefined,
       totalScore: body.totalScore ? Number(body.totalScore) : undefined,
       duration: body.duration ? parseInt(String(body.duration)) : undefined,
       startTime: body.startTime ?? null,

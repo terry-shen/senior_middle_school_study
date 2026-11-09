@@ -55,6 +55,12 @@ function toDateTime(value: any, _field: string): Date | undefined {
  * 创建考试会话
  */
 export async function createExamSession(data: CreateExamSessionData) {
+  // M5 / 6.3：v2 只保留整卷考试，在线逐题作答路径停用
+  if (data.mode !== 'whole_paper') {
+    const err = new Error('v2 仅支持整卷考试（mode=whole_paper），在线逐题测验已停用');
+    (err as any).statusCode = 400;
+    throw err;
+  }
   const source = data.source || (data.mode === 'whole_paper' ? 'library' : 'manual');
 
   // 自动组卷模式：从题库选题
@@ -68,12 +74,17 @@ export async function createExamSession(data: CreateExamSessionData) {
     totalScore = data.totalScore || selected.reduce((sum: number, q: any) => sum + (q.score || 5), 0);
   }
 
+  // 学科：未显式指定时，整卷模式继承试卷所属学科（否则学生端按学科过滤看不到）
+  let subjectId = data.subjectId || null;
+
   if (data.mode === 'whole_paper' && data.paperId) {
     content = '[]'; // 整卷模式 content 为空
-    if (!totalScore) {
-      const paper = await prisma.examPaper.findUnique({ where: { id: data.paperId }, select: { totalScore: true } });
-      totalScore = paper?.totalScore || 100;
-    }
+    const paper = await prisma.examPaper.findUnique({
+      where: { id: data.paperId },
+      select: { totalScore: true, subjectId: true },
+    });
+    if (!totalScore) totalScore = paper?.totalScore || 100;
+    if (!subjectId) subjectId = paper?.subjectId || null;
   }
 
   return prisma.examSession.create({
@@ -83,7 +94,7 @@ export async function createExamSession(data: CreateExamSessionData) {
       source,
       content,
       paperId: data.paperId || null,
-      subjectId: data.subjectId || null,
+      subjectId,
       totalScore,
       duration: data.duration || 120,
       startTime: toDateTime(data.startTime, 'startTime'),
@@ -351,6 +362,7 @@ export async function listExamSessionsForStudent(studentId: number, subjectId?: 
   const sessions = await prisma.examSession.findMany({
     where: {
       status: { in: ['published', 'ongoing', 'graded'] },
+      mode: 'whole_paper',
       ...(subjectId ? { subjectId } : {}),
     },
     orderBy: { createdAt: 'desc' },

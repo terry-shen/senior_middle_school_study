@@ -297,3 +297,27 @@ export async function getStudentMasteryOverviewForAdmin(
   );
   return response.json();
 }
+
+// ===== 章节聚合视图（M5 / 6.6） =====
+
+export interface GroupedWrongQuestionSection {
+  sectionId: number | null;
+  textbookName: string | null;
+  chapterTitle: string | null;
+  sectionTitle: string | null;
+  label: string;
+  count: number;
+  weakCount: number;
+  items: StudentWrongQuestion[];
+}
+
+export async function getWrongQuestionsGrouped(
+  token: string,
+  opts: { includeMastered?: boolean } = {}
+): Promise<{ success: boolean; total: number; groups: GroupedWrongQuestionSection[] }> {
+  const url = withSubjectParam(
+    `${API_BASE}/wrong-questions/grouped?includeMastered=${opts.includeMastered ? 'true' : 'false'}`
+  );
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  return response.json();
+}

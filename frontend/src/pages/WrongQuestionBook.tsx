@@ -20,9 +20,11 @@ import {
   createPhotoWrongQuestion,
   normalizeImageUrl,
   parseOptions,
+  getWrongQuestionsGrouped,
   type StudentWrongQuestion,
   type MasteryOverview,
   type ViewMode,
+  type GroupedWrongQuestionSection,
 } from '../services/wrong-questions-api';
 import './WrongQuestionBook.css';
 
@@ -66,6 +68,27 @@ export default function WrongQuestionBook() {
   const [filterTag, setFilterTag] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [showGrouped, setShowGrouped] = useState(false);
+  const [grouped, setGrouped] = useState<GroupedWrongQuestionSection[]>([]);
+  const [groupedLoading, setGroupedLoading] = useState(false);
+
+  const loadGrouped = async (includeMastered = false) => {
+    if (!token) return;
+    setGroupedLoading(true);
+    try {
+      const res = await getWrongQuestionsGrouped(token, { includeMastered });
+      setGrouped(res.groups || []);
+    } catch (e: any) {
+      showToast('error', e.message || '章节聚合加载失败');
+    } finally {
+      setGroupedLoading(false);
+    }
+  };
+
+  const openGrouped = () => {
+    setShowGrouped(true);
+    loadGrouped(viewMode === 'all');
+  };
 
   const loadData = async () => {
     if (!token) return;
@@ -241,16 +264,22 @@ export default function WrongQuestionBook() {
       <section className="wq-filters">
         <div className="view-tabs">
           <button
-            className={viewMode === 'unmastered' ? 'tab active' : 'tab'}
-            onClick={() => setViewMode('unmastered')}
+            className={viewMode === 'unmastered' && !showGrouped ? 'tab active' : 'tab'}
+            onClick={() => { setShowGrouped(false); setViewMode('unmastered'); }}
           >
             未掌握 ({unmasteredCount})
           </button>
           <button
-            className={viewMode === 'all' ? 'tab active' : 'tab'}
-            onClick={() => setViewMode('all')}
+            className={viewMode === 'all' && !showGrouped ? 'tab active' : 'tab'}
+            onClick={() => { setShowGrouped(false); setViewMode('all'); }}
           >
             全部 ({overview?.overall.total ?? 0})
+          </button>
+          <button
+            className={showGrouped ? 'tab active' : 'tab'}
+            onClick={openGrouped}
+          >
+            按章节
           </button>
         </div>
         <select
@@ -293,7 +322,40 @@ export default function WrongQuestionBook() {
         )}
       </section>
 
-      <section className="wq-list">
+      {showGrouped && (
+        <section className="wq-grouped">
+          {groupedLoading && <div className="loading">加载中...</div>}
+          {!groupedLoading && grouped.length === 0 && (
+            <div className="empty-state"><div className="empty-icon">📚</div><p>暂无错题</p></div>
+          )}
+          {!groupedLoading && grouped.map((g) => (
+            <div key={g.sectionId ?? 'none'} className="wq-group-card">
+              <div className="wq-group-head">
+                <span className="wq-group-label">{g.label}</span>
+                <span className="wq-group-count">
+                  共 {g.count} 题{g.weakCount > 0 ? ` · 未掌握 ${g.weakCount}` : ''}
+                </span>
+              </div>
+              <ul className="wq-group-list">
+                {g.items.slice(0, 20).map((item) => (
+                  <li key={item.id} className="wq-group-item">
+                    <div className="wq-group-content">
+                      {item.content ? <MathText text={item.content} /> : <span className="muted">（图片题）</span>}
+                    </div>
+                    <div className="wq-group-answers">
+                      <span>我的：{item.myAnswer || '—'}</span>
+                      <span>正确：{item.correctAnswer || '—'}</span>
+                    </div>
+                  </li>
+                ))}
+                {g.items.length > 20 && <li className="muted">… 其余 {g.items.length - 20} 题</li>}
+              </ul>
+            </div>
+          ))}
+        </section>
+      )}
+
+      <section className="wq-list" style={showGrouped ? { display: 'none' } : undefined}>
         {loading && <div className="loading">加载中...</div>}
         {!loading && questions.length === 0 && (
           <div className="empty-state">

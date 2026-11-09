@@ -7,10 +7,7 @@ import promptTemplateRoutes from './routes/prompt-template';
 import authRoutes from './routes/auth';
 import studentRoutes from './routes/students';
 import classRoutes from './routes/classes';
-import knowledgePointRoutes from './routes/knowledge-points';
 import paperRoutes from './routes/papers';
-import difficultyRoutes from './routes/difficulty';
-import examRoutes from './routes/exams';
 import examSessionRoutes from './routes/exam-sessions';
 import netdiskRoutes from './routes/netdisk';
 import videoLibraryRoutes from './routes/video-library';
@@ -20,6 +17,9 @@ import incentiveRoutes from './routes/incentive';
 import answerSheetRoutes from './routes/answer-sheets';
 import paperLibraryRoutes from './routes/paper-library';
 import subjectRoutes from './routes/subjects';
+import chapterRoutes from './routes/chapters';
+import netdiskIndexRoutes from './routes/netdisk-index';
+import learningRoutes from './routes/learning';
 
 // Load environment variables
 dotenv.config();
@@ -60,11 +60,15 @@ app.get('/api', (_req: Request, res: Response) => {
       auth: '/api/auth',
       students: '/api/students',
       classes: '/api/classes',
-      knowledgePoints: '/api/knowledge-points',
       papers: '/api/papers',
-      difficulty: '/api/difficulty',
-      exams: '/api/exams',
-      onlineExams: '/api/online-exams',
+      paperLibrary: '/api/paper-library',
+      examSessions: '/api/exam-sessions',
+      answerSheets: '/api/answer-sheets',
+      netdisk: '/api/netdisk',
+      videoLibrary: '/api/video-resources',
+      wrongQuestions: '/api/wrong-questions',
+      incentive: '/api/incentive',
+      subjects: '/api/subjects',
     },
   });
 });
@@ -109,36 +113,12 @@ try {
   console.error('Failed to register Class routes:', error);
 }
 
-// Knowledge Point routes
-try {
-  app.use('/api/knowledge-points', knowledgePointRoutes);
-  console.log('Knowledge Point routes registered at /api/knowledge-points');
-} catch (error) {
-  console.error('Failed to register Knowledge Point routes:', error);
-}
-
 // Paper routes
 try {
   app.use('/api/papers', paperRoutes);
   console.log('Paper routes registered at /api/papers');
 } catch (error) {
   console.error('Failed to register Paper routes:', error);
-}
-
-// Difficulty routes
-try {
-  app.use('/api/difficulty', difficultyRoutes);
-  console.log('Difficulty routes registered at /api/difficulty');
-} catch (error) {
-  console.error('Failed to register Difficulty routes:', error);
-}
-
-// Exam routes
-try {
-  app.use('/api/exams', examRoutes);
-  console.log('Exam routes registered at /api/exams');
-} catch (error) {
-  console.error('Failed to register Exam routes:', error);
 }
 
 // Exam Session routes (unified: whole_paper + online)
@@ -180,6 +160,9 @@ try {
 app.use('/api/answer-sheets', answerSheetRoutes);
 app.use('/api/paper-library', paperLibraryRoutes);
 app.use('/api/subjects', subjectRoutes);
+  app.use('/api/chapters', chapterRoutes);
+  app.use('/api/netdisk-index', netdiskIndexRoutes);
+  app.use('/api/learning', learningRoutes);
   console.log('Incentive routes registered at /api/incentive');
 } catch (error) {
   console.error('Failed to register Incentive routes:', error);

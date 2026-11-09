@@ -17,11 +17,13 @@ import {
   downloadWholePaperFile,
   triggerBlobDownload,
   deletePaper,
+  batchAttachSection,
   type ExamPaper,
   type PaperLibraryFilterOptions,
   type RecoveryGroup,
   type MultiImportResult,
 } from '../services/papers-api';
+import { getTaxonomyTree, type TextbookNode } from '../services/chapters-api';
 import './PaperLibrary.css';
 
 const getStatusText = (status?: string) => {
@@ -61,8 +63,13 @@ export default function PaperLibrary() {
   const [allClasses, setAllClasses] = useState<{ id: number; name: string; grade: string }[]>([]);
   // paperId -> published mockExamId
   const [publishedMap, setPublishedMap] = useState<Record<number, number>>({});
+  // M5：章节筛选 + 批量挂载
+  const [taxonomy, setTaxonomy] = useState<TextbookNode[]>([]);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [batchSectionId, setBatchSectionId] = useState('');
+  const [batchBusy, setBatchBusy] = useState(false);
 
-  const loadPapers = async (targetPage = page) => {
+  const loadPapers = async (targetPage = page, overrideFilters?: Record<string, string>) => {
     if (!token) return;
     setLoading(true);
     try {
@@ -70,7 +77,7 @@ export default function PaperLibrary() {
         purpose: 'whole_paper',
         page: targetPage,
         limit: 20,
-        ...(filters as any),
+        ...((overrideFilters ?? filters) as any),
       });
       setPapers(res.data || []);
       setTotal(res.pagination?.total || 0);
@@ -92,7 +99,7 @@ export default function PaperLibrary() {
   };
 
   const loadRecovery = async () => {
-    if (!token) return;
+    if (!token || !isAdmin) return;
     try {
       const res = await getRecoveryList(token);
       setRecoveryGroups(res.groups || []);
@@ -106,6 +113,9 @@ export default function PaperLibrary() {
     loadPapers(1);
     loadFilters();
     loadPublishedMap();
+    getTaxonomyTree(token, getSelectedSubjectId() || undefined)
+      .then((books) => setTaxonomy(books))
+      .catch(() => setTaxonomy([]));
   }, [token]);
 
   useEffect(() => {
@@ -114,7 +124,7 @@ export default function PaperLibrary() {
 
   // 已发布试卷 → mockExamId 映射（用于显示"取消发布"）
   const loadPublishedMap = async () => {
-    if (!token) return;
+    if (!token || !isAdmin) return;
     try {
       const groups = (await getRecoveryList(token)).groups || [];
       const map: Record<number, number> = {};
@@ -126,8 +136,62 @@ export default function PaperLibrary() {
   };
 
   const handleFilterChange = (key: string, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-    setTimeout(() => loadPapers(1), 0);
+    const next = { ...filters, [key]: value };
+    if (key === 'textbookId') {
+      next.chapterId = '';
+      next.sectionId = '';
+    }
+    if (key === 'chapterId') {
+      next.sectionId = '';
+    }
+    setFilters(next);
+    loadPapers(1, next);
+  };
+
+  // ===== M5：章节筛选选项 + 批量挂载 =====
+  const chapterOptions = filters.textbookId
+    ? taxonomy.find((b) => String(b.id) === filters.textbookId)?.chapters || []
+    : taxonomy.flatMap((b) => b.chapters || []);
+  const sectionOptions = (filters.chapterId
+    ? chapterOptions.filter((c) => String(c.id) === filters.chapterId)
+    : chapterOptions
+  ).flatMap((c) => (c.sections || []).map((s) => ({ id: s.id, label: `${c.title} / ${s.title}` })));
+
+  const allSectionsForBatch = taxonomy.flatMap((b) =>
+    (b.chapters || []).flatMap((c) =>
+      (c.sections || []).map((s) => ({ id: s.id, label: `${b.name} / ${c.title} / ${s.title}` }))
+    )
+  );
+
+  const toggleSelect = (id: number) =>
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const toggleAll = () =>
+    setSelectedIds((prev) => (prev.length === papers.length ? [] : papers.map((p) => p.id)));
+
+  const handleBatchAttach = async (clear = false) => {
+    if (!token || selectedIds.length === 0) return;
+    if (!clear && !batchSectionId) {
+      setError('请先选择要挂载的章节');
+      return;
+    }
+    setBatchBusy(true);
+    setError('');
+    try {
+      const res = await batchAttachSection(token, selectedIds, clear ? null : Number(batchSectionId));
+      setMessage(`已${clear ? '解除挂载' : '挂载'} ${res.affected} 份试卷`);
+      setSelectedIds([]);
+      await loadPapers(1);
+    } catch (e: any) {
+      setError(e.message || '批量挂载失败');
+    } finally {
+      setBatchBusy(false);
+    }
+  };
+
+  const sectionLabel = (p: ExamPaper) => {
+    const s = p.section;
+    if (!s) return '—';
+    return [s.chapter?.textbook?.name, s.chapter?.title, s.title].filter(Boolean).join(' / ');
   };
 
   // ===== 导入 =====
@@ -426,6 +490,18 @@ export default function PaperLibrary() {
               <option value="">全部学校</option>
               {options.schools.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
+            <select value={filters.textbookId || ''} onChange={(e) => handleFilterChange('textbookId', e.target.value)}>
+              <option value="">全部册</option>
+              {taxonomy.map((b) => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
+            </select>
+            <select value={filters.chapterId || ''} onChange={(e) => handleFilterChange('chapterId', e.target.value)}>
+              <option value="">全部章</option>
+              {chapterOptions.map((c) => <option key={c.id} value={String(c.id)}>{c.title}</option>)}
+            </select>
+            <select value={filters.sectionId || ''} onChange={(e) => handleFilterChange('sectionId', e.target.value)}>
+              <option value="">全部节</option>
+              {sectionOptions.map((s) => <option key={s.id} value={String(s.id)}>{s.label}</option>)}
+            </select>
             <input
               type="text" placeholder="搜索标题..." value={filters.keyword || ''}
               onChange={(e) => setFilters((p) => ({ ...p, keyword: e.target.value }))}
@@ -443,24 +519,61 @@ export default function PaperLibrary() {
             )}
           </div>
 
+          {isAdmin && (
+            <div className="lib-batch-bar">
+              <span className="muted">已选 {selectedIds.length} 份</span>
+              <select value={batchSectionId} onChange={(e) => setBatchSectionId(e.target.value)}>
+                <option value="">选择章节…</option>
+                {allSectionsForBatch.map((s) => <option key={s.id} value={String(s.id)}>{s.label}</option>)}
+              </select>
+              <button className="btn-sm btn-primary" disabled={batchBusy || selectedIds.length === 0} onClick={() => handleBatchAttach(false)}>
+                {batchBusy ? '处理中…' : '挂到章节'}
+              </button>
+              <button className="btn-sm" disabled={batchBusy || selectedIds.length === 0} onClick={() => handleBatchAttach(true)}>
+                解除挂载
+              </button>
+              {selectedIds.length > 0 && <button className="btn-sm" onClick={() => setSelectedIds([])}>清空选择</button>}
+            </div>
+          )}
+
           <div className="lib-table-wrap">
             <table className="lib-table">
               <thead>
                 <tr>
+                  <th className="check-col">
+                    {isAdmin && (
+                      <input
+                        type="checkbox"
+                        checked={papers.length > 0 && selectedIds.length === papers.length}
+                        onChange={toggleAll}
+                        aria-label="全选"
+                      />
+                    )}
+                  </th>
                   <th>标题</th><th>学科</th><th>年份</th><th>省份</th><th>学校</th>
-                  <th>总分/时长</th><th>格式</th><th>状态</th><th>操作</th>
+                  <th>总分/时长</th><th>格式</th><th>状态</th><th>章节</th><th>操作</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={9}>加载中...</td></tr>
+                  <tr><td colSpan={11}>加载中...</td></tr>
                 ) : papers.length === 0 ? (
-                  <tr><td colSpan={9} className="empty">暂无整卷试卷{isAdmin ? '，请先导入' : ''}</td></tr>
+                  <tr><td colSpan={11} className="empty">暂无整卷试卷{isAdmin ? '，请先导入' : ''}</td></tr>
                 ) : (
                   papers.map((p) => {
                     const isPublished = !!publishedMap[p.id];
                     return (
                       <tr key={p.id}>
+                        <td className="check-col">
+                          {isAdmin && (
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.includes(p.id)}
+                              onChange={() => toggleSelect(p.id)}
+                              aria-label={`选择 ${p.title}`}
+                            />
+                          )}
+                        </td>
                         <td className="title-cell" title={p.title}>
                           <Link to={`/paper-library/${p.id}/view`} className="paper-title-link">
                             {p.title}
@@ -473,6 +586,7 @@ export default function PaperLibrary() {
                         <td>{p.totalScore ?? '—'}分 / {p.duration ?? '—'}分</td>
                         <td>{(p.sourceFormat || '-').toUpperCase()}</td>
                         <td><span className={`badge ${isPublished ? 'badge-published' : ''}`}>{isPublished ? '已发布' : getStatusText(p.status)}</span></td>
+                        <td className="section-cell" title={sectionLabel(p)}>{sectionLabel(p)}</td>
                         <td className="actions-cell">
                           {isAdmin ? (
                             <>

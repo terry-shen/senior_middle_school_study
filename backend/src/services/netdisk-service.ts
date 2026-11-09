@@ -197,6 +197,34 @@ export async function listFiles(dir: string): Promise<NetdiskFileEntry[]> {
   }));
 }
 
+/** 递归扫描用：分页拉取目录全部条目（单目录超过 200 条时自动翻页） */
+export async function listFilesAll(dir: string): Promise<NetdiskFileEntry[]> {
+  const c = await getConfig();
+  if (!c) throw Object.assign(new Error('未配置应用凭证'), { statusCode: 400 });
+  if (!c.accessToken) throw Object.assign(new Error('网盘账号未绑定'), { statusCode: 400 });
+  const token = await ensureToken();
+  const appName = '高中学习系统';
+  const fullDir = dir.startsWith(`/apps/${appName}`) ? dir : `/apps/${appName}`;
+  const out: NetdiskFileEntry[] = [];
+  const limit = 200;
+  for (let start = 0; start < 20000; start += limit) {
+    const { data } = await axios.get<XpanListResponse>('https://pan.baidu.com/rest/2.0/xpan/file', {
+      params: { method: 'list', dir: fullDir, access_token: token, order: 'name', desc: 0, limit, start },
+      timeout: 30000,
+    });
+    if (data.error) throw new Error(`目录浏览失败: ${data.error} ${data.error_description || ''}`);
+    const list = data.list ?? [];
+    for (const f of list) {
+      out.push({
+        fsId: Number(f.fs_id), path: f.path, name: f.server_filename,
+        isDir: f.isdir === 1 ? 1 : 0, size: f.size, modifyTime: new Date(f.local_mtime * 1000).toISOString(),
+      });
+    }
+    if (list.length < limit) break;
+  }
+  return out;
+}
+
 // ============ 分享生成 ============
 export async function createShare(fsIds: number[]) {
   const c = await getConfig();
