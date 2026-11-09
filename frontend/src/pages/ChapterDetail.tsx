@@ -97,6 +97,16 @@ export default function ChapterDetail() {
     }
   }, [token, sectionId]);
 
+  // 该节没有精选资源时，自动展开「更多资源」，避免学生进入空页
+  useEffect(() => {
+    if (!featured) return;
+    const total = featured.groups.reduce((n, g) => n + g.items.length, 0);
+    if (total === 0 && featured.moreCount > 0 && !moreOpen && moreItems.length === 0) {
+      setMoreOpen(true);
+      loadMore(1);
+    }
+  }, [featured, moreOpen, moreItems.length, loadMore]);
+
   const openAsset = async (asset: AssetLite) => {
     setViewing(asset);
     if (!token) return;
