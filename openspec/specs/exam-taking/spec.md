@@ -5,58 +5,6 @@
 
 ## Requirements
 
-### Requirement: 在线答题（选择题）
-系统 SHALL 支持学生在Web界面直接完成选择题的作答。
-
-#### Scenario: 开始答题
-- **WHEN** 学生点击"开始测验"按钮
-- **THEN** 系统显示试题界面并开始计时
-
-#### Scenario: 提交选择题答案
-- **WHEN** 学生选择选项并点击"下一题"或"提交"
-- **THEN** 系统记录学生的选择并更新答题进度
-
-#### Scenario: 答题过程保存
-- **WHEN** 学生在答题过程中刷新页面或中断
-- **THEN** 系统保存当前答题状态，学生可继续答题
-
-### Requirement: 拍照上传答案
-系统 SHALL 支持学生使用手机或电脑拍照上传填空题、解答题的答案。
-
-#### Scenario: 拍照上传界面
-- **WHEN** 学生进入填空题或解答题作答页面
-- **THEN** 系统显示拍照上传按钮和图片预览区域
-
-#### Scenario: 上传答案图片
-- **WHEN** 学生拍摄或选择答案图片并上传
-- **THEN** 系统保存图片并进行OCR识别，提取答案文本
-
-#### Scenario: 手写答案识别
-- **WHEN** 系统完成上传图片的OCR识别
-- **THEN** 系统显示识别出的文本，学生可手动修正
-
-### Requirement: 答题时间记录
-系统 SHALL 记录学生的答题时间信息（开始时间、提交时间、每题用时）。
-
-#### Scenario: 记录答题用时
-- **WHEN** 学生提交答案
-- **THEN** 系统记录该题的答题用时
-
-#### Scenario: 查看答题时间统计
-- **WHEN** 学生或管理员查看答题记录详情
-- **THEN** 系统显示每题的答题用时和总用时
-
-### Requirement: 答题记录存储
-系统 SHALL 完整保存学生的答题记录，包括试题、答案、答题时间、答题方式等。
-
-#### Scenario: 保存答题记录
-- **WHEN** 学生完成测验并提交
-- **THEN** 系统创建完整的答题记录，状态标记为"待批改"
-
-#### Scenario: 查看答题历史
-- **WHEN** 学生查看答题历史列表
-- **THEN** 系统返回该学生的所有答题记录及批改状态
-
 ### Requirement: 测验状态管理
 系统 SHALL 管理测验的生命周期状态（未开始、进行中、已提交、已批改）。对于整卷考试（questionIds 为空的 Exam），系统不创建答题记录，状态保持 published。
 
@@ -103,55 +51,6 @@
 - **THEN** 系统 SHALL NOT 启动倒计时（整卷考试为线下作答，不受在线时间约束）
 - **AND** MockExam.duration 仅作为建议考试时长显示，不强制提交
 
-### Requirement: 在线测验统一为ExamSession
-在线测验 SHALL 不再使用独立的 Exam 表，统一为 ExamSession(mode='online')。学生答题记录统一为 ExamSubmission(answers JSON)。发布 SHALL 通过 ExamSessionAssignment 显式指定参考学生；学生只能看到并参加被分配给自己的测验。
-
-#### Scenario: 创建在线测验ExamSession
-- **WHEN** 管理员创建在线测验（手动选题或自动组卷）
-- **THEN** 创建 ExamSession(mode='online', source='manual'|'auto', content=题ID数组, status='draft')
-
-#### Scenario: 发布在线测验须选择分配对象
-- **WHEN** 管理员发布在线测验
-- **THEN** 必须选择班级或学生；系统为每个被分配学生创建 ExamSessionAssignment 记录
-- **AND** 未选择时返回 400，测验保持 draft
-- **AND** 发布后仅被分配学生可见
-
-#### Scenario: 学生开始在线测验
-- **WHEN** 学生（被分配）点击「开始考试」
-- **THEN** 创建/获取 ExamSubmission(examSessionId, studentId, mode='online', status='pending')
-- **AND** 学生可逐题答题，答案实时保存到 ExamSubmission.answers JSON
-
-#### Scenario: 学生开始未被分配的测验被拒绝
-- **WHEN** 学生对未被分配的在线测验调用开始
-- **THEN** 返回 403「未分配该考试」
-
-#### Scenario: ExamSubmission.answers 数据结构
-- **WHEN** 学生保存某题答案
-- **THEN** ExamSubmission.answers JSON 数组追加/更新 {questionId, answer, timeSpent}
-- **AND** 不再创建独立的 AnswerRecord 记录
-
-#### Scenario: 提交在线测验
-- **WHEN** 学生点击「提交试卷」
-- **THEN** ExamSubmission.status='submitted'
-- **AND** 系统对选择题自动判分，填空题/解答题等待人工批改
-
-#### Scenario: 整卷模式不创建ExamSubmission
-- **WHEN** ExamSession.mode='whole_paper'
-- **THEN** 学生考试时不创建 ExamSubmission
-- **AND** 只关联 AnswerSheet（学生上传的答题纸照片/Word）
-
-#### Scenario: ExamSession状态流转
-- **WHEN** 考试创建时 status='draft'
-- **AND** 发布时 status='published'
-- **AND** 学生开始答题时 status='ongoing'
-- **AND** 所有学生提交截止后 status='graded'
-- **AND** 4 态统一（draft/published/ongoing/graded）
-
-#### Scenario: 学生侧菜单整合
-- **WHEN** 学生查看导航栏
-- **THEN** 「在线测验」入口合并到「模拟考试」主入口中
-- **AND** 学生看到的考试列表统一来自 ExamSession（含 online 和 whole_paper 两种模式），且仅含被分配给自己的考试
-
 ### Requirement: 学生端学科筛选
 
 系统 SHALL 在学生端支持按学科筛选考试和错题。
@@ -167,3 +66,57 @@
 - **WHEN** 学生首次登录
 - **THEN** 学科切换器默认选中「数学」（或上次选择的学科，从 localStorage 恢复）
 - **AND** 学生端切换器不显示「全部学科」选项（仅管理员可看全部）
+
+### Requirement: 整卷考试统一为 ExamSession
+
+v2 的考试 SHALL 只有一种形态：整卷考试（ExamSession.mode='whole_paper'），学生下载试卷后线下作答，再上传答题纸。在线逐题作答路径 SHALL 不再提供。
+
+#### Scenario: 从试卷库发布整卷考试
+- **WHEN** 管理员在试卷库选中一份整卷试卷并点击「发布考试」
+- **THEN** 创建 ExamSession(mode='whole_paper', source='library', paperId=试卷 id, status='draft')
+- **AND** 继续发布时 status='published'，并为选定班级/学生写入 ExamSessionAssignment
+
+#### Scenario: 学生只能看到被分配的整卷考试
+- **WHEN** 学生请求考试列表
+- **THEN** 只返回 status in (published, ongoing, graded) 且存在本人 ExamSessionAssignment 的整卷考试
+- **AND** 不返回在线模式考试
+
+#### Scenario: 学生打开整卷考试
+- **WHEN** 学生点击某场整卷考试
+- **THEN** 页面提供「下载试卷」与「上传答题纸」两个操作
+- **AND** 不进入逐题答题界面，不显示答题倒数计时
+
+#### Scenario: 未分配学生访问
+- **WHEN** 学生访问未被分配的整卷考试
+- **THEN** 返回 403 并提示「未分配该考试」
+
+#### Scenario: 整卷考试不创建逐题提交记录
+- **WHEN** 学生参加整卷考试
+- **THEN** 系统不创建 ExamSubmission
+- **AND** 只创建/更新 AnswerSheet（学生上传的答题纸图片或 Word）
+
+#### Scenario: 整卷考试状态流转
+- **WHEN** 考试创建时 status='draft'
+- **AND** 发布时 status='published'
+- **AND** 学生首次打开时 status='ongoing'
+- **AND** 教师完成批改后 status='graded'
+
+#### Scenario: 取消发布
+- **WHEN** 管理员取消发布某整卷考试
+- **THEN** status 回到 'draft'
+- **AND** 相关 ExamSessionAssignment 删除，学生端不再可见
+- **AND** 已上传的答题纸保留，不随取消发布删除
+
+### Requirement: 整卷考试章节过滤
+
+系统 SHALL 支持整卷考试按章节（Section）归属与筛选，让学生从章节入口直接进入该节的试卷。
+
+#### Scenario: 发布时指定章节
+- **WHEN** 管理员发布整卷考试并选择所属章节
+- **THEN** 考试从关联试卷继承或显式写入 `sectionId`
+- **AND** 学生端「我的试卷」按章节分组展示
+
+#### Scenario: 从章节进入试卷
+- **WHEN** 学生位于某节详情页并点击该节的试卷
+- **THEN** 直接进入该场整卷考试的详情（下载试卷 / 上传答题纸）
+- **AND** 不需要先在全局考试列表中查找
