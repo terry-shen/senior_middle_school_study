@@ -235,3 +235,38 @@
   .cmap-continue { flex-direction: column; align-items: flex-start; }
   .cmap-badges { display: none; }
 }
+
+/* 视频主线课程 */
+.cmap-videos { margin: 14px 0 18px; border: 1px solid #e6e6e6; border-radius: 10px; background: #fff; overflow: hidden; }
+.cmap-videos-head { display: flex; align-items: baseline; gap: 10px; padding: 12px 16px; background: linear-gradient(90deg,#f3f7ff,#ffffff); border-bottom: 1px solid #eee; }
+.cmap-videos-head h2 { margin: 0; font-size: 16px; color: #1f2d3d; }
+.cmap-videos-meta { font-size: 12.5px; color: #888; }
+.cmap-vseries { border-bottom: 1px solid #f0f0f0; }
+.cmap-vseries:last-child { border-bottom: none; }
+.cmap-vseries-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 16px; background: #fafbfc; border: none; cursor: pointer; text-align: left; }
+.cmap-vseries-head:hover { background: #f2f5f8; }
+.cmap-vseries-name { font-weight: 600; color: #22303f; }
+.cmap-vseries-meta { margin-left: auto; font-size: 12px; color: #8a8a8a; }
+.cmap-vgroups { padding: 4px 16px 10px 34px; }
+.cmap-vgroup { margin: 6px 0; }
+.cmap-vgroup-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; background: transparent; border: none; border-radius: 6px; cursor: pointer; text-align: left; }
+.cmap-vgroup-head:hover { background: #f6f8fa; }
+.cmap-vgroup-tag { font-size: 13.5px; color: #34495e; font-weight: 500; }
+.cmap-vgroup-count { font-size: 11.5px; color: #7f8c8d; background: #eef2f5; border-radius: 10px; padding: 1px 8px; }
+.cmap-videos-list { list-style: none; margin: 2px 0 6px 26px; padding: 0; }
+.cmap-video-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 8px; background: transparent; border: none; border-radius: 6px; cursor: pointer; text-align: left; color: #2c3e50; font-size: 13px; }
+.cmap-video-item:hover { background: #eef6ff; color: #1565c0; }
+.cmap-video-play { color: #2f80ed; font-size: 11px; }
+.cmap-video-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmap-video-size { font-size: 11.5px; color: #95a5a6; }
+
+/* 关联教材小节（并入课程章节，不再单独成树） */
+.cmap-sections { list-style: none; margin: 2px 0 8px 26px; padding: 0; }
+.cmap-sections-label { font-size: 12px; color: #95a5a6; margin: 4px 0 2px; }
+.cmap-section-link {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 5px 8px; background: transparent; border: none; border-radius: 6px;
+  cursor: pointer; text-align: left; color: #2c3e50; font-size: 13px;
+}
+.cmap-section-link:hover { background: #f1f8ff; color: #1565c0; }
+.cmap-section-title { flex: 1; }

@@ -211,3 +211,40 @@ export async function getStudentLearningMap(token: string, studentId: number) {
 export async function getStudentWorkbench(token: string) {
   return req<{ success: boolean } & StudentWorkbench>(token, withSubjectParam('/learning/workbench'));
 }
+
+export interface VideoSeriesItem {
+  id: number;
+  name: string;
+  courseNo: number | null;
+  fsId: string | null;
+  size: string | null;
+}
+
+export interface CourseSectionNode {
+  id: number;
+  title: string;
+  textbookName: string;
+  chapterTitle: string;
+  resourceCount: number;
+  paperCount: number;
+  weakCount: number;
+}
+
+export interface VideoSeriesGroup {
+  tag: string;
+  videos: VideoSeriesItem[];
+  sections: CourseSectionNode[];
+}
+
+export interface VideoSeries {
+  series: string;
+  groups: VideoSeriesGroup[];
+  total: number;
+}
+
+export async function getVideoSeries(token: string) {
+  return req<{ success: boolean; series: VideoSeries[]; total: number }>(
+    token,
+    withSubjectParam('/learning/video-series'),
+  );
+}
