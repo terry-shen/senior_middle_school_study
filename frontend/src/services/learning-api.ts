@@ -97,6 +97,7 @@ export interface SectionWrongQuestion {
 
 export interface LearningProgress {
   sectionId: number;
+  subjectId?: number | null;
   sectionTitle: string;
   chapterTitle: string;
   textbookName: string;

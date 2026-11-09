@@ -100,7 +100,7 @@ export default function ChapterMap() {
         <button className="cmap-refresh" onClick={load} disabled={loading}>刷新</button>
       </div>
 
-      {progress && (
+        {progress && (!selectedSubject || !progress.subjectId || progress.subjectId === selectedSubject.id) && (
         <div className="cmap-continue">
           <div className="cmap-continue-text">
             <span className="cmap-continue-label">继续学习</span>
