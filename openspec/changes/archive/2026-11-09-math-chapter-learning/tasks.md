@@ -109,8 +109,17 @@
 
 ## 7. M6 切换与收尾
 
-- [ ] 7.1 全量回归：后端构建、前端构建、`npx jest` 全绿，逐页访问管理端与学生的全部页面确认无 ErrorBoundary
-- [ ] 7.2 验证 v2 只加表加列：对比 `dev.db` schema，确认无既有列被删除或语义修改
-- [ ] 7.3 归档本变更的 OpenSpec delta（同步 3 个新 capability 与 6 个修改/4 个移除），验证 `openspec validate --all` 全部通过
-- [ ] 7.4 合并 `v2` → `main` 并打 tag `v2.0`，验证 `main` 上服务可启动、健康检查 200、学生可登录并进入章节地图
-- [ ] 7.5 更新部署说明（v1 停服、v2 启动方式、章节种子与网盘扫描的初始化步骤），验证新环境按文档可从零跑起来
+- [x] 7.1 全量回归：后端构建、前端构建、`npx jest` 全绿，逐页访问管理端与学生的全部页面确认无 ErrorBoundary
+- [x] 7.2 验证 v2 只加表加列：对比 `dev.db` schema，确认无既有列被删除或语义修改
+- [x] 7.3 归档本变更的 OpenSpec delta（同步 3 个新 capability 与 6 个修改/4 个移除），验证 `openspec validate --all` 全部通过
+- [x] 7.4 合并 `v2` → `main` 并打 tag `v2.0`，验证 `main` 上服务可启动、健康检查 200、学生可登录并进入章节地图
+- [x] 7.5 更新部署说明（v1 停服、v2 启动方式、章节种子与网盘扫描的初始化步骤），验证新环境按文档可从零跑起来
+
+### 第 7 组实施记录（M6 切换与收尾）
+
+- 7.1 全量回归通过：后端 tsc 构建无错、前端 vite 构建通过（仅 chunk 体积提示）、`npx jest` 14 suites / 123 tests 全绿；浏览器逐页验证管理员 15 页（/、试卷库、题库管理、题目列表、学生、章节管理、资源映射、模拟考试、答题纸阅卷、学习激励、学科管理、模型管理、网盘绑定、学习资源、资源管理）与学生 8 页（/、章节学习、章节详情、模拟考试、错题本、我的答题纸、学习激励、学习资源），全部无 ErrorBoundary、无「权限不足」、无 console error。
+- 7.2 仅新增校验：`git diff v1-final -- backend/prisma/schema.prisma` = 132 insertions / 0 deletions，无既有列被删除或改义。
+- 7.3 归档完成：`openspec archive math-chapter-learning --yes`（因 4 个 capability 全量退役，在变更 `.openspec.yaml` 中声明 `retire_capabilities: true`）→ 归档为 `2026-11-09-math-chapter-learning`，spec 同步新增 22 / 修改 2 / 移除 20；`openspec validate --all` 23 passed 0 failed；`openspec list` 无活动变更。
+- 7.4 合并与打标：v2 上 6 个原子提交 → `main` 以 `--no-ff` 合并（e85db9c）→ tag `v2.0`；main 上 `/health` 200、学生登录成功、`GET /api/learning/map?subjectId=2` 返回 5 册。
+- 7.5 部署说明：`docs/deployment-native.md` 追加「v2 章节化学习版本部署（v2.0）」章节（环境变量、依赖与 db push、seed-subjects/seed-taxonomy 初始化、三服务启动命令、网盘索引初始化四步、从 v1 升级步骤）。
+- 顺带修复：学生访问试卷库时 `loadPublishedMap/loadRecovery` 仍调用 admin 接口导致 403（加 isAdmin 守卫）；整卷考试创建未透传/继承学科导致学生端按学科过滤看不到（route 透传 + service 以 `data.subjectId ?? paper.subjectId` 兜底）。

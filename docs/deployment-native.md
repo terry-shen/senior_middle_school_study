@@ -447,3 +447,74 @@ curl -X POST http://localhost:8080/file_parse \
 | mcq-extractor (Python) | 8000 | 试题提取微服务（回退） |
 | MinerU API (Python) | 8080 | 文档解析服务（推荐） |
    ```
+
+---
+
+## v2 章节化学习版本部署（v2.0）
+
+> v1 已停止维护，v2 以「章节」为主轴：教材 → 章 → 节 → [视频/讲义/练习/试卷] → 答题纸 → 教师批注 → 错题回到该节。
+> 数据库为 SQLite（`backend/prisma/dev.db`），无需 PostgreSQL；考试仅支持整卷模式；知识点/难度/在线逐题测验已移除。
+
+### 1. 环境变量（backend/.env）
+
+```
+DATABASE_URL="file:./dev.db"
+PORT=3000
+JWT_SECRET=<生产环境务必更换>
+JWT_EXPIRES_IN=7d
+HF_HOME=D:\huggingface      # MinerU 模型目录（可放任意磁盘，避免占用 C 盘）
+MINERU_API_PORT=56090
+```
+
+### 2. 安装依赖与初始化数据库
+
+```powershell
+cd backend; npm install; npx prisma generate; npx prisma db push
+cd ../frontend; npm install
+```
+
+首次部署不会自动创建账号，需执行以下脚本（幂等）：
+
+```powershell
+cd backend
+node seed-subjects.cjs        # 11 个学科字典
+node seed-taxonomy.cjs        # 人教A数学 5 册 / 18 章 / 73 节
+node seed-llm-configs.cjs     # 可选：LLM 配置
+```
+
+管理员/学生账号可通过注册接口或 `/api/students/import/json` 批量导入。
+
+### 3. 启动三件套
+
+```powershell
+# 后端（端口 3000）
+cd backend
+npm run build
+Start-Process cmd -ArgumentList '/c','set HF_HOME=D:\huggingface&& node dist\index.js > ..\logs\backend.log 2> ..\logs\backend.err.log' -WindowStyle Hidden
+
+# 前端（端口 5173，开发模式）
+cd ../frontend
+Start-Process cmd -ArgumentList '/c','npx vite --host' -WindowStyle Hidden
+
+# MinerU 解析服务（端口 56090，试卷/Word 导入用；冷启 30-90s）
+cd ../backend
+Start-Process cmd -ArgumentList '/c','set HF_HOME=D:\huggingface&& mineru-api --host 127.0.0.1 --port 56090 >> logs\mineru-api.log 2>> logs\mineru-api.err.log' -WindowStyle Hidden
+```
+
+健康检查：`GET http://localhost:3000/health`、`GET http://localhost:56090/health`。
+
+> 生产环境可用 `docs/deployment-native.md` 中的 Nginx + PM2 方案托管 `frontend/dist` 静态文件并反向代理 `/api`、`/uploads`。
+
+### 4. 初始化网盘资源索引（可选，但推荐）
+
+1. 管理员登录 → 系统设置 → **网盘绑定**，填入百度网盘开放平台 AppKey/SecretKey/SignKey 与回调地址，完成 OAuth 授权；
+2. 进入 **资源映射**（`/netdisk-index`）点击「开始扫描」，系统递归扫描 `/apps/高中学习系统` 并自动分类（视频/讲义/练习/试卷/答案/课件/垃圾）、提取年份/地区/系列、生成章节候选；
+3. 在左侧选择小节，右侧勾选资源「挂到选中节」，每节精选上限 5 条；
+4. 学生端「章节学习」即可看到该节的精选与更多资源。
+
+### 5. 从 v1 升级
+
+- v1 的 `main` 已打 tag `v1-final`，v2 为 tag `v2.0`（同仓库、同数据库文件）；
+- v2 schema 只新增表与列（`textbooks`、`chapters`、`sections`、`netdisk_assets`、`netdisk_scan_state`、`student_learning_progress` + 若干 `section_id` 列），不删除既有列；
+- 升级步骤：停 v1 服务 → 拉取 v2 代码 → `npx prisma db push` → `node seed-taxonomy.cjs` → 重新构建并启动；
+- v1 的在线逐题测验入口已下线，旧的 online 考试会话在 v2 学生端不可见；如需保留请先导出成绩。
