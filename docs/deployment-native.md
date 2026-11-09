@@ -477,9 +477,11 @@ cd ../frontend; npm install
 
 ```powershell
 cd backend
-node seed-subjects.cjs        # 11 个学科字典
-node seed-taxonomy.cjs        # 人教A数学 5 册 / 18 章 / 73 节
-node seed-llm-configs.cjs     # 可选：LLM 配置
+node seed-subjects.cjs           # 11 个学科字典
+node seed-taxonomy.cjs           # 人教A 数学 5 册 / 18 章 / 73 节
+node seed-taxonomy-science.cjs   # 人教版 物理 6 册 / 27 章 / 124 节 + 生物 5 册 / 25 章 / 81 节
+node seed-ai-assistants.cjs      # AI 助理目录（豆包 / DeepSeek / WorkBuddy）
+node seed-llm-configs.cjs        # 可选：LLM 配置
 ```
 
 管理员/学生账号可通过注册接口或 `/api/students/import/json` 批量导入。
@@ -518,3 +520,115 @@ Start-Process cmd -ArgumentList '/c','set HF_HOME=D:\huggingface&& mineru-api --
 - v2 schema 只新增表与列（`textbooks`、`chapters`、`sections`、`netdisk_assets`、`netdisk_scan_state`、`student_learning_progress` + 若干 `section_id` 列），不删除既有列；
 - 升级步骤：停 v1 服务 → 拉取 v2 代码 → `npx prisma db push` → `node seed-taxonomy.cjs` → 重新构建并启动；
 - v1 的在线逐题测验入口已下线，旧的 online 考试会话在 v2 学生端不可见；如需保留请先导出成绩。
+
+---
+
+## v2.1 教材目录与资源映射维护
+
+> 本章说明如何为新学科录入教材目录、如何重建网盘资源与章节的映射、以及如何清理重复文件。
+> 所有脚本均为幂等或可回滚操作，可重复执行。
+
+### 1. 教材目录现状
+
+| 学科 | 脚本 | 版本 | 规模 |
+|---|---|---|---|
+| 数学 | `seed-taxonomy.cjs` | 人教A（2019） | 5 册 / 18 章 / 73 节 |
+| 物理 | `seed-taxonomy-science.cjs` | 人教版（2019） | 6 册 / 27 章 / 124 节 |
+| 生物 | `seed-taxonomy-science.cjs` | 人教版（2019） | 5 册 / 25 章 / 81 节 |
+
+合计 16 册 / 70 章 / 278 节。化学、英语、语文、政治、历史、地理暂未录入教材目录（这些学科的学生端不会出现章节，资源映射也不会产生结果）。
+
+```powershell
+cd backend
+node seed-taxonomy.cjs           # 数学（已存在则跳过新增，按源文件覆盖标题）
+node seed-taxonomy-science.cjs   # 物理 + 生物
+```
+
+两个脚本都按「册名 → 章序号 → 节序号」做 upsert：册按 `subjectId + edition + name` 定位，章/节的 `order` 直接取数组下标（第 1 章 = 1，第 1 节 = 1），已存在的记录会按其位置更新标题。**因此要改标题，请直接改脚本里的数组再执行**，不要只改数据库（下次执行会被覆盖）。
+
+### 2. 新增一个学科的教材目录
+
+1. 在 `backend/seed-taxonomy-science.cjs` 里仿照 `PHYSICS` / `BIOLOGY` 追加一个常量（数组顺序即册/章/节顺序）：
+
+```js
+const CHEMISTRY = [
+  {
+    name: '必修第一册', grade: '高一上',
+    chapters: [
+      { title: '第一章 物质及其变化', sections: ['1.1 物质的分类及转化', '1.2 离子反应'] },
+    ],
+  },
+];
+```
+
+2. 在文件末尾的启动块里加一行（`seedSubject(code, 常量)`，code 必须是 `subjects` 表中已存在的学科代码）：
+
+```js
+const r3 = await seedSubject('chemistry', CHEMISTRY);
+console.log('chemistry', JSON.stringify(r3));
+```
+
+3. `node seed-taxonomy-science.cjs` 重新执行；
+4. `GET /api/chapters/tree?subjectId=<id>` 确认册/章/节数量；
+5. 到「资源映射」页重新执行一次自动映射（见下节）。
+
+### 3. 网盘资源 → 章节 的离线映射流水线
+
+映射分三步，中间产物全部落盘在**仓库根目录**的 `data/netdisk-mapping/`（已加入 `.gitignore`），任何一步中断都可单独重跑，不会污染数据库。
+
+```powershell
+cd backend
+
+# A. 导出快照（只读，不改库）
+node scripts/netdisk-mapping/export-assets.cjs
+#   → data/netdisk-mapping/assets.jsonl   （跳过 manual / ignored 的资源；加 --include-manual 可一并导出人工条目）
+#   → data/netdisk-mapping/sections.json  （全部教材节）
+
+# B. 计算映射方案（纯计算，不写库，可反复调规则）
+node scripts/netdisk-mapping/propose-mapping.cjs
+#   → data/netdisk-mapping/mapping-proposal.jsonl
+#   → data/netdisk-mapping/stats.json     （mapped / unmapped / 各学科分布 / 覆盖节数 / 抽样 30 条）
+
+# C. 写库（分批 500 条事务，支持断点续跑）
+node scripts/netdisk-mapping/apply-mapping.cjs --reset     # --reset 清掉旧的 auto 结果后全量重算
+node scripts/netdisk-mapping/apply-mapping.cjs             # 不带 --reset 则从中断处续跑
+```
+
+**匹配规则要点**
+
+- 资源按路径中最靠后的学科关键词归属学科，只与该学科的教材节比对；
+- 普通文档：节号命中 +3、节标题核心整串命中 +8、专有分词 +2、通用词（函数/性质/图象/概念…）+1，最高分 ≥5 且领先第二名 ≥2 才自动确认；
+- 视频：**忽略课程编号**（数学课程编号 ≠ 教材节号），只用主题词与节标题匹配，`【章节标签】` 命中章名时额外加分；
+- 未达阈值的资源只写候选（`candidateSections`），不确认、学生端不可见，可在「资源映射」页人工确认。
+
+**页面内触发**（免命令行）：`/netdisk-index`（管理员）→ 头部「🔁 重新自动映射」，对应 `POST /api/netdisk-index/remap`，返回 `{scanned, mapped, perSection}`。
+
+### 4. 资源去重
+
+同一学科下，文件名（去副本编号、统一大小写与空白）与文件大小完全一致即视为重复。保留优先级：已挂章节 → 已确认 → 学生可见 → id 较小者；其余标记 `status = 'ignored'`（**不物理删除**，可在数据库改回 `active` 恢复）。
+
+```powershell
+cd backend
+node scripts/netdisk-mapping/dedup-assets.cjs            # 预演，只输出重复组统计
+node scripts/netdisk-mapping/dedup-assets.cjs --apply    # 实际写库
+```
+
+### 5. 当前基准数据（可作验收对照）
+
+| 指标 | 数值 |
+|---|---|
+| 网盘资源总数 | 54,677 |
+| 活跃资源（去重后） | 44,666 |
+| 已确认挂接教材节 | 5,073 |
+| 学生可见资源 | 2,840 |
+| 有资源的教材节 | 258 / 278 |
+| 数学覆盖 | 67 / 73 节 |
+| 物理覆盖 | 113 / 124 节 |
+| 生物覆盖 | 76 / 81 节 |
+
+### 6. 常见问题
+
+- **学生端某节没有资源**：先看 `/netdisk-index` 该节的「未映射」数量。若资源存在但未确认，人工确认即可；若确实为空，说明网盘中没有对应主题的文件。
+- **资源挂错节**：在「资源映射」页勾选后「解除映射」（`sectionId = null`），再挂到正确的小节；人工确认过的条目在后续自动映射中不会被覆盖（`mapSource='manual'`）。
+- **重跑映射后学生端数量变少**：正常现象——新规则更严格，低置信度条目从「已确认」退回「候选」，可在页面人工确认。
+- **换了学科选择器看不到内容**：章节与资源都按当前选中学科过滤，确认顶部学科切换器是否停在有教材目录的学科（数学/物理/生物）。
