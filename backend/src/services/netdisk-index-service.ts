@@ -170,6 +170,27 @@ export async function loadSectionKeywordIndex(subjectId?: number): Promise<Secti
   return { sections: list, byId: new Map(sections.map(s => [s.id, { id: s.id, title: s.title }])) };
 }
 
+/** 学科 code → subjectId（无学科关键词时兜底数学），用于多学科映射 */
+const subjectIdByCode = new Map<string, number | null>();
+async function resolveSubjectId(code: string | null): Promise<number | null> {
+  const key = code || 'math';
+  if (subjectIdByCode.has(key)) return subjectIdByCode.get(key)!;
+  const s = await prisma.subject.findUnique({ where: { code: key }, select: { id: true } });
+  const id = s?.id ?? null;
+  subjectIdByCode.set(key, id);
+  return id;
+}
+
+const sectionIndexCache = new Map<string, SectionKeywordIndex>();
+export async function sectionIndexForSubjectCode(code: string | null): Promise<SectionKeywordIndex> {
+  const sid = await resolveSubjectId(code);
+  const key = String(sid ?? 'all');
+  if (!sectionIndexCache.has(key)) {
+    sectionIndexCache.set(key, await loadSectionKeywordIndex(sid ?? undefined));
+  }
+  return sectionIndexCache.get(key)!;
+}
+
 /** 计算候选章节（不写库）。评分：节号 +3、核心标题整串 +8（仅≥3 字）、专有分词 +2、通用词 +1 */
 export function computeCandidates(text: string, index: SectionKeywordIndex, limit = 3): CandidateSection[] {
   const normText = normalizeMatchText(text);
@@ -357,7 +378,7 @@ export async function getScanStatus(): Promise<ScanStatus> {
 }
 
 /** 单文件入库（分类 + 元数据 + 候选章节） */
-async function indexFile(entry: NetdiskFileEntry, index: SectionKeywordIndex) {
+async function indexFile(entry: NetdiskFileEntry) {
   const name = entry.name || entry.path.split('/').pop() || entry.path;
   const ext = extOf(name);
   const assetKind = classifyAsset(name, ext);
@@ -367,9 +388,9 @@ async function indexFile(entry: NetdiskFileEntry, index: SectionKeywordIndex) {
   const region = extractRegion(fullText);
   const series = extractSeries(fullText);
   const subjectCode = detectSubjectFromText(entry.path);
-  const isMathAsset = subjectCode === null || subjectCode === 'math';
   const isVideo = assetKind === 'video';
-  const candidates = assetKind === 'junk' || !isMathAsset
+  const index = await sectionIndexForSubjectCode(subjectCode);
+  const candidates = assetKind === 'junk'
     ? []
     : isVideo
       ? computeVideoCandidates(name, index)
@@ -418,7 +439,6 @@ async function indexFile(entry: NetdiskFileEntry, index: SectionKeywordIndex) {
 }
 
 async function runScanLoop() {
-  const index = await loadSectionKeywordIndex();
   try {
     for (;;) {
       if (pauseRequested) { await writeState({ status: 'paused' }); running = false; return; }
@@ -439,7 +459,7 @@ async function runScanLoop() {
       let files = 0;
       for (const entry of entries) {
         if (entry.isDir === 1) { dirs.push(entry.path); continue; }
-        try { await indexFile(entry, index); files++; } catch { /* 跳过单文件错误 */ }
+        try { await indexFile(entry); files++; } catch { /* 跳过单文件错误 */ }
       }
       const nextQueue = queue.concat(dirs);
       const st2 = await readState();
@@ -673,7 +693,6 @@ export async function sectionConvergence(sectionIds: number[]) {
  * 其他资源 = 辅助：节号 + 标题分词
  */
 export async function remapAll(): Promise<{ scanned: number; mapped: number; perSection: number }> {
-  const index = await loadSectionKeywordIndex();
   const pageSize = 500;
   let cursor = 0;
   let scanned = 0;
@@ -691,14 +710,12 @@ export async function remapAll(): Promise<{ scanned: number; mapped: number; per
     for (const a of batch) {
       scanned++;
       const subjectCode = detectSubjectFromText(a.path);
-      const isMath = subjectCode === null || subjectCode === 'math';
       const isVideo = a.assetKind === 'video';
       const text = `${a.name} ${a.path}`;
-      const candidates = !isMath
-        ? []
-        : isVideo
-          ? computeVideoCandidates(a.name, index)
-          : computeCandidates(text, index);
+      const index = await sectionIndexForSubjectCode(subjectCode);
+      const candidates = isVideo
+        ? computeVideoCandidates(a.name, index)
+        : computeCandidates(text, index);
       const best = isVideo ? pickVideoMap(candidates) : pickAutoMap(candidates);
       if (best) mapped++;
       ops.push(prisma.netdiskAsset.update({
