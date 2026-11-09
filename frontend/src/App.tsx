@@ -20,6 +20,7 @@ const PaperLibrary = lazy(() => import('./pages/PaperLibrary'));
 const ChapterManagement = lazy(() => import('./pages/ChapterManagement'));
 const ChapterMap = lazy(() => import('./pages/ChapterMap'));
 const ChapterDetail = lazy(() => import('./pages/ChapterDetail'));
+const AiAssistants = lazy(() => import('./pages/AiAssistants'));
 const NetdiskMapping = lazy(() => import('./pages/NetdiskMapping'));
 const PaperViewer = lazy(() => import('./pages/PaperViewer'));
 const QuestionBank = lazy(() => import('./pages/QuestionBank'));
@@ -114,6 +115,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <ChapterDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ai-assistants"
+        element={
+          <ProtectedRoute>
+            <AiAssistants />
           </ProtectedRoute>
         }
       />

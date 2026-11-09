@@ -30,6 +30,7 @@ const adminGroups: NavGroup[] = [
   {
     title: '学习内容',
     items: [
+      { to: '/learning', label: '章节学习', icon: '📖' },
       { to: '/netdisk-index', label: '资源映射', icon: '🧭' },
       { to: '/chapters', label: '章节管理', icon: '🗂️' },
     ],
@@ -113,6 +114,15 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             onClick={handleNavigate}
           >
             🏠 工作台
+          </Link>
+
+          <Link
+            to="/ai-assistants"
+            className={`sidebar-item ${isActive('/ai-assistants') ? 'active' : ''}`}
+            onClick={handleNavigate}
+          >
+            <span className="sidebar-item-icon">🤖</span>
+            <span>AI 助理</span>
           </Link>
 
           {user?.role === 'admin' ? (
