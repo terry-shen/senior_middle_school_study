@@ -102,6 +102,14 @@ router.post('/assets/batch', requireAuth, requireAdmin, async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
+// ===== 全量重新自动映射（不覆盖人工确认） =====
+router.post('/remap', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const result = await svc.remapAll();
+    res.json({ success: true, ...result });
+  } catch (e) { fail(res, e); }
+});
+
 // ===== 三层收敛抽检 =====
 router.get('/convergence', requireAuth, requireAdmin, async (req, res) => {
   try {

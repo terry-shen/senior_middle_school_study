@@ -16,11 +16,11 @@ export type AssetKind = 'lecture' | 'ppt' | 'answer' | 'practice' | 'exam' | 'pl
 export type Audience = 'student' | 'teacher' | 'both';
 
 export interface SectionKeywordIndex {
-  sections: { id: number; title: string; core: string; tokens: string[] }[];
+  sections: { id: number; title: string; core: string; tokens: string[]; number: string | null; chapterTitle: string }[];
   byId: Map<number, { id: number; title: string }>;
 }
 
-export interface CandidateSection { sectionId: number; title: string; score: number }
+export interface CandidateSection { sectionId: number; title: string; score: number; numHit?: boolean; tokenHits?: number; coreHit?: boolean }
 
 // ============ 分类规则 ============
 const VIDEO_EXT = new Set(['mp4', 'avi', 'mkv', 'mov', 'flv', 'wmv', 'ts', 'm4v', 'webm']);
@@ -101,45 +101,207 @@ export function extractSeries(text: string): string | null {
 // ============ 章节关键词与自动映射 ============
 const STOP_TOKENS = new Set(['的', '与', '和', '及', '其', '一', '二', '三', '上', '下', '中', '应用', '复习', '初步']);
 
-export function sectionTokens(title: string): { core: string; tokens: string[] } {
+/** 通用词：命中仅给 1 分，避免「函数/性质」这类泛词把不同章节混在一起 */
+const GENERIC_TOKENS = new Set([
+  '函数', '性质', '概念', '运算', '图象', '基本', '关系', '方程', '公式', '定理', '定义',
+  '问题', '方法', '综合', '练习', '表示', '意义', '案例', '统计', '概率', '向量', '三角',
+  '导数', '几何', '应用', '初步', '基本关系', '基本性质',
+]);
+
+/** 去空白与常见标点，便于中文标题匹配 */
+function normalizeMatchText(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[【】\[\]（）()｛｝{}《》<>、，,．.·:：;；!！?？"'“”‘’\-—_]/g, '');
+}
+
+/** 从路径/文件名推断学科（取最先出现的关键词） */
+const SUBJECT_WORDS: Array<[RegExp, string]> = [
+  [/数学/, 'math'],
+  [/物理/, 'physics'],
+  [/化学/, 'chemistry'],
+  [/生物/, 'biology'],
+  [/语文/, 'chinese'],
+  [/英语/, 'english'],
+  [/政治/, 'politics'],
+  [/历史/, 'history'],
+  [/地理/, 'geography'],
+  [/理综/, 'science'],
+  [/文综/, 'liberal_arts'],
+];
+export function detectSubjectFromText(text: string): string | null {
+  let best: { pos: number; code: string } | null = null;
+  for (const [re, code] of SUBJECT_WORDS) {
+    const g = new RegExp(re.source, 'g');
+    let m: RegExpExecArray | null;
+    while ((m = g.exec(text)) !== null) {
+      // 取最深（最后出现）的学科关键词：越靠后的目录/文件名越具体
+      if (!best || m.index > best.pos) best = { pos: m.index, code };
+      if (m[0].length === 0) g.lastIndex++;
+    }
+  }
+  return best ? best.code : null;
+}
+
+export function sectionTokens(title: string): { core: string; tokens: string[]; number: string | null } {
+  const numberMatch = title.trim().match(/^(\d{1,2}\.\d{1,2})/);
   const core = title
     .replace(/^\s*\d+(\.\d+)*\s*/, '')
     .replace(/[（(][^）)]*[）)]/g, '')
     .trim();
   const tokens = new Set<string>();
-  if (core.length >= 3) tokens.add(core);
+  const normCore = normalizeMatchText(core);
+  if (normCore.length >= 3) tokens.add(normCore);
   for (const part of core.split(/[的与和、，,．./·\s]+/)) {
-    if (part.length >= 2 && !STOP_TOKENS.has(part)) tokens.add(part);
+    const p = normalizeMatchText(part);
+    if (p.length >= 2 && !STOP_TOKENS.has(part)) tokens.add(p);
   }
-  return { core, tokens: [...tokens] };
+  return { core: normCore, tokens: [...tokens], number: numberMatch ? numberMatch[1] : null };
 }
 
 export async function loadSectionKeywordIndex(subjectId?: number): Promise<SectionKeywordIndex> {
   const sections = await prisma.section.findMany({
     where: subjectId ? { chapter: { textbook: { subjectId } } } : undefined,
-    select: { id: true, title: true },
+    select: { id: true, title: true, chapter: { select: { title: true } } },
     orderBy: { id: 'asc' },
   });
-  const list = sections.map(s => ({ id: s.id, title: s.title, ...sectionTokens(s.title) }));
+  const list = sections.map(s => ({ id: s.id, title: s.title, ...sectionTokens(s.title), chapterTitle: s.chapter?.title || '' }));
   return { sections: list, byId: new Map(sections.map(s => [s.id, { id: s.id, title: s.title }])) };
 }
 
-/** 计算候选章节（不写库） */
+/** 计算候选章节（不写库）。评分：节号 +3、核心标题整串 +8（仅≥3 字）、专有分词 +2、通用词 +1 */
 export function computeCandidates(text: string, index: SectionKeywordIndex, limit = 3): CandidateSection[] {
+  const normText = normalizeMatchText(text);
   const scored: CandidateSection[] = [];
   for (const s of index.sections) {
     let score = 0;
-    for (const t of s.tokens) {
-      if (!text.includes(t)) continue;
-      score += t === s.core ? 4 : t.length >= 3 ? 2 : 1;
+    let numHit = false;
+    let tokenHits = 0;
+    let coreHit = false;
+    if (s.number) {
+      const numRe = new RegExp(`(^|[^0-9.])${s.number.replace('.', '\\.')}([^0-9.]|$)`);
+      if (numRe.test(text) || normText.includes(s.number)) {
+        score += 3;
+        numHit = true;
+      }
     }
-    if (score > 0) scored.push({ sectionId: s.id, title: s.title, score });
+    for (const t of s.tokens) {
+      if (!normText.includes(t)) continue;
+      if (t === s.core) {
+        if (t.length >= 3) {
+          score += 8;
+          coreHit = true;
+        } else {
+          // 两字核心易是其它词的一部分（如「成对数据」里的「对数」），只在词边界命中时才算强信号
+          const at = normText.indexOf(t);
+          const prev = at > 0 ? normText[at - 1] : '';
+          const next = normText[at + t.length] || '';
+          const strong = at === 0
+            || ['讲', '节', '章', '点', '练', '考'].includes(prev)
+            || ['的', '与', '和', '及'].includes(next)
+            || next === '';
+          if (strong) {
+            score += 6;
+            coreHit = true;
+          } else {
+            score += 2;
+            tokenHits++;
+          }
+        }
+      } else if (GENERIC_TOKENS.has(t)) {
+        score += 1;
+      } else {
+        score += 2;
+        tokenHits++;
+      }
+    }
+    if (score > 0) scored.push({ sectionId: s.id, title: s.title, score, numHit, tokenHits, coreHit });
   }
   scored.sort((a, b) => b.score - a.score || a.sectionId - b.sectionId);
   return scored.slice(0, limit);
 }
 
-export const AUTO_MAP_THRESHOLD = 3;
+/** 自动确认阈值与歧义要求：最高分 ≥5、领先第二名 ≥2，且必须「核心标题命中」或「节号+专有分词同时命中」 */
+export const AUTO_MAP_THRESHOLD = 5;
+export const AUTO_MAP_MARGIN = 2;
+
+export function pickAutoMap(candidates: CandidateSection[]): CandidateSection | null {
+  const best = candidates[0];
+  if (!best || best.score < AUTO_MAP_THRESHOLD) return null;
+  if (!best.coreHit && !(best.numHit && (best.tokenHits ?? 0) > 0)) return null;
+  const second = candidates[1];
+  if (second && best.score - second.score < AUTO_MAP_MARGIN) return null;
+  return best;
+}
+
+// ============ 视频主线映射 ============
+const VIDEO_TAG_RE = /【([^】]+)】/;
+const VIDEO_EXT_RE = /\.(mp4|mkv|mov|avi|flv|wmv|ts|m4v|webm)$/i;
+
+/**
+ * 视频文件名 → 主题词 + 章节标签
+ * 例：`p052 【函数】5.2 指数函数  052].mp4` → { tag: '函数', topic: '指数函数' }
+ * 注意：课程自己的编号（5.2）与教材节号无关，这里直接丢弃
+ */
+export function videoTopicText(rawName: string): { topic: string; tag: string | null } {
+  const tagMatch = rawName.match(VIDEO_TAG_RE);
+  let t = rawName.replace(VIDEO_EXT_RE, '');
+  t = t.replace(/^p\d+\s*/i, '');
+  t = t.replace(VIDEO_TAG_RE, ' ');
+  t = t.replace(/^\s*\d{1,2}\.\d{1,2}(\.\d+)?\s*/, ''); // 课程序号
+  t = t.replace(/\s*\d+\]\s*$/, ' ');
+  t = t.replace(/[\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+  return { topic: t, tag: tagMatch ? tagMatch[1] : null };
+}
+
+/** 视频用候选：不看节号，只看主题词与节标题的契合，外加【标签】与章名的呼应 */
+export function computeVideoCandidates(rawName: string, index: SectionKeywordIndex, limit = 3): CandidateSection[] {
+  const { topic, tag } = videoTopicText(rawName);
+  const normTopic = normalizeMatchText(topic);
+  const tagTokens = tag
+    ? tag.split(/[与和、，,\s]+/).map(normalizeMatchText).filter(x => x.length >= 2)
+    : [];
+  const scored: CandidateSection[] = [];
+  for (const s of index.sections) {
+    let score = 0;
+    let tokenHits = 0;
+    let coreHit = false;
+    for (const t of s.tokens) {
+      if (!normTopic.includes(t)) continue;
+      if (t === s.core && t.length >= 3) {
+        score += 8;
+        coreHit = true;
+      } else if (GENERIC_TOKENS.has(t)) {
+        score += 1;
+      } else {
+        score += 2;
+        tokenHits++;
+      }
+    }
+    // 【函数】→ 章名「函数的概念与性质」；【三角函数】→ 章名「三角函数」
+    if (tagTokens.length && s.chapterTitle) {
+      const normChapter = normalizeMatchText(s.chapterTitle);
+      if (tagTokens.some(t => normChapter.includes(t))) score += 3;
+    }
+    if (score > 0) scored.push({ sectionId: s.id, title: s.title, score, numHit: false, tokenHits, coreHit });
+  }
+  scored.sort((a, b) => b.score - a.score || a.sectionId - b.sectionId);
+  return scored.slice(0, limit);
+}
+
+export const VIDEO_MAP_THRESHOLD = 4;
+export const VIDEO_MAP_MARGIN = 1;
+
+/** 视频确认：必须有标题实词命中（标签加分不足以独立成锚），且领先第二名 ≥1 */
+export function pickVideoMap(candidates: CandidateSection[]): CandidateSection | null {
+  const best = candidates[0];
+  if (!best || best.score < VIDEO_MAP_THRESHOLD) return null;
+  if (!best.coreHit && (best.tokenHits ?? 0) === 0) return null;
+  const second = candidates[1];
+  if (second && best.score - second.score < VIDEO_MAP_MARGIN) return null;
+  return best;
+}
 
 // ============ 扫描状态 ============
 export interface ScanStatus {
@@ -204,9 +366,15 @@ async function indexFile(entry: NetdiskFileEntry, index: SectionKeywordIndex) {
   const year = extractYear(fullText);
   const region = extractRegion(fullText);
   const series = extractSeries(fullText);
-  const candidates = assetKind === 'junk' ? [] : computeCandidates(fullText, index);
-  const best = candidates[0];
-  const autoMap = best && best.score >= AUTO_MAP_THRESHOLD;
+  const subjectCode = detectSubjectFromText(entry.path);
+  const isMathAsset = subjectCode === null || subjectCode === 'math';
+  const isVideo = assetKind === 'video';
+  const candidates = assetKind === 'junk' || !isMathAsset
+    ? []
+    : isVideo
+      ? computeVideoCandidates(name, index)
+      : computeCandidates(fullText, index);
+  const autoMap = isVideo ? pickVideoMap(candidates) : pickAutoMap(candidates);
   const data = {
     fsId: BigInt(entry.fsId),
     name,
@@ -230,9 +398,9 @@ async function indexFile(entry: NetdiskFileEntry, index: SectionKeywordIndex) {
       data: {
         ...data,
         ...(keepManual ? {} : {
-          sectionId: autoMap ? best.sectionId : null,
+          sectionId: autoMap ? autoMap.sectionId : null,
           mapSource: autoMap ? 'auto' : 'none',
-          mapConfirmed: false,
+          mapConfirmed: !!autoMap,
         }),
       },
     });
@@ -241,9 +409,9 @@ async function indexFile(entry: NetdiskFileEntry, index: SectionKeywordIndex) {
       data: {
         ...data,
         path: entry.path,
-        sectionId: autoMap ? best.sectionId : null,
+        sectionId: autoMap ? autoMap.sectionId : null,
         mapSource: autoMap ? 'auto' : 'none',
-        mapConfirmed: false,
+        mapConfirmed: !!autoMap,
       },
     });
   }
@@ -496,4 +664,55 @@ export async function sectionConvergence(sectionIds: number[]) {
     return { sectionId: id, pinned, more, total: pinned + more, ok: pinned >= 3 && pinned <= 5 };
   });
   return result;
+}
+
+
+/**
+ * 全量重新自动映射（人工确认过的条目不覆盖）
+ * 视频 = 主线：按主题词 + 章节标签定位教材节（忽略课程内编号）
+ * 其他资源 = 辅助：节号 + 标题分词
+ */
+export async function remapAll(): Promise<{ scanned: number; mapped: number; perSection: number }> {
+  const index = await loadSectionKeywordIndex();
+  const pageSize = 500;
+  let cursor = 0;
+  let scanned = 0;
+  let mapped = 0;
+  for (;;) {
+    const batch = await prisma.netdiskAsset.findMany({
+      where: { id: { gt: cursor }, status: { not: 'ignored' }, mapSource: { not: 'manual' } },
+      select: { id: true, name: true, path: true, assetKind: true },
+      orderBy: { id: 'asc' },
+      take: pageSize,
+    });
+    if (!batch.length) break;
+    cursor = batch[batch.length - 1].id;
+    const ops: any[] = [];
+    for (const a of batch) {
+      scanned++;
+      const subjectCode = detectSubjectFromText(a.path);
+      const isMath = subjectCode === null || subjectCode === 'math';
+      const isVideo = a.assetKind === 'video';
+      const text = `${a.name} ${a.path}`;
+      const candidates = !isMath
+        ? []
+        : isVideo
+          ? computeVideoCandidates(a.name, index)
+          : computeCandidates(text, index);
+      const best = isVideo ? pickVideoMap(candidates) : pickAutoMap(candidates);
+      if (best) mapped++;
+      ops.push(prisma.netdiskAsset.update({
+        where: { id: a.id },
+        data: {
+          candidateSections: candidates.length ? JSON.stringify(candidates) : null,
+          sectionId: best ? best.sectionId : null,
+          mapSource: best ? 'auto' : 'none',
+          mapConfirmed: !!best,
+        },
+      }));
+    }
+    await prisma.$transaction(ops);
+  }
+  const perSection = await prisma.section.count({ where: { netdiskAssets: { some: { mapConfirmed: true, status: 'active' } } } });
+  return { scanned, mapped, perSection };
 }
