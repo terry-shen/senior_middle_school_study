@@ -79,3 +79,6 @@ desktop.ini
 
 # Python virtualenv
 .venv-py312/
+
+# netdisk mapping intermediate data
+data/netdisk-mapping/
