@@ -146,6 +146,7 @@ export async function getProgress(studentId: number) {
   if (!row) return null;
   return {
     sectionId: row.sectionId,
+    subjectId: row.section.chapter.textbook.subjectId,
     sectionTitle: row.section.title,
     chapterTitle: row.section.chapter.title,
     textbookName: row.section.chapter.textbook.name,
@@ -280,10 +281,59 @@ function resolveTagForChapter(chapterTitle: string): string | null {
   return null;
 }
 
-const tagRank = (tag: string) => {
-  const i = TAG_ORDER.indexOf(tag);
-  return i < 0 ? TAG_ORDER.length : i;
-};
+const BOOK_ORDER = [
+  '必修第一册', '必修第二册', '必修第三册', '选择性必修第一册', '选择性必修第二册', '选择性必修第三册',
+  '必修1 分子与细胞', '必修2 遗传与进化', '选择性必修1 稳态与调节', '选择性必修2 生物与环境', '选择性必修3 生物技术与工程',
+];
+/** 物理旧教材视频标签 → 人教2019 册名 */
+const PHYSICS_TAG_ALIASES: Array<[RegExp, string]> = [
+  [/高中物理必修一|运动的描述|匀变速直线运动|弹簧专题/, '必修第一册'],
+  [/高中物理必修二/, '必修第二册'],
+  [/高中物理选修3-1|选修3-1/, '必修第三册'],
+  [/选修3-2|电磁感应/, '选择性必修第二册'],
+  [/高中物理选修3-5|动量/, '选择性必修第一册'],
+];
+const BIOLOGY_BOOK_PATTERNS: Array<[RegExp, string]> = [
+  [/选择性必修三|选择性必修3/, '选择性必修3 生物技术与工程'],
+  [/选择性必修二|选择性必修2/, '选择性必修2 生物与环境'],
+  [/选择性必修一|选择性必修1/, '选择性必修1 稳态与调节'],
+  [/必修二|必修2/, '必修2 遗传与进化'],
+  [/必修一|必修1/, '必修1 分子与细胞'],
+];
+function normalizeVideoTag(subjectCode: string | null, rawTag: string, videoName: string): string {
+  if (subjectCode === 'physics') {
+    for (const [re, name] of PHYSICS_TAG_ALIASES) if (re.test(rawTag)) return name;
+  }
+  if (subjectCode === 'biology') {
+    for (const [re, name] of BIOLOGY_BOOK_PATTERNS) if (re.test(videoName)) return name;
+  }
+  return rawTag;
+}
+function resolveSectionTag(subjectCode: string | null, chapterTitle: string, textbookName: string): string | null {
+  if (subjectCode === 'physics' || subjectCode === 'biology') return textbookName || null;
+  return resolveTagForChapter(chapterTitle);
+}
+const TAIL_TAGS = ['其他', '高考最后十课', '最后十课'];
+const isTailTag = (tag: string) => TAIL_TAGS.some(t => tag.includes(t));
+
+/** 分组排序：数学课程章节按 TAG_ORDER；非教材章节（如物理/生物专题）按首课编号；考前冲刺类置尾 */
+function compareGroups(a: VideoSeriesGroup, b: VideoSeriesGroup): number {
+  const ta = isTailTag(a.tag) ? 1 : 0, tb = isTailTag(b.tag) ? 1 : 0;
+  if (ta !== tb) return ta - tb;
+  const ba = BOOK_ORDER.indexOf(a.tag), bb = BOOK_ORDER.indexOf(b.tag);
+  if (ba >= 0 && bb >= 0 && ba !== bb) return ba - bb;
+  if (ba >= 0 && bb < 0) return -1;
+  if (bb >= 0 && ba < 0) return 1;
+  const ia = TAG_ORDER.indexOf(a.tag), ib = TAG_ORDER.indexOf(b.tag);
+  if (ia >= 0 && ib >= 0 && ia !== ib) return ia - ib;
+  if (ia >= 0 && ib < 0) return -1;
+  if (ib >= 0 && ia < 0) return 1;
+  const na = Math.min(...a.videos.map(v => v.courseNo ?? 9999));
+  const nb = Math.min(...b.videos.map(v => v.courseNo ?? 9999));
+  if (na !== nb) return na - nb;
+  if (a.videos.length !== b.videos.length) return b.videos.length - a.videos.length;
+  return a.tag.localeCompare(b.tag, 'zh-CN');
+}
 
 function courseNoOf(name: string): number | null {
   const m1 = name.match(/^p(\d+)/i);
@@ -337,7 +387,7 @@ export async function getVideoSeries(
 
   const sectionsByTag = new Map<string, CourseSectionNode[]>();
   for (const s of sectionRows) {
-    const tag = resolveTagForChapter(s.chapter?.title || '');
+    const tag = resolveSectionTag(subjectCode, s.chapter?.title || '', s.chapter?.textbook?.name || '');
     if (!tag) continue;
     if (!sectionsByTag.has(tag)) sectionsByTag.set(tag, []);
     sectionsByTag.get(tag)!.push({
@@ -356,11 +406,10 @@ export async function getVideoSeries(
   const tree = new Map<string, Map<string, VideoSeriesItem[]>>();
   let total = 0;
   for (const r of videoRows) {
-    const code = detectSubjectFromText(r.path);
-    if (subjectCode && code && code !== subjectCode) continue;
-    if (subjectCode && !code && subjectCode !== 'math') continue;
     const series = seriesOfPath(r.path);
-    const tag = tagOfName(r.name);
+    const code = detectSubjectFromText(r.path) || detectSubjectFromText(series);
+    if (subjectCode && code !== subjectCode) continue;
+    const tag = normalizeVideoTag(subjectCode, tagOfName(r.name), r.name);
     if (!tree.has(series)) tree.set(series, new Map());
     const g = tree.get(series)!;
     if (!g.has(tag)) g.set(tag, []);
@@ -381,14 +430,35 @@ export async function getVideoSeries(
       sections: sectionsByTag.get(tag) || [],
     }));
     // 没有视频但有教材小节的课程章节也保留（如仅题库/讲义覆盖）
-    if (series === '1. 阿不高中数学') {
+    if (subjectCode) {
       for (const [tag, sections] of sectionsByTag.entries()) {
         if (!groupList.some(g => g.tag === tag)) groupList.push({ tag, videos: [], sections });
       }
     }
-    groupList.sort((a, b) => tagRank(a.tag) - tagRank(b.tag));
+    groupList.sort(compareGroups);
     return { series, groups: groupList, total: groupList.reduce((n, g) => n + g.videos.length, 0) };
   });
+
+  // 指定学科时：把散落在「其他」系列里的同科视频（如高考最后十课）并入该科唯一的系列
+  if (subjectCode) {
+    const mainSeries = seriesList.filter(s => s.series !== '其他');
+    const otherSeries = seriesList.find(s => s.series === '其他');
+    if (mainSeries.length === 1 && otherSeries) {
+      const target = mainSeries[0];
+      for (const g of otherSeries.groups) {
+        const exist = target.groups.find(x => x.tag === g.tag);
+        if (exist) {
+          exist.videos.push(...g.videos);
+          exist.videos.sort((a, b) => (a.courseNo ?? 9999) - (b.courseNo ?? 9999) || a.id - b.id);
+        } else {
+          target.groups.push(g);
+        }
+      }
+      target.groups.sort(compareGroups);
+      target.total = target.groups.reduce((n, g) => n + g.videos.length, 0);
+      return { series: mainSeries, total: target.total };
+    }
+  }
 
   seriesList.sort((a, b) => a.series.localeCompare(b.series, 'zh-CN'));
   return { series: seriesList, total };
