@@ -30,6 +30,7 @@ function stripBigInt(r: any) {
 router.get('/', requireAuth, async (req, res) => {
   try {
     const subjectId = req.query.subjectId ? Number(req.query.subjectId) : null;
+    const sectionId = req.query.sectionId ? Number(req.query.sectionId) : null;
     const type = req.query.type as string | undefined;
     const keyword = req.query.keyword as string | undefined;
     const page = Math.max(1, Number(req.query.page) || 1);
@@ -40,6 +41,8 @@ router.get('/', requireAuth, async (req, res) => {
     if (!manage) where.isActive = true;
     if (type) where.resourceType = type;
     if (keyword) where.title = { contains: keyword };
+    // 章节维度（M5 / 6.4）
+    if (sectionId) where.sectionId = sectionId;
     // subjectId 过滤：null=全科可见；指定学科=该学科+全科
     if (subjectId) where.OR = [{ subjectId }, { subjectId: null }];
 
@@ -48,7 +51,10 @@ router.get('/', requireAuth, async (req, res) => {
       prisma.videoResource.findMany({
         where, orderBy: [{ sort: 'asc' }, { createdAt: 'desc' }],
         skip: (page - 1) * limit, take: limit,
-        include: { subject: { select: { id: true, name: true, icon: true } } },
+        include: {
+          subject: { select: { id: true, name: true, icon: true } },
+          section: { select: { id: true, title: true, chapter: { select: { id: true, title: true } } } },
+        },
       }),
     ]);
     res.json({ data: data.map(stripBigInt), pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
@@ -72,7 +78,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 // ============ 创建 ============
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { title, subjectId, grade, chapter, resourceType, netdiskPath, fsId, description, sort } = req.body ?? {};
+    const { title, subjectId, grade, chapter, resourceType, netdiskPath, fsId, description, sort, sectionId } = req.body ?? {};
     if (!title || !netdiskPath) return res.status(400).json({ error: 'title/netdiskPath 必填' });
     const type = resourceType || detectType(netdiskPath) || 'video';
     const r = await prisma.videoResource.create({
@@ -80,6 +86,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
         title: String(title), netdiskPath: String(netdiskPath),
         resourceType: type,
         subjectId: subjectId ? Number(subjectId) : null,
+        sectionId: sectionId ? Number(sectionId) : null,
         grade: grade ? String(grade) : null,
         chapter: chapter ? String(chapter) : null,
         fsId: fsId ? BigInt(fsId) : null,
@@ -98,10 +105,11 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { title, subjectId, grade, chapter, description, sort, isActive, shareUrl, fileUrl } = req.body ?? {};
+    const { title, subjectId, grade, chapter, description, sort, isActive, shareUrl, fileUrl, sectionId } = req.body ?? {};
     const data: Record<string, unknown> = {};
     if (title !== undefined) data.title = String(title);
     if (subjectId !== undefined) data.subjectId = subjectId ? Number(subjectId) : null;
+    if (sectionId !== undefined) data.sectionId = sectionId ? Number(sectionId) : null;
     if (grade !== undefined) data.grade = grade ? String(grade) : null;
     if (chapter !== undefined) data.chapter = chapter ? String(chapter) : null;
     if (description !== undefined) data.description = description ? String(description) : null;

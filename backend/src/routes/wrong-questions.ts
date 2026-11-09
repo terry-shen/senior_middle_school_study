@@ -59,6 +59,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
       knowledgePointTags: data.knowledgePointTags ?? null,
       notes: data.notes ?? null,
       subjectId: data.subjectId != null ? parseInt(String(data.subjectId)) : null,
+      sectionId: data.sectionId != null && data.sectionId !== '' ? parseInt(String(data.sectionId)) : null,
     });
     res.status(201).json({ success: true, wrongQuestion: created });
   } catch (err: any) {
@@ -87,6 +88,7 @@ router.post('/upload-photo', requireAuth, upload.single('image'), async (req: Re
       analysis: data.analysis || null,
       notes: data.notes || null,
       subjectId: data.subjectId != null && data.subjectId !== '' ? parseInt(String(data.subjectId)) : null,
+      sectionId: data.sectionId != null && data.sectionId !== '' ? parseInt(String(data.sectionId)) : null,
     });
     res.status(201).json({ success: true, wrongQuestion: created });
   } catch (err: any) {
@@ -104,6 +106,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
       tag: (req.query.tag as string) || undefined,
       reviewStatus: (req.query.reviewStatus as string) || undefined,
       subjectId: req.query.subjectId ? parseInt(String(req.query.subjectId)) : undefined,
+      sectionId: req.query.sectionId ? parseInt(String(req.query.sectionId)) : undefined,
       viewMode: (req.query.viewMode as 'unmastered' | 'all') || 'unmastered',
       sortBy: (req.query.sortBy as 'createdAt' | 'lastReviewAt') || 'createdAt',
       page: req.query.page ? parseInt(req.query.page as string) : 1,
@@ -190,6 +193,22 @@ router.get('/stats', requireAuth, async (req: Request, res: Response) => {
     const studentId = req.user!.id;
     const stats = await WrongQuestionsService.getWrongQuestionStats(studentId);
     res.json(stats);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 章节维度聚合（册/章/节 + 未分类）
+router.get('/grouped', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const studentId = req.user!.id;
+    const subjectId = req.query.subjectId ? parseInt(String(req.query.subjectId)) : undefined;
+    const includeMastered = req.query.includeMastered === 'true';
+    const result = await WrongQuestionsService.getWrongQuestionsGroupedBySection(studentId, {
+      subjectId,
+      includeMastered,
+    });
+    res.json({ success: true, ...result });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

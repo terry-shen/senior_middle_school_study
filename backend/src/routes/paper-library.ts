@@ -40,12 +40,17 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
       ...(req.query.examType ? { examType: req.query.examType as string } : {}),
       ...(req.query.school ? { school: { contains: req.query.school as string } } : {}),
       ...(keyword ? { title: { contains: keyword } } : {}),
+      // 章节维度（M5）：节 / 章 / 册 三级筛选
+      ...(req.query.sectionId ? { sectionId: toInt(req.query.sectionId) ?? undefined } : {}),
+      ...(req.query.chapterId ? { section: { chapterId: toInt(req.query.chapterId) ?? undefined } } : {}),
+      ...(req.query.textbookId ? { section: { chapter: { textbookId: toInt(req.query.textbookId) ?? undefined } } } : {}),
     };
     const [data, total] = await Promise.all([
       prisma.examPaper.findMany({
         where,
         include: {
           subject: { select: { id: true, name: true, icon: true } },
+          section: { select: { id: true, title: true, chapter: { select: { id: true, title: true, textbook: { select: { id: true, name: true } } } } } },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
@@ -82,6 +87,43 @@ router.get('/filters', requireAuth, async (_req: Request, res: Response) => {
       examTypes: uniq(rows.map((r) => r.examType)).sort((a, b) => a.localeCompare(b, 'zh-CN')),
       schools: uniq(rows.map((r) => r.school)).sort((a, b) => a.localeCompare(b, 'zh-CN')),
     });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * POST /api/paper-library/batch-section — 批量挂载章节（M5 / 6.2）
+ * body: { paperIds: number[], sectionId: number | null }
+ * sectionId=null 表示解除挂载。
+ */
+router.post('/batch-section', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { paperIds, sectionId } = req.body ?? {};
+    if (!Array.isArray(paperIds) || paperIds.length === 0) {
+      return res.status(400).json({ error: '请选择要挂载的试卷' });
+    }
+    if (paperIds.length > 200) {
+      return res.status(400).json({ error: '单次最多批量挂载 200 份试卷' });
+    }
+    const ids = paperIds
+      .map((v: unknown) => toInt(v))
+      .filter((v): v is number => v !== null);
+    if (ids.length === 0) return res.status(400).json({ error: '试卷 ID 无效' });
+
+    let targetSectionId: number | null = null;
+    if (sectionId !== null && sectionId !== undefined && sectionId !== '') {
+      targetSectionId = toInt(sectionId);
+      if (targetSectionId === null) return res.status(400).json({ error: '章节 ID 无效' });
+      const section = await prisma.section.findUnique({ where: { id: targetSectionId }, select: { id: true } });
+      if (!section) return res.status(404).json({ error: '章节不存在' });
+    }
+
+    const result = await prisma.examPaper.updateMany({
+      where: { id: { in: ids } },
+      data: { sectionId: targetSectionId },
+    });
+    res.json({ success: true, affected: result.count, sectionId: targetSectionId });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

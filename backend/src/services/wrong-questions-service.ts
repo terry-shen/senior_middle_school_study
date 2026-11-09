@@ -22,6 +22,7 @@ export interface CreateWrongQuestionInput {
   knowledgePointTags?: string | null;
   notes?: string | null;
   subjectId?: number | null; // 学科维度
+  sectionId?: number | null; // 章节维度（M5）
 }
 
 export interface UpdateWrongQuestionInput {
@@ -36,6 +37,7 @@ export interface UpdateWrongQuestionInput {
   knowledgePointTags?: string | null;
   notes?: string | null;
   subjectId?: number | null; // 学科维度
+  sectionId?: number | null; // 章节维度（M5）
 }
 
 export interface WrongQuestionFilters {
@@ -44,6 +46,7 @@ export interface WrongQuestionFilters {
   tag?: string; // 模糊匹配 knowledgePointTags
   reviewStatus?: string; // new/reviewing/mastered
   subjectId?: number; // 学科维度
+  sectionId?: number; // 章节维度（M5）
   viewMode?: 'unmastered' | 'all'; // 默认 unmastered
   sortBy?: 'createdAt' | 'lastReviewAt';
   page?: number;
@@ -72,6 +75,7 @@ export async function createWrongQuestion(
       knowledgePointTags: data.knowledgePointTags ?? null,
       notes: data.notes ?? null,
       subjectId: data.subjectId ?? null,
+      sectionId: data.sectionId === null || data.sectionId === undefined ? null : Number(data.sectionId),
     },
   });
 }
@@ -89,6 +93,7 @@ export async function getWrongQuestions(
     tag,
     reviewStatus,
     subjectId,
+    sectionId,
     viewMode = 'unmastered',
     sortBy = 'createdAt',
     page = 1,
@@ -98,6 +103,7 @@ export async function getWrongQuestions(
   const where: Prisma.StudentWrongQuestionWhereInput = {
     studentId,
     ...(subjectId ? { subjectId } : {}),
+    ...(sectionId ? { sectionId } : {}),
   };
 
   if (questionType && questionType !== 'all') {
@@ -173,6 +179,9 @@ export async function updateWrongQuestion(
       ...(data.knowledgePointTags !== undefined && { knowledgePointTags: data.knowledgePointTags }),
       ...(data.notes !== undefined && { notes: data.notes }),
       ...(data.subjectId !== undefined && { subjectId: data.subjectId }),
+      ...(data.sectionId !== undefined && {
+        sectionId: data.sectionId === null ? null : Number(data.sectionId),
+      }),
     },
   });
 }
@@ -378,4 +387,94 @@ export async function getStudentWrongQuestionsForAdmin(studentId: number, filter
  */
 export async function getStudentMasteryOverviewForAdmin(studentId: number) {
   return getMasteryOverview(studentId);
+}
+
+// ===== 章节维度聚合（M5 / 6.6） =====
+
+export interface SectionWrongQuestionGroup {
+  sectionId: number | null;
+  textbookName: string | null;
+  chapterTitle: string | null;
+  sectionTitle: string | null;
+  label: string;
+  count: number;
+  weakCount: number;
+  items: unknown[];
+}
+
+/**
+ * 错题按章节聚合（册/章/节分组 + 未分类组）
+ * 只统计未掌握（可利用 includeMastered 切换为全部）
+ */
+export async function getWrongQuestionsGroupedBySection(
+  studentId: number,
+  opts: { subjectId?: number; includeMastered?: boolean } = {}
+) {
+  const where: Prisma.StudentWrongQuestionWhereInput = {
+    studentId,
+    ...(opts.subjectId ? { subjectId: opts.subjectId } : {}),
+  };
+  if (!opts.includeMastered) where.reviewStatus = { not: 'mastered' };
+
+  const rows = await prisma.studentWrongQuestion.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    include: {
+      section: {
+        select: {
+          id: true,
+          title: true,
+          order: true,
+          chapter: {
+            select: {
+              id: true,
+              title: true,
+              order: true,
+              textbook: { select: { id: true, name: true, order: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  type Internal = SectionWrongQuestionGroup & { _tb: number; _ch: number; _sec: number };
+  const map = new Map<string, Internal>();
+
+  for (const row of rows) {
+    const key = row.sectionId === null ? 'none' : String(row.sectionId);
+    const sec = (row as any).section;
+    const ch = sec?.chapter;
+    const tb = ch?.textbook;
+    if (!map.has(key)) {
+      const parts = [tb?.name, ch?.title, sec?.title].filter(Boolean) as string[];
+      map.set(key, {
+        sectionId: row.sectionId ?? null,
+        textbookName: tb?.name ?? null,
+        chapterTitle: ch?.title ?? null,
+        sectionTitle: sec?.title ?? null,
+        label: parts.length > 0 ? parts.join(' / ') : '未分类',
+        count: 0,
+        weakCount: 0,
+        items: [],
+        _tb: tb?.order ?? 9999,
+        _ch: ch?.order ?? 9999,
+        _sec: sec?.order ?? 9999,
+      });
+    }
+    const g = map.get(key)!;
+    g.count += 1;
+    if (row.reviewStatus !== 'mastered') g.weakCount += 1;
+    g.items.push(row);
+  }
+
+  const groups = Array.from(map.values())
+    .sort((a, b) => {
+      if (a.sectionId === null) return 1;
+      if (b.sectionId === null) return -1;
+      return a._tb - b._tb || a._ch - b._ch || a._sec - b._sec;
+    })
+    .map(({ _tb, _ch, _sec, ...g }) => g);
+
+  return { total: rows.length, groups };
 }
