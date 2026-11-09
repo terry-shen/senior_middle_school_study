@@ -74,6 +74,13 @@ export async function startScan(token: string, restart = false): Promise<{ succe
   return d;
 }
 
+export async function remapAssets(token: string): Promise<{ success: boolean; scanned: number; mapped: number; perSection: number }> {
+  const r = await fetch(`${API_BASE}/netdisk-index/remap`, { method: 'POST', headers: H(token) });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || '重新映射失败');
+  return d;
+}
+
 export async function pauseScan(token: string): Promise<{ success: boolean; status: ScanStatus }> {
   const r = await fetch(`${API_BASE}/netdisk-index/scan/pause`, { method: 'POST', headers: H(token) });
   const d = await r.json();

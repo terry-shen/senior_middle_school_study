@@ -4,7 +4,7 @@ import { useSubject } from '../contexts/SubjectContext';
 import { getTaxonomyTree } from '../services/chapters-api';
 import type { TextbookNode } from '../services/chapters-api';
 import {
-  batchAction, getIndexStats, getScanStatus, listAssets, pauseScan, startScan,
+  batchAction, getIndexStats, getScanStatus, listAssets, pauseScan, remapAssets, startScan,
 } from '../services/netdisk-index-api';
 import type { AssetRow, IndexStats, ScanStatus } from '../services/netdisk-index-api';
 import type { BatchAction } from '../services/netdisk-index-api';
@@ -37,6 +37,7 @@ export default function NetdiskMapping() {
   const [openChapters, setOpenChapters] = useState<number[]>([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [remapping, setRemapping] = useState(false);
 
   const sectionCounts = useMemo(() => {
     const map = new Map<number, number>();
@@ -115,6 +116,17 @@ export default function NetdiskMapping() {
     catch (e) { setMessage((e as Error).message); }
   };
 
+  const handleRemap = async () => {
+    if (!token) return;
+    setRemapping(true);
+    try {
+      const r = await remapAssets(token);
+      setMessage(`重新映射完成：扫描 ${r.scanned} 条，自动确认 ${r.mapped} 条，覆盖 ${r.perSection} 个章节`);
+      await refreshAll();
+    } catch (e) { setMessage((e as Error).message); }
+    setRemapping(false);
+  };
+
   const toggleBook = (id: number) => setOpenBooks(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   const toggleChapter = (id: number) => setOpenChapters(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
@@ -156,6 +168,7 @@ export default function NetdiskMapping() {
           </button>
           <button className="nm-btn" onClick={() => handleScan(true)}>重新扫描</button>
           <button className="nm-btn" onClick={handlePause} disabled={scan?.status !== 'running'}>暂停</button>
+          <button className="nm-btn" onClick={handleRemap} disabled={remapping}>{remapping ? '映射中…' : '重新自动映射'}</button>
         </div>
       </div>
 
