@@ -3,6 +3,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
+import { detectSubjectFromText } from './netdisk-index-service';
 
 const prisma = new PrismaClient();
 
@@ -32,7 +33,7 @@ function toLite(a: {
 }
 
 export const RESOURCE_GROUPS = [
-  { key: 'video', label: '视频', kinds: ['video'] },
+  { key: 'video', label: '主线视频', kinds: ['video'] },
   { key: 'lecture', label: '讲义', kinds: ['lecture', 'ppt', 'plan'] },
   { key: 'practice', label: '练习', kinds: ['practice'] },
   { key: 'exam', label: '试卷资料', kinds: ['exam'] },
@@ -236,4 +237,159 @@ export async function getWorkbench(studentId: number, subjectId?: number) {
     }),
   ]);
   return { progress, pendingExams, weakCount, weakTop };
+}
+
+
+// ============ 视频主线课程（系列 → 课程章节 → 视频 + 关联教材小节） ============
+// 教材章节不再单独成树，而是并入对应的课程章节作为「关联教材小节」
+
+export interface VideoSeriesItem { id: number; name: string; courseNo: number | null; fsId: string | null; size: string | null }
+export interface CourseSectionNode {
+  id: number; title: string; textbookName: string; chapterTitle: string;
+  resourceCount: number; paperCount: number; weakCount: number;
+}
+export interface VideoSeriesGroup { tag: string; videos: VideoSeriesItem[]; sections: CourseSectionNode[] }
+export interface VideoSeries { series: string; groups: VideoSeriesGroup[]; total: number }
+
+/** 教材章节 → 课程章节（阿不体系）的归并规则；顺序敏感（三角函数先于函数、圆锥曲线先于圆） */
+const CHAPTER_TAG_RULES: Array<[RegExp, string]> = [
+  [/三角函数/, '三角函数'],
+  [/集合|常用逻辑/, '集合与逻辑'],
+  [/不等式/, '不等式'],
+  [/函数的概念与性质|指数函数与对数函数/, '函数'],
+  [/平面向量/, '向量'],
+  [/复数/, '复数'],
+  [/立体几何|空间向量/, '立体几何'],
+  [/统计|概率/, '概率统计'],
+  [/直线和圆/, '直线和圆'],
+  [/圆锥曲线/, '圆曲'],
+  [/数列/, '数列'],
+  [/导数/, '导数'],
+  [/计数原理|排列组合/, '排列组合'],
+];
+
+const TAG_ORDER = [
+  '初高衔接', '集合与逻辑', '不等式', '函数', '三角函数', '向量', '数列', '立体几何',
+  '直线和圆', '圆曲', '导数', '概率统计', '排列组合', '复数', '高考最后十课', '其他',
+];
+
+function resolveTagForChapter(chapterTitle: string): string | null {
+  for (const [re, tag] of CHAPTER_TAG_RULES) {
+    if (re.test(chapterTitle)) return tag;
+  }
+  return null;
+}
+
+const tagRank = (tag: string) => {
+  const i = TAG_ORDER.indexOf(tag);
+  return i < 0 ? TAG_ORDER.length : i;
+};
+
+function courseNoOf(name: string): number | null {
+  const m1 = name.match(/^p(\d+)/i);
+  if (m1) return parseInt(m1[1], 10);
+  const m2 = name.match(/^\s*(\d{1,3})\./);
+  return m2 ? parseInt(m2[1], 10) : null;
+}
+
+function tagOfName(name: string): string {
+  const m = name.match(/【([^】]+)】/);
+  return m ? m[1] : '其他';
+}
+
+function seriesOfPath(p: string): string {
+  const parts = p.split('/');
+  const i = parts.findIndex(x => x.includes('视频教学'));
+  return i >= 0 && parts[i + 1] ? parts[i + 1] : '其他';
+}
+
+export async function getVideoSeries(
+  studentId: number,
+  subjectId?: number,
+): Promise<{ series: VideoSeries[]; total: number }> {
+  let subjectCode: string | null = null;
+  if (subjectId) {
+    const sub = await prisma.subject.findUnique({ where: { id: subjectId }, select: { code: true } });
+    subjectCode = sub?.code ?? null;
+  }
+
+  // 1) 视频
+  const videoRows = await prisma.netdiskAsset.findMany({
+    where: { assetKind: 'video', status: 'active' },
+    select: { id: true, name: true, path: true, fsId: true, size: true },
+    orderBy: { id: 'asc' },
+  });
+
+  // 2) 教材小节 + 计数（资源=学生可见、试卷、本人薄弱）
+  const sectionRows = await prisma.section.findMany({
+    where: subjectId ? { chapter: { textbook: { subjectId } } } : undefined,
+    select: { id: true, title: true, chapter: { select: { title: true, textbook: { select: { name: true } } } } },
+    orderBy: { id: 'asc' },
+  });
+  const [resCounts, paperCounts, weakCounts] = await Promise.all([
+    prisma.netdiskAsset.groupBy({ by: ['sectionId'], where: { ...STUDENT_VISIBLE, sectionId: { not: null } }, _count: { _all: true } }),
+    prisma.examPaper.groupBy({ by: ['sectionId'], where: { sectionId: { not: null } }, _count: { _all: true } }),
+    prisma.studentWrongQuestion.groupBy({ by: ['sectionId'], where: { studentId, sectionId: { not: null }, reviewStatus: { not: 'mastered' } }, _count: { _all: true } }),
+  ]);
+  const resMap = new Map(resCounts.map(r => [r.sectionId as number, r._count._all]));
+  const paperMap = new Map(paperCounts.map(r => [r.sectionId as number, r._count._all]));
+  const weakMap = new Map(weakCounts.map(r => [r.sectionId as number, r._count._all]));
+
+  const sectionsByTag = new Map<string, CourseSectionNode[]>();
+  for (const s of sectionRows) {
+    const tag = resolveTagForChapter(s.chapter?.title || '');
+    if (!tag) continue;
+    if (!sectionsByTag.has(tag)) sectionsByTag.set(tag, []);
+    sectionsByTag.get(tag)!.push({
+      id: s.id,
+      title: s.title,
+      textbookName: s.chapter?.textbook?.name || '',
+      chapterTitle: s.chapter?.title || '',
+      resourceCount: resMap.get(s.id) || 0,
+      paperCount: paperMap.get(s.id) || 0,
+      weakCount: weakMap.get(s.id) || 0,
+    });
+  }
+  for (const list of sectionsByTag.values()) list.sort((a, b) => a.id - b.id);
+
+  // 3) 组装：系列 → 课程章节（视频 + 关联教材小节）
+  const tree = new Map<string, Map<string, VideoSeriesItem[]>>();
+  let total = 0;
+  for (const r of videoRows) {
+    const code = detectSubjectFromText(r.path);
+    if (subjectCode && code && code !== subjectCode) continue;
+    if (subjectCode && !code && subjectCode !== 'math') continue;
+    const series = seriesOfPath(r.path);
+    const tag = tagOfName(r.name);
+    if (!tree.has(series)) tree.set(series, new Map());
+    const g = tree.get(series)!;
+    if (!g.has(tag)) g.set(tag, []);
+    g.get(tag)!.push({
+      id: r.id,
+      name: r.name,
+      courseNo: courseNoOf(r.name),
+      fsId: r.fsId != null ? String(r.fsId) : null,
+      size: r.size != null ? String(r.size) : null,
+    });
+    total++;
+  }
+
+  const seriesList: VideoSeries[] = [...tree.entries()].map(([series, groups]) => {
+    const groupList: VideoSeriesGroup[] = [...groups.entries()].map(([tag, videos]) => ({
+      tag,
+      videos: videos.sort((a, b) => (a.courseNo ?? 9999) - (b.courseNo ?? 9999) || a.id - b.id),
+      sections: sectionsByTag.get(tag) || [],
+    }));
+    // 没有视频但有教材小节的课程章节也保留（如仅题库/讲义覆盖）
+    if (series === '1. 阿不高中数学') {
+      for (const [tag, sections] of sectionsByTag.entries()) {
+        if (!groupList.some(g => g.tag === tag)) groupList.push({ tag, videos: [], sections });
+      }
+    }
+    groupList.sort((a, b) => tagRank(a.tag) - tagRank(b.tag));
+    return { series, groups: groupList, total: groupList.reduce((n, g) => n + g.videos.length, 0) };
+  });
+
+  seriesList.sort((a, b) => a.series.localeCompare(b.series, 'zh-CN'));
+  return { series: seriesList, total };
 }

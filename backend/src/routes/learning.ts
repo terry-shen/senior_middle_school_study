@@ -74,6 +74,14 @@ router.get('/workbench', requireAuth, async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
+// 视频主线课程：按系列 → 章节标签 → 课程序号组织（管理员与学生一致）
+router.get('/video-series', requireAuth, async (req, res) => {
+  try {
+    const subjectId = toInt(req.query.subjectId);
+    res.json({ success: true, ...(await learning.getVideoSeries(req.user!.id, subjectId ?? undefined)) });
+  } catch (e) { fail(res, e); }
+});
+
 // 管理端：某学生章节地图（只读，供学生管理入口复用）
 router.get('/map/student/:studentId', requireAuth, requireAdmin, async (req, res) => {
   try {
