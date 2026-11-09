@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { listNetdiskFiles, getNetdiskStatus } from '../services/netdisk-api';
+import { listNetdiskFiles, getNetdiskPublicStatus } from '../services/netdisk-api';
 import type { NetdiskFile } from '../services/netdisk-api';
 import './NetdiskBrowser.css';
 
@@ -7,6 +7,8 @@ const API_BASE = 'http://localhost:3000/api';
 
 interface Props {
   token: string;
+  /** 管理员绑定页浏览全学科，不按当前学科过滤 */
+  allSubjects?: boolean;
 }
 
 const VIDEO_EXTS = ['mp4', 'mkv', 'mov', 'avi', 'flv', 'ts', 'm3u8', 'rmvb', 'wmv'];
@@ -39,7 +41,7 @@ type Viewer =
   | { kind: 'image'; f: NetdiskFile }
   | { kind: 'doc'; f: NetdiskFile };
 
-export default function NetdiskBrowser({ token }: Props) {
+export default function NetdiskBrowser({ token, allSubjects }: Props) {
   const [bound, setBound] = useState<boolean | null>(null);
   const [dir, setDir] = useState('/apps/高中学习系统');
   const [files, setFiles] = useState<NetdiskFile[]>([]);
@@ -50,7 +52,7 @@ export default function NetdiskBrowser({ token }: Props) {
   const [inlineDoc, setInlineDoc] = useState<NetdiskFile | null>(null);
 
   useEffect(() => {
-    getNetdiskStatus(token).then((s) => setBound(!!s.bound)).catch(() => setBound(false));
+    getNetdiskPublicStatus(token).then((s) => setBound(!!s.bound)).catch(() => setBound(false));
   }, [token]);
 
   const load = useCallback(async (d: string) => {
@@ -58,7 +60,7 @@ export default function NetdiskBrowser({ token }: Props) {
     setLoading(true);
     setError('');
     try {
-      const r = await listNetdiskFiles(token, d);
+      const r = await listNetdiskFiles(token, d, { allSubjects });
       setDir(r.dir || d);
       setFiles(r.files || []);
     } catch (e: any) {

@@ -2,6 +2,8 @@
  * Netdisk Binding API — /api/netdisk（百度网盘开放平台绑定与操作）
  */
 
+import { withSubjectParam } from './subjects-api';
+
 const API_BASE = 'http://localhost:3000/api';
 
 function authHeaders(token: string) {
@@ -69,6 +71,13 @@ export async function getNetdiskStatus(token: string): Promise<NetdiskConfigStat
   return res.json();
 }
 
+/** 学生端可用：只返回是否已绑定，不含凭证 */
+export async function getNetdiskPublicStatus(token: string): Promise<{ success: boolean; bound: boolean; status: string }> {
+  const res = await fetch(`${API_BASE}/netdisk/status/public`, { headers: authHeaders(token) });
+  if (!res.ok) return { success: false, bound: false, status: 'unknown' };
+  return res.json();
+}
+
 export async function saveNetdiskConfig(token: string, config: NetdiskConfigInput): Promise<{ success: boolean }> {
   const res = await fetch(`${API_BASE}/netdisk/config`, {
     method: 'PUT',
@@ -91,9 +100,10 @@ export async function unbindNetdisk(token: string): Promise<{ success: boolean }
   return res.json();
 }
 
-export async function listNetdiskFiles(token: string, dir?: string): Promise<NetdiskListResult> {
-  const qs = dir ? `?dir=${encodeURIComponent(dir)}` : '';
-  const res = await fetch(`${API_BASE}/netdisk/files${qs}`, { headers: authHeaders(token) });
+export async function listNetdiskFiles(token: string, dir?: string, opts?: { allSubjects?: boolean }): Promise<NetdiskListResult> {
+  const base = `${API_BASE}/netdisk/files?dir=${encodeURIComponent(dir || '/')}`;
+  const url = opts?.allSubjects ? base : withSubjectParam(base);
+  const res = await fetch(url, { headers: authHeaders(token) });
   const d = await res.json();
   if (!res.ok) throw new Error(d.error || '获取目录失败');
   // 规范化：filename 兜底用 name（后端返回 name 字段）

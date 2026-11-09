@@ -172,7 +172,7 @@ export default function NetdiskBinding() {
         ) : status?.bound ? (
           <div className="nd-actions">
             <button className="nd-btn-danger" onClick={handleUnbind}>解除绑定</button>
-            <NetdiskBrowser token={token!} />
+            <NetdiskBrowser token={token!} allSubjects />
           </div>
         ) : (
           <div>
