@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
 import { requireAuth, requireAdmin } from '../middleware/permission';
 import * as netdisk from '../services/netdisk-service';
+import { detectSubjectFromText } from '../services/netdisk-index-service';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -13,6 +14,14 @@ function toStatusCode(e: unknown): number {
 
 // GET /api/netdisk/status
 // GET /api/netdisk/status (admin — 返回完整凭证用于表单回填)
+// GET /api/netdisk/status/public —— 仅返回绑定状态，供学生端浏览资源时使用（不含任何凭证）
+router.get('/status/public', requireAuth, async (_req, res) => {
+  try {
+    const s = await netdisk.getStatus();
+    res.json({ success: true, bound: !!s.bound, status: s.status });
+  } catch (e: unknown) { res.status(toStatusCode(e)).json({ error: (e as Error).message }); }
+});
+
 router.get('/status', requireAuth, requireAdmin, async (_req, res) => {
   try { res.json(await netdisk.getStatus()); }
   catch (e: unknown) { res.status(toStatusCode(e)).json({ error: (e as Error).message }); }
@@ -59,10 +68,24 @@ router.post('/unbind', requireAuth, requireAdmin, async (_req, res) => {
 });
 
 // GET /api/netdisk/files?dir= (admin)
-router.get('/files', requireAuth, requireAdmin, async (req, res) => {
+router.get('/files', requireAuth, async (req, res) => {
   try {
     const dir = (req.query.dir as string) || '/';
-    res.json({ success: true, dir, files: await netdisk.listFiles(dir) });
+    const files = await netdisk.listFiles(dir);
+    const subjectId = req.query.subjectId ? parseInt(String(req.query.subjectId), 10) : 0;
+    let filtered = files;
+    if (subjectId) {
+      const sub = await prisma.subject.findUnique({ where: { id: subjectId }, select: { code: true } });
+      const code = sub?.code;
+      if (code) {
+        // 只过滤能识别出学科的条目；识别不出的目录（如「视频教学」「教辅材料」）保留以便导航
+        filtered = files.filter((f: any) => {
+          const detected = detectSubjectFromText(`${f.path || ''} ${f.name || ''}`);
+          return !detected || detected === code;
+        });
+      }
+    }
+    res.json({ success: true, dir, files: filtered });
   } catch (e: unknown) { res.status(toStatusCode(e)).json({ error: (e as Error).message }); }
 });
 
