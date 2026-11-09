@@ -14,6 +14,8 @@ import { useToast } from '../contexts/ToastContext';
 import MathText from '../components/MathText';
 import SubjectSelect from '../components/SubjectSelect';
 import { getSelectedSubjectId } from '../services/subjects-api';
+import { listFlatSections } from '../services/chapters-api';
+import type { FlatSection } from '../services/chapters-api';
 import {
   getWrongQuestionById,
   updateWrongQuestion,
@@ -74,6 +76,8 @@ export default function WrongQuestionEdit() {
   const [notes, setNotes] = useState('');
   const [options, setOptions] = useState<string[]>(['', '', '', '']);
   const [subjectId, setSubjectId] = useState<number | null>(isNew ? getSelectedSubjectId() : null);
+  const [sectionId, setSectionId] = useState<number | null>(null);
+  const [sections, setSections] = useState<FlatSection[]>([]);
 
   // MathLive popup state
   const [showMathPopup, setShowMathPopup] = useState(false);
@@ -85,6 +89,22 @@ export default function WrongQuestionEdit() {
   useEffect(() => {
     loadMathLive().catch(console.error);
   }, []);
+
+  // 章节下拉（M5 / 6.5）
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    listFlatSections(token, subjectId || getSelectedSubjectId() || undefined)
+      .then((list) => {
+        if (!cancelled) setSections(list);
+      })
+      .catch(() => {
+        if (!cancelled) setSections([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, subjectId]);
 
   useEffect(() => {
     if (isNew || !token || !wqId) return;
@@ -101,6 +121,7 @@ export default function WrongQuestionEdit() {
         setKnowledgePointTags(w.knowledgePointTags || '');
         setNotes(w.notes || '');
         setSubjectId((w as any).subjectId ?? null);
+        setSectionId((w as any).sectionId ?? null);
         const parsed = parseOptions(w.options);
         setOptions(
           parsed.length > 0 ? parsed : ['', '', '', '']
@@ -155,6 +176,7 @@ export default function WrongQuestionEdit() {
         knowledgePointTags,
         notes,
         subjectId,
+        sectionId,
       };
       if (isChoice(questionType)) {
         const validOptions = options.filter((o) => o.trim());
@@ -298,6 +320,20 @@ export default function WrongQuestionEdit() {
           <label>
             <span>学科</span>
             <SubjectSelect value={subjectId} onChange={setSubjectId} allowEmpty emptyLabel="未指定学科" />
+          </label>
+          <label>
+            <span>章节</span>
+            <select
+              value={sectionId ?? ''}
+              onChange={(e) => setSectionId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">未指定章节</option>
+              {sections.map((s) => (
+                <option key={s.id} value={String(s.id)}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
             <span>题型</span>

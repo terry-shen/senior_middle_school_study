@@ -51,6 +51,7 @@ export interface CreateExamSessionInput {
   source: ExamSessionSource;
   questionIds?: number[];
   paperId?: number;
+  subjectId?: number | null;
   totalScore?: number;
   duration?: number;
   startTime?: string | null;

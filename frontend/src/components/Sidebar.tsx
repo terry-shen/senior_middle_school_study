@@ -28,16 +28,16 @@ const adminGroups: NavGroup[] = [
     ],
   },
   {
-    title: '题目管理',
+    title: '学习内容',
     items: [
-      { to: '/questions', label: '题目列表', icon: '📋' },
-      { to: '/difficulty', label: '难度管理', icon: '📊' },
+      { to: '/netdisk-index', label: '资源映射', icon: '🧭' },
+      { to: '/chapters', label: '章节管理', icon: '🗂️' },
     ],
   },
   {
-    title: '知识点文档',
+    title: '题目管理',
     items: [
-      { to: '/knowledge-points', label: '知识点列表', icon: '📖' },
+      { to: '/questions', label: '题目列表', icon: '📋' },
     ],
   },
   {
@@ -52,8 +52,6 @@ const adminGroups: NavGroup[] = [
     items: [
       { to: '/mock-exams', label: '模拟考试', icon: '🎯' },
   { to: '/resources', label: '学习资源', icon: '📺' },
-      { to: '/online-exams', label: '在线测验', icon: '🌐' },
-      { to: '/grading', label: 'AI批改', icon: '✏️' },
       { to: '/answer-sheets', label: '答题纸阅卷', icon: '📝' },
     ],
   },
@@ -69,6 +67,7 @@ const adminGroups: NavGroup[] = [
 ];
 
 const studentItems: NavItem[] = [
+  { to: '/learning', label: '章节学习', icon: '📖' },
   { to: '/mock-exams', label: '模拟考试', icon: '🎯' },
   { to: '/wrong-questions', label: '错题本', icon: '❌' },
   { to: '/answer-sheets', label: '我的答题纸', icon: '📝' },

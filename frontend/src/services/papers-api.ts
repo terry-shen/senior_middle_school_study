@@ -24,6 +24,12 @@ export interface ExamPaper {
   subject?: { id: number; name: string; icon?: string | null } | null; // 学科（Subject 外键嵌套对象）
   subjectId?: number | null; // 学科 ID（提交更新用）
   school?: string | null; // 学校（自由文本，试卷库分类）
+  sectionId?: number | null; // 章节 ID（M5 闭环）
+  section?: {
+    id: number;
+    title: string;
+    chapter?: { id: number; title: string; textbook?: { id: number; name: string } | null } | null;
+  } | null;
   pageImages?: string[] | string | null; // rendered page image URLs (list endpoint returns a JSON string, detail returns an array)
   parsedMarkdown?: string; // MinerU parsed Markdown with LaTeX formulas
   editedMarkdown?: string; // User-edited Markdown (calibrated version)
@@ -667,6 +673,9 @@ export interface PaperLibraryFilters {
   examType?: string;
   school?: string;
   keyword?: string;
+  textbookId?: string | number;
+  chapterId?: string | number;
+  sectionId?: string | number;
   purpose?: string;
   page?: number;
   limit?: number;
@@ -712,6 +721,9 @@ export async function getPaperLibrary(
   if (filters.examType) params.set('examType', filters.examType);
   if (filters.school) params.set('school', filters.school);
   if (filters.keyword) params.set('keyword', filters.keyword);
+  if (filters.textbookId) params.set('textbookId', String(filters.textbookId));
+  if (filters.chapterId) params.set('chapterId', String(filters.chapterId));
+  if (filters.sectionId) params.set('sectionId', String(filters.sectionId));
   if (filters.page) params.set('page', String(filters.page));
   if (filters.limit) params.set('limit', String(filters.limit));
   const response = await fetch(withSubjectParam(`${API_BASE}/paper-library?${params.toString()}`), {
@@ -732,6 +744,24 @@ export async function getPaperLibraryFilters(token: string): Promise<PaperLibrar
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err.error || '筛选项获取失败');
+  }
+  return response.json();
+}
+
+/** POST /api/paper-library/batch-section — 批量挂载/解除挂载章节（M5 / 6.2） */
+export async function batchAttachSection(
+  token: string,
+  paperIds: number[],
+  sectionId: number | null
+): Promise<{ success: boolean; affected: number; sectionId: number | null }> {
+  const response = await fetch(`${API_BASE}/paper-library/batch-section`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ paperIds, sectionId }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || '批量挂载失败');
   }
   return response.json();
 }
