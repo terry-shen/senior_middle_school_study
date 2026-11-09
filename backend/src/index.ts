@@ -17,6 +17,7 @@ import incentiveRoutes from './routes/incentive';
 import answerSheetRoutes from './routes/answer-sheets';
 import paperLibraryRoutes from './routes/paper-library';
 import subjectRoutes from './routes/subjects';
+import aiAssistantRoutes from './routes/ai-assistants';
 import chapterRoutes from './routes/chapters';
 import netdiskIndexRoutes from './routes/netdisk-index';
 import learningRoutes from './routes/learning';
@@ -163,6 +164,7 @@ app.use('/api/subjects', subjectRoutes);
   app.use('/api/chapters', chapterRoutes);
   app.use('/api/netdisk-index', netdiskIndexRoutes);
   app.use('/api/learning', learningRoutes);
+  app.use('/api/ai-assistants', aiAssistantRoutes);
   console.log('Incentive routes registered at /api/incentive');
 } catch (error) {
   console.error('Failed to register Incentive routes:', error);

@@ -754,3 +754,22 @@ model StudentLearningProgress {
   @@index([sectionId])
   @@map("student_learning_progress")
 }
+
+// ===== AI 助理导航 =====
+
+// 可导航的在线 AI 站点（介绍 + 跳转地址，由管理员维护）
+model AiAssistant {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique // doubao / deepseek / workbuddy
+  name        String
+  url         String   @default("")
+  icon        String?
+  description String?
+  order       Int      @default(0)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([order])
+  @@map("ai_assistants")
+}
