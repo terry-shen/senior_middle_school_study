@@ -1,0 +1,160 @@
+.rv-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 20, 35, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 24px;
+}
+
+.rv-modal {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.32);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: min(1000px, 96vw);
+  max-height: 92vh;
+}
+
+.rv-modal.rv-kind-image { width: min(1100px, 96vw); }
+.rv-modal.rv-kind-pdf { width: min(1100px, 96vw); height: 92vh; }
+
+.rv-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e8ebf1;
+  background: #f7f9fc;
+}
+
+.rv-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rv-kind {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #e8f0fe;
+  color: #1a56c4;
+  white-space: nowrap;
+}
+
+.rv-name {
+  font-size: 13.5px;
+  color: #24303f;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rv-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.rv-btn {
+  font-size: 12.5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid #d4dae5;
+  background: #fff;
+  color: #33445c;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rv-btn:hover { background: #eef2f9; }
+
+.rv-btn-primary {
+  background: #1a56c4;
+  border-color: #1a56c4;
+  color: #fff;
+}
+.rv-btn-primary:hover { background: #1546a3; }
+
+.rv-close { padding: 5px 9px; }
+
+.rv-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #10141c;
+  padding: 10px;
+}
+
+.rv-video-el {
+  max-width: 100%;
+  max-height: 78vh;
+  background: #000;
+  border-radius: 6px;
+}
+
+.rv-image-wrap {
+  width: 100%;
+  max-height: 78vh;
+  overflow: auto;
+  text-align: center;
+  background: #10141c;
+}
+
+.rv-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.rv-pdf {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+  border-radius: 4px;
+}
+
+.rv-download-panel {
+  color: #e9eef7;
+  text-align: center;
+  padding: 32px 16px 40px;
+}
+
+.rv-download-icon { font-size: 44px; margin-bottom: 8px; }
+
+.rv-download-title {
+  font-size: 14px;
+  color: #c7d2e4;
+  margin-bottom: 16px;
+}
+
+.rv-empty {
+  color: #c7d2e4;
+  font-size: 14px;
+  padding: 40px 12px;
+}
+
+.rv-foot {
+  display: flex;
+  gap: 14px;
+  justify-content: flex-end;
+  padding: 8px 14px;
+  border-top: 1px solid #e8ebf1;
+  font-size: 12px;
+  color: #78859a;
+  background: #fbfcfe;
+  min-height: 32px;
+}

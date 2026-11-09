@@ -1,0 +1,237 @@
+.chapter-map {
+  padding: 24px 28px 48px;
+  max-width: 1080px;
+  text-align: left;
+}
+
+.cmap-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.cmap-head h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  color: #1f2937;
+}
+
+.cmap-sub {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.cmap-dot {
+  margin: 0 6px;
+  color: #c3cad6;
+}
+
+.cmap-refresh {
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #d4dae5;
+  background: #fff;
+  color: #33445c;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cmap-refresh:hover { background: #eef2f9; }
+.cmap-refresh:disabled { opacity: 0.55; cursor: default; }
+
+.cmap-continue {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  border-radius: 10px;
+  border: 1px solid #cfe0ff;
+  background: linear-gradient(180deg, #f2f7ff, #eaf2ff);
+}
+
+.cmap-continue-text {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.cmap-continue-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1a56c4;
+  background: #dbe8ff;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.cmap-continue-path {
+  font-size: 13.5px;
+  color: #24303f;
+  font-weight: 600;
+}
+
+.cmap-continue-asset {
+  font-size: 12.5px;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 340px;
+}
+
+.cmap-continue-btn {
+  flex-shrink: 0;
+  font-size: 13px;
+  padding: 7px 14px;
+  border-radius: 7px;
+  border: 1px solid #1a56c4;
+  background: #1a56c4;
+  color: #fff;
+  cursor: pointer;
+}
+.cmap-continue-btn:hover { background: #1546a3; }
+
+.cmap-loading,
+.cmap-empty,
+.cmap-error {
+  font-size: 13.5px;
+  color: #6b7280;
+  padding: 16px 0;
+}
+.cmap-error { color: #c0392b; }
+
+.cmap-book {
+  border: 1px solid #e3e8f0;
+  border-radius: 10px;
+  background: #fff;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.cmap-book-head,
+.cmap-chapter-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: #f8fafd;
+  padding: 11px 14px;
+  cursor: pointer;
+  text-align: left;
+}
+.cmap-book-head:hover,
+.cmap-chapter-head:hover { background: #eef3fb; }
+
+.cmap-caret {
+  color: #8a94a6;
+  font-size: 12px;
+  width: 12px;
+  flex-shrink: 0;
+}
+
+.cmap-book-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.cmap-book-meta {
+  font-size: 12px;
+  color: #7b8798;
+  margin-left: auto;
+}
+
+.cmap-chapters {
+  border-top: 1px solid #eef1f6;
+  padding: 4px 0 8px;
+}
+
+.cmap-chapter {
+  margin: 2px 0;
+}
+
+.cmap-chapter-head {
+  background: #fff;
+  padding: 8px 14px 8px 30px;
+}
+
+.cmap-chapter-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #33445c;
+}
+
+.cmap-chapter-meta {
+  font-size: 12px;
+  color: #9aa5b5;
+  margin-left: auto;
+}
+
+.cmap-sections {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 4px;
+}
+
+.cmap-section {
+  padding: 0 14px 0 54px;
+}
+
+.cmap-section-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  text-decoration: none;
+  color: #33445c;
+}
+.cmap-section-link:hover { background: #f4f7fc; }
+
+.cmap-section.current .cmap-section-link {
+  background: #eef5ff;
+  box-shadow: inset 3px 0 0 #1a56c4;
+}
+
+.cmap-section-title {
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmap-badges {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cmap-badge {
+  font-size: 11.5px;
+  padding: 1px 7px;
+  border-radius: 9px;
+  background: #f0f2f7;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.cmap-badge-paper { background: #eef6ec; color: #2f7a3d; }
+.cmap-badge-weak { background: #fdeeee; color: #b93a3a; }
+.cmap-badge-current { background: #1a56c4; color: #fff; }
+
+@media (max-width: 768px) {
+  .chapter-map { padding: 16px 14px 32px; }
+  .cmap-head { flex-direction: column; }
+  .cmap-continue { flex-direction: column; align-items: flex-start; }
+  .cmap-badges { display: none; }
+}
