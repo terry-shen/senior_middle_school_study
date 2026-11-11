@@ -15,7 +15,7 @@ services:
       JWT_EXPIRES_IN: "7d"
       # 云端不部署 MinerU：关闭 CLI 探测与本地 API 自启
       MINERU_DISABLED: "1"
-      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://106.15.136.254}"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://106.15.136.254:5173}"
       CORS_ORIGIN: "${CORS_ORIGIN:-}"
     volumes:
       - ./data/db:/app/data
@@ -44,5 +44,5 @@ services:
         condition: service_healthy
     ports:
       # 宿主机 3000 已被 Grafana 占用；本站对外用 80（无域名，直接 IP 访问）
-      - "80:80"
+      - "5173:80"
     mem_limit: 128m

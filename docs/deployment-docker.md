@@ -2,11 +2,11 @@
 
 ## 1. 访问地址
 
-- 应用：`http://106.15.136.254/`（宿主机 80 端口，需安全组放行）
-- 健康检查：`http://106.15.136.254/api`（返回接口清单）、容器内 `/health`
+- 应用：`http://106.15.136.254:5173/`（宿主机 5173 端口，需安全组放行）
+- 健康检查：`http://106.15.136.254:5173/api`（返回接口清单）、容器内 `/health`
 - 账号：`admin1 / admin123`（管理员）、`2026001 / student123`（学生）
 
-> 宿主机 3000/4000/8083 已被既有 Grafana、TeslaMate、Calibre-Web 占用，本站使用 80 端口，不冲突。
+> 宿主机 3000/4000/8083 已被既有 Grafana、TeslaMate、Calibre-Web 占用，本站使用 5173 端口，不冲突。
 
 ## 2. 目录结构
 
@@ -106,7 +106,7 @@ v3 只保留「章节学习」主线：学科一级导航 → 视频课程主线
 ### 9.2 PUBLIC_BASE_URL
 ```bash
 # /www/highschool-system/.env
-PUBLIC_BASE_URL=http://106.15.136.254
+PUBLIC_BASE_URL=http://106.15.136.254:5173
 ```
 用于生成百度网盘 OAuth 回调地址（`${PUBLIC_BASE_URL}/api/netdisk/callback`）。
 修改后需在百度开放平台「安全设置 → 授权回调页」登记同一地址，然后重启 api。
