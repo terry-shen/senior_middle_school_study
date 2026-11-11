@@ -1,18 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import MathText from '../components/MathText';
 import ResourceViewer from '../components/ResourceViewer';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getFeaturedResources,
   getMoreResources,
-  getSectionPapers,
-  getSectionWrongQuestions,
   recordProgress,
   type AssetLite,
-  type SectionPaper,
   type SectionResourcesFeatured,
-  type SectionWrongQuestion,
 } from '../services/learning-api';
 import './ChapterDetail.css';
 
@@ -45,8 +40,6 @@ export default function ChapterDetail() {
   const navigate = useNavigate();
 
   const [featured, setFeatured] = useState<SectionResourcesFeatured | null>(null);
-  const [papers, setPapers] = useState<SectionPaper[]>([]);
-  const [wrongs, setWrongs] = useState<SectionWrongQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -63,14 +56,8 @@ export default function ChapterDetail() {
     setLoading(true);
     setError('');
     try {
-      const [f, p, w] = await Promise.all([
-        getFeaturedResources(token, sectionId),
-        getSectionPapers(token, sectionId),
-        getSectionWrongQuestions(token, sectionId).catch(() => ({ success: true, data: [] as SectionWrongQuestion[] })),
-      ]);
+      const f = await getFeaturedResources(token, sectionId);
       setFeatured(f);
-      setPapers(p.data || []);
-      setWrongs(w.data || []);
     } catch (e) {
       setError(e instanceof Error ? e.message : '加载失败');
     } finally {
@@ -141,8 +128,6 @@ export default function ChapterDetail() {
           <p className="cd-sub">
             精选资源 {totalFeatured} 条
             {hasMore ? ` · 更多资源 ${moreCount} 条` : ''}
-            {papers.length > 0 ? ` · 本节试卷 ${papers.length} 份` : ''}
-            {wrongs.length > 0 ? ` · 我的错题 ${wrongs.length} 道` : ''}
           </p>
         </div>
         <button className="cd-btn" onClick={() => navigate('/learning')}>← 返回章节</button>
@@ -227,64 +212,6 @@ export default function ChapterDetail() {
           )}
         </section>
       )}
-
-      <section className="cd-group">
-        <h2 className="cd-group-title">
-          本节试卷
-          <span className="cd-group-count">{papers.length}</span>
-        </h2>
-        {papers.length === 0 ? (
-          <p className="cd-group-empty">暂无挂载到本节的试卷</p>
-        ) : (
-          <div className="cd-paper-list">
-            {papers.map((p) => (
-              <div key={p.id} className="cd-paper">
-                <div className="cd-paper-main">
-                  <div className="cd-paper-title">{p.title}</div>
-                  <div className="cd-paper-meta">
-                    {p.year ? `${p.year} 年` : ''}
-                    {p.region ? ` · ${p.region}` : ''}
-                    {p.examType ? ` · ${p.examType}` : ''}
-                    {p.totalScore ? ` · 满分 ${p.totalScore}` : ''}
-                    {p.duration ? ` · ${p.duration} 分钟` : ''}
-                  </div>
-                </div>
-                <button className="cd-btn" onClick={() => navigate(`/paper-library/${p.id}/view`)}>查看试卷</button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="cd-group">
-        <h2 className="cd-group-title">
-          本节错题
-          <span className="cd-group-count">{wrongs.length}</span>
-        </h2>
-        {wrongs.length === 0 ? (
-          <p className="cd-group-empty">
-            本节暂无错题，可在 <Link to="/wrong-questions">错题本</Link> 中录入。
-          </p>
-        ) : (
-          <ul className="cd-wrong-list">
-            {wrongs.map((w) => (
-              <li key={w.id} className="cd-wrong">
-                <div className="cd-wrong-head">
-                  <span className="cd-chip">{KIND_LABEL[w.questionType] || w.questionType}</span>
-                  <span className={`cd-chip ${w.reviewStatus === 'mastered' ? 'cd-chip-ok' : 'cd-chip-warn'}`}>
-                    {w.reviewStatus === 'mastered' ? '已掌握' : w.reviewStatus === 'reviewing' ? '复习中' : '未复习'}
-                  </span>
-                </div>
-                <div className="cd-wrong-content"><MathText text={w.content} /></div>
-                <div className="cd-wrong-answers">
-                  <span>我的答案：{w.myAnswer || '—'}</span>
-                  <span>正确答案：{w.correctAnswer || '—'}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
 
       <ResourceViewer asset={viewing} token={token || ''} onClose={() => setViewing(null)} />
     </div>

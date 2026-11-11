@@ -270,3 +270,39 @@
 }
 .cmap-section-link:hover { background: #f1f8ff; color: #1565c0; }
 .cmap-section-title { flex: 1; }
+
+.cmap-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 16px; }
+.cmap-tab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; border: 1px solid #e3e6f0; background: #fff; color: #333; font-size: 14px; cursor: pointer; transition: all .15s ease; }
+.cmap-tab:hover:not(:disabled) { border-color: var(--tab-color, #1e2761); box-shadow: 0 2px 8px rgba(30, 39, 97, .08); }
+.cmap-tab.active { background: var(--tab-color, #1e2761); border-color: var(--tab-color, #1e2761); color: #fff; }
+.cmap-tab.pending { color: #9aa0b4; background: #f7f8fb; border-style: dashed; cursor: not-allowed; }
+.cmap-tab-icon { font-size: 15px; }
+.cmap-tab-name { font-weight: 600; }
+.cmap-tab-count { font-size: 12px; opacity: .72; }
+.cmap-tab.active .cmap-tab-count { opacity: .9; }
+.cmap-tab-pending { font-size: 11px; padding: 1px 6px; border-radius: 8px; background: #eceef5; color: #8a90a6; }
+@media (max-width: 768px) { .cmap-tab { padding: 6px 10px; font-size: 13px; } }
+
+
+/* 学科不存在 / 待建设 空态 */
+.cmap-empty-box {
+  margin: 24px 0;
+  padding: 32px 24px;
+  border: 1px dashed #d5d9e2;
+  border-radius: 12px;
+  background: #fafbfd;
+  text-align: center;
+}
+.cmap-empty-icon { font-size: 36px; margin-bottom: 8px; }
+.cmap-empty-box h2 { margin: 0 0 8px; font-size: 18px; color: #1e2761; }
+.cmap-empty-box p { margin: 0 0 16px; color: #5b6472; font-size: 14px; }
+.cmap-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #1e2761;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+.cmap-btn:hover { background: #2a3675; }

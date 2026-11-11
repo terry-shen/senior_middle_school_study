@@ -145,16 +145,16 @@ export default function NetdiskBinding() {
           </div>
           <div className="nd-form-row">
             <label>授权回调页</label>
-            <input type="text" value={redirectUri} onChange={(e) => setRedirectUri(e.target.value)} placeholder="留空使用默认 http://localhost:3000/api/netdisk/callback" />
+            <input type="text" value={redirectUri} onChange={(e) => setRedirectUri(e.target.value)} placeholder="留空使用默认 /api/netdisk/callback" />
           </div>
         </div>
         <div className="nd-callback-notice">
           <strong>⚠️ 关键：授权前必须完成此步骤</strong>
           <p>到百度开放平台（pan.baidu.com/union）→ 应用管理 → 安全设置 → <strong>授权回调页</strong>，把下方地址<strong>原样</strong>添加进去（每行一条，必须与之一字不差，含 http:// 和端口）：</p>
           <div className="nd-callback-box">
-            <code>{status?.redirectUri || 'http://localhost:3000/api/netdisk/callback'}</code>
+            <code>{status?.redirectUri || '/api/netdisk/callback'}</code>
             <button type="button" className="btn-sm" onClick={() => {
-              const uri = status?.redirectUri || 'http://localhost:3000/api/netdisk/callback';
+              const uri = status?.redirectUri || '/api/netdisk/callback';
               navigator.clipboard?.writeText(uri).then(() => setMessage('回调地址已复制到剪贴板'));
             }}>复制</button>
           </div>

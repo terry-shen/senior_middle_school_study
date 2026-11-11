@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useSubject } from '../contexts/SubjectContext';
 import {
+  getLearningSubjects,
   getProgress,
   getVideoSeries,
   type AssetLite,
   type LearningProgress,
+  type LearningSubject,
   type VideoSeries,
   type VideoSeriesItem,
 } from '../services/learning-api';
+import { setSelectedSubjectId } from '../services/subjects-api';
 import ResourceViewer from '../components/ResourceViewer';
 import './ChapterMap.css';
 
@@ -25,9 +27,13 @@ function formatSize(size: string): string {
 }
 
 export default function ChapterMap() {
+  const { code } = useParams<{ code: string }>();
   const { token } = useAuth();
-  const { selectedSubject } = useSubject();
   const navigate = useNavigate();
+
+  const [subjects, setSubjects] = useState<LearningSubject[]>([]);
+  const [subject, setSubject] = useState<LearningSubject | null>(null);
+  const [subjectsLoaded, setSubjectsLoaded] = useState(false);
   const [videoSeries, setVideoSeries] = useState<VideoSeries[]>([]);
   const [videoTotal, setVideoTotal] = useState(0);
   const [progress, setProgress] = useState<LearningProgress | null>(null);
@@ -37,8 +43,43 @@ export default function ChapterMap() {
   const [openTags, setOpenTags] = useState<Record<string, boolean>>({});
   const [viewing, setViewing] = useState<AssetLite | null>(null);
 
-  const load = useCallback(async () => {
+  // 1) 学科列表 + 当前学科（由路由 /learning/:code 决定）
+  useEffect(() => {
     if (!token) return;
+    let cancelled = false;
+    setLoading(true);
+    getLearningSubjects(token)
+      .then((res) => {
+        if (cancelled) return;
+        const list = res.data ?? [];
+        setSubjects(list);
+        setSubjectsLoaded(true);
+        const found = list.find((s) => s.code === code) ?? null;
+        setSubject(found);
+        if (found) {
+          setSelectedSubjectId(found.id);
+          localStorage.setItem('learningSubjectCode', found.code);
+          localStorage.setItem('learningSubjectId', String(found.id));
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : '加载学科失败');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, code]);
+
+  // 2) 该学科的视频主线 + 学习进度
+  const loadContent = useCallback(async () => {
+    if (!token || !subject) return;
+    if (subject.sectionCount === 0) {
+      setVideoSeries([]);
+      setVideoTotal(0);
+      setProgress(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -50,12 +91,14 @@ export default function ChapterMap() {
       setError(e instanceof Error ? e.message : '加载失败');
     } finally {
       setLoading(false);
+      setOpenSeries({});
+      setOpenTags({});
     }
-  }, [token]);
+  }, [token, subject]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadContent();
+  }, [loadContent]);
 
   useEffect(() => {
     if (!videoSeries.length) return;
@@ -86,21 +129,60 @@ export default function ChapterMap() {
     });
   };
 
+  const showProgress = !!progress && !!subject && (!progress.subjectId || progress.subjectId === subject.id);
+
+  if (subjectsLoaded && !subject) {
+    return (
+      <div className="chapter-map">
+        <div className="cmap-empty-box">
+          <h2>学科不存在</h2>
+          <p>请从左侧导航选择一个学科。</p>
+          {subjects.length > 0 && (
+            <button className="cmap-btn" onClick={() => navigate(`/learning/${subjects[0].code}`)}>
+              前往「{subjects[0].name}」
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (subject && subject.sectionCount === 0) {
+    return (
+      <div className="chapter-map">
+        <div className="cmap-head">
+          <div>
+            <h1>
+              {subject.icon || '📘'} {subject.name}
+            </h1>
+            <p className="cmap-sub">该学科内容正在建设中。</p>
+          </div>
+        </div>
+        <div className="cmap-empty-box">
+          <div className="cmap-empty-icon">🚧</div>
+          <h2>待建设</h2>
+          <p>「{subject.name}」的教材目录与视频课程尚未录入，接入后即可在这里按章节学习。</p>
+          <button className="cmap-btn" onClick={() => navigate('/')}>
+            返回工作台
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="chapter-map">
       <div className="cmap-head">
         <div>
-          <h1>📖 章节学习</h1>
-          <p className="cmap-sub">
-            {selectedSubject ? `${selectedSubject.icon || ''} ${selectedSubject.name}` : '全部学科'}
-            <span className="cmap-dot">·</span>
-            以视频课程为主线，教材章节与讲义/练习/试卷并入对应课程章节
-          </p>
+          <h1>
+            {subject?.icon || '📖'} {subject?.name || '章节学习'}
+          </h1>
+          <p className="cmap-sub">按视频课程主线学习，教材小节内含精选视频、讲义与练习。</p>
         </div>
-        <button className="cmap-refresh" onClick={load} disabled={loading}>刷新</button>
+        <button className="cmap-refresh" onClick={loadContent} disabled={loading}>刷新</button>
       </div>
 
-        {progress && (!selectedSubject || !progress.subjectId || progress.subjectId === selectedSubject.id) && (
+      {showProgress && progress && (
         <div className="cmap-continue">
           <div className="cmap-continue-text">
             <span className="cmap-continue-label">继续学习</span>
@@ -118,7 +200,7 @@ export default function ChapterMap() {
       {loading && <p className="cmap-loading">加载中...</p>}
       {!loading && error && <p className="cmap-error">{error}</p>}
       {!loading && !error && videoSeries.length === 0 && (
-        <p className="cmap-empty">当前学科暂无课程资源。</p>
+        <p className="cmap-empty">该学科暂无视频课程，请先到「资源映射」完成资源整理。</p>
       )}
 
       {!loading && !error && videoSeries.length > 0 && (
@@ -174,8 +256,6 @@ export default function ChapterMap() {
                                         <span className="cmap-section-title">{sec.title}</span>
                                         <span className="cmap-badges">
                                           <span className="cmap-badge">资源 {sec.resourceCount}</span>
-                                          {sec.paperCount > 0 && <span className="cmap-badge cmap-badge-paper">试卷 {sec.paperCount}</span>}
-                                          {sec.weakCount > 0 && <span className="cmap-badge cmap-badge-weak">薄弱 {sec.weakCount}</span>}
                                         </span>
                                       </button>
                                     </li>

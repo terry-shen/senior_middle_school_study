@@ -1,7 +1,7 @@
 /**
  * 网盘资源索引与映射工作台 API — /api/netdisk-index
  */
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = '/api';
 
 function H(token: string) {
   return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };

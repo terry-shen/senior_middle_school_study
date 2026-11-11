@@ -3,7 +3,7 @@ import { listNetdiskFiles, getNetdiskPublicStatus } from '../services/netdisk-ap
 import type { NetdiskFile } from '../services/netdisk-api';
 import './NetdiskBrowser.css';
 
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = '/api';
 
 interface Props {
   token: string;

@@ -1,9 +1,9 @@
 /**
- * 学生学习 API（M4）：章节资源三档、章节地图、我的学习工作台
+ * 学习 API（v3）：学科目录 / 视频主线课程 / 小节资源 / 学习进度 / 最近打开
  */
 import { withSubjectParam } from './subjects-api';
 
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = '/api';
 
 async function req<T>(token: string, path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -17,6 +17,15 @@ async function req<T>(token: string, path: string, init?: RequestInit): Promise<
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as any)?.error || `请求失败（${res.status}）`);
   return data as T;
+}
+
+export interface LearningSubject {
+  id: number;
+  code: string;
+  name: string;
+  icon: string | null;
+  color: string | null;
+  sectionCount: number;
 }
 
 export interface AssetLite {
@@ -68,33 +77,6 @@ export interface SectionResourcesList {
   pagination: Pagination;
 }
 
-export interface SectionPaper {
-  id: number;
-  title: string;
-  year: number | null;
-  region: string | null;
-  examType: string | null;
-  totalScore: number | null;
-  duration: number | null;
-  purpose: string;
-  pdfUrl: string | null;
-  status: string;
-  subject: { id: number; name: string } | null;
-}
-
-export interface SectionWrongQuestion {
-  id: number;
-  content: string;
-  imageUrl: string | null;
-  questionType: string;
-  difficulty: string | null;
-  myAnswer: string | null;
-  correctAnswer: string | null;
-  analysis: string | null;
-  reviewStatus: string;
-  createdAt: string;
-}
-
 export interface LearningProgress {
   sectionId: number;
   subjectId?: number | null;
@@ -106,55 +88,46 @@ export interface LearningProgress {
   updatedAt: string;
 }
 
-export interface MapSection {
-  id: number;
-  order: number;
-  title: string;
-  resourceCount: number;
-  paperCount: number;
-  weakCount: number;
-  isCurrent: boolean;
+export interface RecentOpen {
+  sectionId: number;
+  sectionTitle: string;
+  chapterTitle: string;
+  textbookName: string;
+  assetId: number | null;
+  assetName: string | null;
+  openedAt: string;
 }
 
-export interface MapChapter {
-  id: number;
-  order: number;
-  title: string;
-  sections: MapSection[];
-}
-
-export interface MapBook {
+export interface VideoSeriesItem {
   id: number;
   name: string;
-  edition: string;
-  grade: string | null;
-  chapters: MapChapter[];
+  courseNo: number | null;
+  fsId: string | null;
+  size: string | null;
 }
 
-export interface WorkbenchPendingExam {
+export interface CourseSectionNode {
   id: number;
   title: string;
-  mode: string;
-  totalScore: number | null;
-  duration: number | null;
-  status: string;
-  createdAt: string;
-  paper: { id: number; title: string; purpose: string } | null;
+  textbookName: string;
+  chapterTitle: string;
+  resourceCount: number;
 }
 
-export interface WorkbenchWeakQuestion {
-  id: number;
-  content: string;
-  questionType: string;
-  sectionId: number | null;
-  createdAt: string;
+export interface VideoSeriesGroup {
+  tag: string;
+  videos: VideoSeriesItem[];
+  sections: CourseSectionNode[];
 }
 
-export interface StudentWorkbench {
-  progress: LearningProgress | null;
-  pendingExams: WorkbenchPendingExam[];
-  weakCount: number;
-  weakTop: WorkbenchWeakQuestion[];
+export interface VideoSeries {
+  series: string;
+  groups: VideoSeriesGroup[];
+  total: number;
+}
+
+export async function getLearningSubjects(token: string) {
+  return req<{ success: boolean; data: LearningSubject[] }>(token, '/learning/subjects');
 }
 
 export async function getFeaturedResources(token: string, sectionId: number) {
@@ -175,18 +148,6 @@ export async function getManageResources(token: string, sectionId: number, page 
   );
 }
 
-export async function getSectionPapers(token: string, sectionId: number) {
-  return req<{ success: boolean; data: SectionPaper[] }>(token, `/learning/sections/${sectionId}/papers`);
-}
-
-export async function getSectionWrongQuestions(token: string, sectionId: number, studentId?: number) {
-  const qs = studentId ? `?studentId=${studentId}` : '';
-  return req<{ success: boolean; data: SectionWrongQuestion[] }>(
-    token,
-    `/learning/sections/${sectionId}/wrong-questions${qs}`,
-  );
-}
-
 export async function recordProgress(token: string, sectionId: number, assetId?: number | null) {
   return req<{ success: boolean; progress: { sectionId: number; assetId: number | null } }>(token, '/learning/progress', {
     method: 'POST',
@@ -198,49 +159,12 @@ export async function getProgress(token: string) {
   return req<{ success: boolean; progress: LearningProgress | null }>(token, '/learning/progress');
 }
 
-export async function getLearningMap(token: string) {
-  return req<{ success: boolean; data: MapBook[] }>(token, withSubjectParam('/learning/map'));
+export async function getRecentOpens(token: string, limit = 5) {
+  return req<{ success: boolean; data: RecentOpen[] }>(token, `/learning/recent?limit=${limit}`);
 }
 
-export async function getStudentLearningMap(token: string, studentId: number) {
-  return req<{ success: boolean; data: MapBook[] }>(
-    token,
-    withSubjectParam(`/learning/map/student/${studentId}`),
-  );
-}
-
-export async function getStudentWorkbench(token: string) {
-  return req<{ success: boolean } & StudentWorkbench>(token, withSubjectParam('/learning/workbench'));
-}
-
-export interface VideoSeriesItem {
-  id: number;
-  name: string;
-  courseNo: number | null;
-  fsId: string | null;
-  size: string | null;
-}
-
-export interface CourseSectionNode {
-  id: number;
-  title: string;
-  textbookName: string;
-  chapterTitle: string;
-  resourceCount: number;
-  paperCount: number;
-  weakCount: number;
-}
-
-export interface VideoSeriesGroup {
-  tag: string;
-  videos: VideoSeriesItem[];
-  sections: CourseSectionNode[];
-}
-
-export interface VideoSeries {
-  series: string;
-  groups: VideoSeriesGroup[];
-  total: number;
+export async function getViewedSectionCounts(token: string) {
+  return req<{ success: boolean; data: Record<string, number> }>(token, '/learning/viewed-counts');
 }
 
 export async function getVideoSeries(token: string) {

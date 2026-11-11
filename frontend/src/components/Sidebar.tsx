@@ -1,6 +1,7 @@
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import SubjectSwitcher from './SubjectSwitcher';
+import { getLearningSubjects, type LearningSubject } from '../services/learning-api';
 import './Sidebar.css';
 
 interface SidebarProps {
@@ -21,68 +22,49 @@ interface NavGroup {
 
 const adminGroups: NavGroup[] = [
   {
-    title: '试卷管理',
-    items: [
-      { to: '/paper-library', label: '试卷库', icon: '📚' },
-      { to: '/question-bank', label: '题库管理', icon: '✂️' },
-    ],
-  },
-  {
     title: '学习内容',
     items: [
-      { to: '/learning', label: '章节学习', icon: '📖' },
-      { to: '/netdisk-index', label: '资源映射', icon: '🧭' },
       { to: '/chapters', label: '章节管理', icon: '🗂️' },
-    ],
-  },
-  {
-    title: '题目管理',
-    items: [
-      { to: '/questions', label: '题目列表', icon: '📋' },
+      { to: '/netdisk-index', label: '资源映射', icon: '🧭' },
+      { to: '/resources', label: '学习资源', icon: '📺' },
     ],
   },
   {
     title: '学生管理',
-    items: [
-      { to: '/students', label: '学生列表', icon: '👥' },
-      { to: '/incentive', label: '学习激励', icon: '🎖️' },
-    ],
-  },
-  {
-    title: '考试管理',
-    items: [
-      { to: '/mock-exams', label: '模拟考试', icon: '🎯' },
-  { to: '/resources', label: '学习资源', icon: '📺' },
-      { to: '/answer-sheets', label: '答题纸阅卷', icon: '📝' },
-    ],
+    items: [{ to: '/students', label: '学生列表', icon: '👥' }],
   },
   {
     title: '系统设置',
-    items: [
-      { to: '/subjects', label: '学科管理', icon: '🗂️' },
-      { to: '/settings/netdisk', label: '网盘绑定', icon: '☁️' },
-      { to: '/resources/manage', label: '资源管理', icon: '🎛️' },
-      { to: '/models', label: '模型管理', icon: '⚙️' },
-    ],
+    items: [{ to: '/settings/netdisk', label: '网盘绑定', icon: '☁️' }],
   },
 ];
 
-const studentItems: NavItem[] = [
-  { to: '/learning', label: '章节学习', icon: '📖' },
-  { to: '/mock-exams', label: '模拟考试', icon: '🎯' },
-  { to: '/wrong-questions', label: '错题本', icon: '❌' },
-  { to: '/answer-sheets', label: '我的答题纸', icon: '📝' },
-  { to: '/incentive', label: '学习激励', icon: '🎖️' },
-];
+const studentItems: NavItem[] = [{ to: '/ai-assistants', label: 'AI 助理', icon: '🤖' }];
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [subjects, setSubjects] = useState<LearningSubject[]>([]);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    getLearningSubjects(token)
+      .then((res) => {
+        if (!cancelled) setSubjects(res.data ?? []);
+      })
+      .catch(() => {
+        /* 学科列表加载失败不影响其他导航 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
-    return location.pathname.startsWith(path);
+    return location.pathname === path || location.pathname.startsWith(`${path}/`);
   };
 
   const handleNavigate = () => {
@@ -95,6 +77,18 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     navigate('/login');
   };
 
+  const renderItem = (item: NavItem) => (
+    <Link
+      key={item.to}
+      to={item.to}
+      className={`sidebar-item ${isActive(item.to) ? 'active' : ''}`}
+      onClick={handleNavigate}
+    >
+      <span className="sidebar-item-icon">{item.icon}</span>
+      <span>{item.label}</span>
+    </Link>
+  );
+
   return (
     <>
       {open && <div className="sidebar-backdrop" onClick={onClose} />}
@@ -105,8 +99,6 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           </Link>
         </div>
 
-        <SubjectSwitcher />
-
         <nav className="sidebar-nav">
           <Link
             to="/"
@@ -116,44 +108,49 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             🏠 工作台
           </Link>
 
-          <Link
-            to="/ai-assistants"
-            className={`sidebar-item ${isActive('/ai-assistants') ? 'active' : ''}`}
-            onClick={handleNavigate}
-          >
-            <span className="sidebar-item-icon">🤖</span>
-            <span>AI 助理</span>
-          </Link>
+          {subjects.length > 0 && (
+            <div className="sidebar-group">
+              <div className="sidebar-group-title">学科</div>
+              {subjects.map((s) => {
+                const ready = s.sectionCount > 0;
+                const to = `/learning/${s.code}`;
+                if (!ready) {
+                  return (
+                    <span key={s.id} className="sidebar-item sidebar-item-disabled" title={`${s.name} · 待建设`}>
+                      <span className="sidebar-item-icon">{s.icon || '📘'}</span>
+                      <span>{s.name}</span>
+                      <span className="sidebar-item-tag">待建设</span>
+                    </span>
+                  );
+                }
+                return (
+                  <Link
+                    key={s.id}
+                    to={to}
+                    className={`sidebar-item ${isActive(to) ? 'active' : ''}`}
+                    onClick={() => {
+                      localStorage.setItem('learningSubjectCode', s.code);
+                      localStorage.setItem('learningSubjectId', String(s.id));
+                      handleNavigate();
+                    }}
+                  >
+                    <span className="sidebar-item-icon">{s.icon || '📘'}</span>
+                    <span>{s.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
 
           {user?.role === 'admin' ? (
             adminGroups.map((group) => (
               <div key={group.title} className="sidebar-group">
                 <div className="sidebar-group-title">{group.title}</div>
-                {group.items.map((item) => (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    className={`sidebar-item ${isActive(item.to) ? 'active' : ''}`}
-                    onClick={handleNavigate}
-                  >
-                    <span className="sidebar-item-icon">{item.icon}</span>
-                    <span>{item.label}</span>
-                  </Link>
-                ))}
+                {group.items.map(renderItem)}
               </div>
             ))
           ) : (
-            studentItems.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={`sidebar-item ${isActive(item.to) ? 'active' : ''}`}
-                onClick={handleNavigate}
-              >
-                <span className="sidebar-item-icon">{item.icon}</span>
-                <span>{item.label}</span>
-              </Link>
-            ))
+            studentItems.map(renderItem)
           )}
         </nav>
 

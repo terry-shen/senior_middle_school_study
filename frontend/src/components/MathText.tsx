@@ -75,10 +75,10 @@ function normalizeImageUrl(src: string): string {
   }
   // Relative path starting with /uploads/ -> served by backend
   if (src.startsWith('/uploads')) {
-    return `http://localhost:3000${src}`;
+    return `${src}`;
   }
   // Other relative paths
-  return `http://localhost:3000/${src}`;
+  return `/${src}`;
 }
 
 // Render a single math expression safely with KaTeX

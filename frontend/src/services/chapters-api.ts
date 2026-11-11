@@ -1,12 +1,10 @@
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = '/api';
 
 export interface SectionNode {
   id: number;
   order: number;
   title: string;
-  resourceCount: number;
-  paperCount: number;
-  wrongQuestionCount: number;
+  resourceCount: number;
 }
 
 export interface ChapterNode {

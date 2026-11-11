@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react';
 import type { AssetLite } from '../services/learning-api';
 import './ResourceViewer.css';
 
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = '/api';
 
 const VIDEO_EXTS = ['mp4', 'mkv', 'mov', 'avi', 'flv', 'ts', 'webm', 'm4v'];
 const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];

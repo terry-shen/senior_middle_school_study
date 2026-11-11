@@ -54,7 +54,7 @@ export default function StudentManagement() {
         ...(searchQuery && { search: searchQuery }),
       });
       
-      const response = await fetch(`http://localhost:3000/api/students?${params}`, {
+      const response = await fetch(`/api/students?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       
@@ -75,7 +75,7 @@ export default function StudentManagement() {
 
   const fetchClasses = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/classes/list');
+      const response = await fetch('/api/classes/list');
       const data = await response.json();
       setClasses(data.classes || data);
     } catch (error) {
@@ -97,7 +97,7 @@ export default function StudentManagement() {
     if (!selectedStudent || !token) return;
 
     try {
-      const response = await fetch(`http://localhost:3000/api/students/${selectedStudent.id}`, {
+      const response = await fetch(`/api/students/${selectedStudent.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -122,7 +122,7 @@ export default function StudentManagement() {
     if (!token || !confirm('确定要删除这个学生吗？')) return;
 
     try {
-      const response = await fetch(`http://localhost:3000/api/students/${studentId}`, {
+      const response = await fetch(`/api/students/${studentId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -141,8 +141,8 @@ export default function StudentManagement() {
 
     try {
       const endpoint = importType === 'csv' 
-        ? 'http://localhost:3000/api/students/import/csv'
-        : 'http://localhost:3000/api/students/import/json';
+        ? '/api/students/import/csv'
+        : '/api/students/import/json';
       
       const body = importType === 'csv' 
         ? importData

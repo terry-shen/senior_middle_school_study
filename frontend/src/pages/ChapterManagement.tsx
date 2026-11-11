@@ -239,9 +239,7 @@ export default function ChapterManagement() {
                               <span className="cm-dot">•</span>
                               <span className="cm-title cm-title-section">{s.title}</span>
                               <span className="cm-badges">
-                                <span className="cm-badge">资源 {s.resourceCount}</span>
-                                <span className="cm-badge">试卷 {s.paperCount}</span>
-                                <span className="cm-badge">错题 {s.wrongQuestionCount}</span>
+                <span className="cm-badge">资源 {s.resourceCount}</span>
                               </span>
                               {isAdmin && (
                                 <span className="cm-btns">

@@ -4,7 +4,7 @@
  * 全局学科切换器将选中学科写入本模块（并持久化到 localStorage），
  * 各 list 类 API 函数通过 withSubjectParam() 隐式附加 subjectId 查询参数。
  */
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = '/api';
 
 export interface Subject {
   id: number;
