@@ -310,7 +310,7 @@ function normalizeVideoTag(subjectCode: string | null, rawTag: string, videoName
   return rawTag;
 }
 function resolveSectionTag(subjectCode: string | null, chapterTitle: string, textbookName: string): string | null {
-  if (subjectCode === 'physics' || subjectCode === 'biology') return textbookName || null;
+  if (subjectCode === 'physics' || subjectCode === 'biology' || subjectCode === 'chemistry') return textbookName || null;
   return resolveTagForChapter(chapterTitle);
 }
 const TAIL_TAGS = ['其他', '高考最后十课', '最后十课'];
@@ -366,7 +366,7 @@ export async function getVideoSeries(
   // 1) 视频
   const videoRows = await prisma.netdiskAsset.findMany({
     where: { assetKind: 'video', status: 'active' },
-    select: { id: true, name: true, path: true, fsId: true, size: true },
+    select: { id: true, name: true, path: true, fsId: true, size: true, sectionId: true },
     orderBy: { id: 'asc' },
   });
 
@@ -384,6 +384,9 @@ export async function getVideoSeries(
   const resMap = new Map(resCounts.map(r => [r.sectionId as number, r._count._all]));
   const paperMap = new Map(paperCounts.map(r => [r.sectionId as number, r._count._all]));
   const weakMap = new Map(weakCounts.map(r => [r.sectionId as number, r._count._all]));
+  // 小节 id → 所属册名（非数学学科按「已挂教材的册」归组视频）
+  const sectionBook = new Map<number, string>();
+  for (const s of sectionRows) sectionBook.set(s.id, s.chapter?.textbook?.name || '');
 
   const sectionsByTag = new Map<string, CourseSectionNode[]>();
   for (const s of sectionRows) {
@@ -407,9 +410,19 @@ export async function getVideoSeries(
   let total = 0;
   for (const r of videoRows) {
     const series = seriesOfPath(r.path);
-    const code = detectSubjectFromText(r.path) || detectSubjectFromText(series);
+    // 学科按「所在目录」判定：文件名里的「化学反应」等词会误判（如生物实验视频）
+    const dirPath = r.path.replace(/\/[^/]+$/, '');
+    const code = detectSubjectFromText(dirPath) || detectSubjectFromText(series);
     if (subjectCode && code !== subjectCode) continue;
-    const tag = normalizeVideoTag(subjectCode, tagOfName(r.name), r.name);
+    const rawTag = tagOfName(r.name);
+    const normalized = normalizeVideoTag(subjectCode, rawTag, r.name);
+    // 非数学学科（物理/生物/化学）以「视频已挂教材的册名」作为课程章节主线；
+    // 未挂章节的视频（如直播答疑）归入「其他」，避免出现 【暑假】/【秋季】 这类非册名分组
+    let tag = normalized;
+    if (subjectCode && subjectCode !== 'math') {
+      const book = r.sectionId != null ? sectionBook.get(r.sectionId) : '';
+      tag = book || (BOOK_ORDER.includes(normalized) ? normalized : '其他');
+    }
     if (!tree.has(series)) tree.set(series, new Map());
     const g = tree.get(series)!;
     if (!g.has(tag)) g.set(tag, []);
