@@ -1,0 +1,48 @@
+name: highschool-system
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: highschool-api:latest
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: "file:/app/data/dev.db"
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET is required}"
+      JWT_EXPIRES_IN: "7d"
+      # 云端不部署 MinerU：关闭 CLI 探测与本地 API 自启
+      MINERU_DISABLED: "1"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://106.15.136.254}"
+      CORS_ORIGIN: "${CORS_ORIGIN:-}"
+    volumes:
+      - ./data/db:/app/data
+      - ./data/uploads:/app/uploads
+      - ./data/logs:/app/logs
+    mem_limit: 700m
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 25s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    image: highschool-web:latest
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      # 宿主机 3000 已被 Grafana 占用；本站对外用 80（无域名，直接 IP 访问）
+      - "80:80"
+    mem_limit: 128m
