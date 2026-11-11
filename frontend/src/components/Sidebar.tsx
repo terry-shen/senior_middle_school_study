@@ -52,7 +52,16 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     let cancelled = false;
     getLearningSubjects(token)
       .then((res) => {
-        if (!cancelled) setSubjects(res.data ?? []);
+        if (!cancelled) {
+          // 已建设学科（有教材小节）排在前面，待建设学科统一排在后面，各自保持原相对顺序
+          const list = [...(res.data ?? [])];
+          list.sort((a, b) => {
+            const ra = a.sectionCount > 0 ? 0 : 1;
+            const rb = b.sectionCount > 0 ? 0 : 1;
+            return ra - rb;
+          });
+          setSubjects(list);
+        }
       })
       .catch(() => {
         /* 学科列表加载失败不影响其他导航 */
