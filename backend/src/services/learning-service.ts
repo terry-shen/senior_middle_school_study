@@ -1,5 +1,5 @@
 /**
- * 学生学习服务（M4）：章节资源三档查询、学习进度、章节地图、我的学习工作台
+ * 学生学习服务（v3）：学科目录、视频主线课程、小节资源三档查询、学习进度与最近打开
  */
 import { PrismaClient } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
@@ -41,6 +41,38 @@ export const RESOURCE_GROUPS = [
 
 export type ResourceMode = 'featured' | 'more' | 'manage';
 
+// ============ 学科目录 ============
+
+export interface LearningSubject {
+  id: number; code: string; name: string; icon: string | null; color: string | null; sectionCount: number;
+}
+
+export async function listLearningSubjects(): Promise<LearningSubject[]> {
+  const subjects = await prisma.subject.findMany({
+    where: { isActive: true },
+    orderBy: { order: 'asc' },
+    select: { id: true, code: true, name: true, icon: true, color: true },
+  });
+  const counts = await prisma.section.groupBy({
+    by: ['chapterId'],
+    _count: { _all: true },
+  });
+  const chapters = await prisma.chapter.findMany({
+    select: { id: true, textbook: { select: { subjectId: true } } },
+  });
+  const subjectOfChapter = new Map<number, number>();
+  for (const c of chapters) subjectOfChapter.set(c.id, c.textbook.subjectId);
+  const bySubject = new Map<number, number>();
+  for (const row of counts) {
+    const sid = subjectOfChapter.get(row.chapterId);
+    if (sid == null) continue;
+    bySubject.set(sid, (bySubject.get(sid) || 0) + row._count._all);
+  }
+  return subjects.map(s => ({ ...s, sectionCount: bySubject.get(s.id) || 0 }));
+}
+
+// ============ 小节资源 ============
+
 export async function getSectionResources(sectionId: number, mode: ResourceMode, page = 1, limit = 12) {
   const section = await prisma.section.findUnique({
     where: { id: sectionId },
@@ -60,12 +92,11 @@ export async function getSectionResources(sectionId: number, mode: ResourceMode,
       label: g.label,
       items: pinned.filter(a => (g.kinds as readonly string[]).includes(a.assetKind)).slice(0, 5).map(toLite),
     }));
-    const pinnedCount = pinned.length;
     const total = await prisma.netdiskAsset.count({ where: { ...baseWhere, isPinned: false } });
     return {
       section: { id: section.id, title: section.title, chapterTitle: section.chapter.title, textbookName: section.chapter.textbook.name },
       groups,
-      pinnedCount,
+      pinnedCount: pinned.length,
       moreCount: total,
     };
   }
@@ -89,35 +120,8 @@ export async function getSectionResources(sectionId: number, mode: ResourceMode,
   };
 }
 
-/** 本节试卷（整卷，学生可下载） */
-export async function getSectionPapers(sectionId: number) {
-  const papers = await prisma.examPaper.findMany({
-    where: { sectionId },
-    orderBy: { id: 'desc' },
-    take: 20,
-    select: {
-      id: true, title: true, year: true, region: true, examType: true, totalScore: true,
-      duration: true, purpose: true, pdfUrl: true, status: true,
-      subject: { select: { id: true, name: true } },
-    },
-  });
-  return papers;
-}
-
-/** 本节错题（当前学生） */
-export async function getSectionWrongQuestions(sectionId: number, studentId: number) {
-  return prisma.studentWrongQuestion.findMany({
-    where: { sectionId, studentId },
-    orderBy: { updatedAt: 'desc' },
-    take: 50,
-    select: {
-      id: true, content: true, imageUrl: true, questionType: true, difficulty: true,
-      myAnswer: true, correctAnswer: true, analysis: true, reviewStatus: true, createdAt: true,
-    },
-  });
-}
-
 // ============ 学习进度 ============
+
 export async function recordProgress(studentId: number, sectionId: number, assetId?: number | null) {
   const section = await prisma.section.findUnique({ where: { id: sectionId } });
   if (!section) throw Object.assign(new Error('小节不存在'), { statusCode: 404 });
@@ -128,11 +132,25 @@ export async function recordProgress(studentId: number, sectionId: number, asset
       throw Object.assign(new Error('资源不属于该小节'), { statusCode: 400 });
     }
   }
-  return prisma.studentLearningProgress.upsert({
+  const progress = await prisma.studentLearningProgress.upsert({
     where: { studentId },
     create: { studentId, sectionId, assetId: assetId ?? null },
     update: { sectionId, assetId: assetId ?? null },
   });
+  await prisma.studentAssetOpen.create({ data: { studentId, sectionId, assetId: assetId ?? null } });
+  // 仅保留最近 200 条访问记录
+  const keep = await prisma.studentAssetOpen.findMany({
+    where: { studentId },
+    orderBy: { openedAt: 'desc' },
+    take: 200,
+    select: { id: true },
+  });
+  if (keep.length === 200) {
+    await prisma.studentAssetOpen.deleteMany({
+      where: { studentId, id: { lt: keep[keep.length - 1].id } },
+    });
+  }
+  return progress;
 }
 
 export async function getProgress(studentId: number) {
@@ -156,103 +174,71 @@ export async function getProgress(studentId: number) {
   };
 }
 
-// ============ 章节地图（含资源数与薄弱标记） ============
-export async function getLearningMap(studentId: number, subjectId?: number) {
-  const sections = await prisma.section.findMany({
-    where: subjectId ? { chapter: { textbook: { subjectId } } } : undefined,
-    include: { chapter: { include: { textbook: true } } },
-    orderBy: [{ chapter: { textbook: { order: 'asc' } } }, { chapter: { order: 'asc' } }, { order: 'asc' }],
+export interface RecentOpen {
+  sectionId: number; sectionTitle: string; chapterTitle: string; textbookName: string;
+  assetId: number | null; assetName: string | null; openedAt: string;
+}
+
+export async function getRecentOpens(studentId: number, limit = 5): Promise<RecentOpen[]> {
+  const rows = await prisma.studentAssetOpen.findMany({
+    where: { studentId },
+    orderBy: { openedAt: 'desc' },
+    take: 40,
+    include: {
+      section: { include: { chapter: { include: { textbook: true } } } },
+      asset: true,
+    },
   });
-  const ids = sections.map(s => s.id);
-  const [resCounts, weakCounts, paperCounts, progress] = await Promise.all([
-    prisma.netdiskAsset.groupBy({ by: ['sectionId'], where: { sectionId: { in: ids }, ...STUDENT_VISIBLE }, _count: { _all: true } }),
-    prisma.studentWrongQuestion.groupBy({ by: ['sectionId'], where: { studentId, sectionId: { in: ids }, reviewStatus: { not: 'mastered' } }, _count: { _all: true } }),
-    prisma.examPaper.groupBy({ by: ['sectionId'], where: { sectionId: { in: ids } }, _count: { _all: true } }),
-    prisma.studentLearningProgress.findUnique({ where: { studentId }, select: { sectionId: true } }),
-  ]);
-  const rMap = new Map(resCounts.map(r => [r.sectionId as number, r._count?._all ?? 0]));
-  const wMap = new Map(weakCounts.map(r => [r.sectionId as number, r._count?._all ?? 0]));
-  const pMap = new Map(paperCounts.map(r => [r.sectionId as number, r._count?._all ?? 0]));
-
-  const books = new Map<number, {
-    id: number; name: string; edition: string; grade: string | null; order: number; chapters: Map<number, {
-      id: number; order: number; title: string; sections: {
-        id: number; order: number; title: string; resourceCount: number; paperCount: number; weakCount: number; isCurrent: boolean;
-      }[];
-    }>;
-  }>();
-
-  for (const sec of sections) {
-    const tb = sec.chapter.textbook;
-    let book = books.get(tb.id);
-    if (!book) {
-      book = { id: tb.id, name: tb.name, edition: tb.edition, grade: tb.grade, order: tb.order, chapters: new Map() };
-      books.set(tb.id, book);
-    }
-    let ch = book.chapters.get(sec.chapter.id);
-    if (!ch) {
-      ch = { id: sec.chapter.id, order: sec.chapter.order, title: sec.chapter.title, sections: [] };
-      book.chapters.set(sec.chapter.id, ch);
-    }
-    ch.sections.push({
-      id: sec.id, order: sec.order, title: sec.title,
-      resourceCount: rMap.get(sec.id) ?? 0,
-      paperCount: pMap.get(sec.id) ?? 0,
-      weakCount: wMap.get(sec.id) ?? 0,
-      isCurrent: progress?.sectionId === sec.id,
+  const out: RecentOpen[] = [];
+  const seen = new Set<string>();
+  for (const r of rows) {
+    const key = `${r.sectionId}:${r.assetId ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      sectionId: r.sectionId,
+      sectionTitle: r.section.title,
+      chapterTitle: r.section.chapter.title,
+      textbookName: r.section.chapter.textbook.name,
+      assetId: r.assetId,
+      assetName: r.asset?.name ?? null,
+      openedAt: r.openedAt.toISOString(),
     });
+    if (out.length >= limit) break;
   }
-
-  return [...books.values()]
-    .sort((a, b) => a.order - b.order)
-    .map(b => ({
-      id: b.id, name: b.name, edition: b.edition, grade: b.grade,
-      chapters: [...b.chapters.values()].sort((x, y) => x.order - y.order),
-    }));
+  return out;
 }
 
-// ============ 我的学习工作台 ============
-export async function getWorkbench(studentId: number, subjectId?: number) {
-  const [progress, pendingExams, weakCount, weakTop] = await Promise.all([
-    getProgress(studentId),
-    prisma.examSession.findMany({
-      where: {
-        status: { in: ['published', 'ongoing'] },
-        ...(subjectId ? { subjectId } : {}),
-        assignments: { some: { studentId } },
-        submissions: { none: { studentId, status: { in: ['submitted', 'graded'] } } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      select: { id: true, title: true, mode: true, totalScore: true, duration: true, status: true, createdAt: true,
-        paper: { select: { id: true, title: true, purpose: true } } },
-    }),
-    prisma.studentWrongQuestion.count({
-      where: { studentId, reviewStatus: { not: 'mastered' }, ...(subjectId ? { subjectId } : {}) },
-    }),
-    prisma.studentWrongQuestion.findMany({
-      where: { studentId, reviewStatus: { not: 'mastered' }, ...(subjectId ? { subjectId } : {}) },
-      orderBy: { updatedAt: 'desc' },
-      take: 3,
-      select: { id: true, content: true, questionType: true, sectionId: true, createdAt: true },
-    }),
-  ]);
-  return { progress, pendingExams, weakCount, weakTop };
+/** 各学科的已浏览小节数（去重） */
+export async function getViewedSectionCounts(studentId: number): Promise<Record<number, number>> {
+  const rows = await prisma.studentAssetOpen.findMany({
+    where: { studentId },
+    select: { sectionId: true },
+    distinct: ['sectionId'],
+  });
+  if (!rows.length) return {};
+  const sections = await prisma.section.findMany({
+    where: { id: { in: rows.map(r => r.sectionId) } },
+    select: { id: true, chapter: { select: { textbook: { select: { subjectId: true } } } } },
+  });
+  const out: Record<number, number> = {};
+  for (const s of sections) {
+    const sid = s.chapter.textbook.subjectId;
+    out[sid] = (out[sid] || 0) + 1;
+  }
+  return out;
 }
-
 
 // ============ 视频主线课程（系列 → 课程章节 → 视频 + 关联教材小节） ============
-// 教材章节不再单独成树，而是并入对应的课程章节作为「关联教材小节」
 
 export interface VideoSeriesItem { id: number; name: string; courseNo: number | null; fsId: string | null; size: string | null }
 export interface CourseSectionNode {
-  id: number; title: string; textbookName: string; chapterTitle: string;
-  resourceCount: number; paperCount: number; weakCount: number;
+  id: number; title: string; textbookName: string; chapterTitle: string; resourceCount: number;
 }
 export interface VideoSeriesGroup { tag: string; videos: VideoSeriesItem[]; sections: CourseSectionNode[] }
 export interface VideoSeries { series: string; groups: VideoSeriesGroup[]; total: number }
 
-/** 教材章节 → 课程章节（阿不体系）的归并规则；顺序敏感（三角函数先于函数、圆锥曲线先于圆） */
+/** 教材章节 → 课程章节（阿不体系）的归并规则；顺序敏感 */
 const CHAPTER_TAG_RULES: Array<[RegExp, string]> = [
   [/三角函数/, '三角函数'],
   [/集合|常用逻辑/, '集合与逻辑'],
@@ -285,7 +271,6 @@ const BOOK_ORDER = [
   '必修第一册', '必修第二册', '必修第三册', '选择性必修第一册', '选择性必修第二册', '选择性必修第三册',
   '必修1 分子与细胞', '必修2 遗传与进化', '选择性必修1 稳态与调节', '选择性必修2 生物与环境', '选择性必修3 生物技术与工程',
 ];
-/** 物理旧教材视频标签 → 人教2019 册名 */
 const PHYSICS_TAG_ALIASES: Array<[RegExp, string]> = [
   [/高中物理必修一|运动的描述|匀变速直线运动|弹簧专题/, '必修第一册'],
   [/高中物理必修二/, '必修第二册'],
@@ -316,7 +301,6 @@ function resolveSectionTag(subjectCode: string | null, chapterTitle: string, tex
 const TAIL_TAGS = ['其他', '高考最后十课', '最后十课'];
 const isTailTag = (tag: string) => TAIL_TAGS.some(t => tag.includes(t));
 
-/** 分组排序：数学课程章节按 TAG_ORDER；非教材章节（如物理/生物专题）按首课编号；考前冲刺类置尾 */
 function compareGroups(a: VideoSeriesGroup, b: VideoSeriesGroup): number {
   const ta = isTailTag(a.tag) ? 1 : 0, tb = isTailTag(b.tag) ? 1 : 0;
   if (ta !== tb) return ta - tb;
@@ -363,28 +347,23 @@ export async function getVideoSeries(
     subjectCode = sub?.code ?? null;
   }
 
-  // 1) 视频
   const videoRows = await prisma.netdiskAsset.findMany({
     where: { assetKind: 'video', status: 'active' },
     select: { id: true, name: true, path: true, fsId: true, size: true, sectionId: true },
     orderBy: { id: 'asc' },
   });
 
-  // 2) 教材小节 + 计数（资源=学生可见、试卷、本人薄弱）
   const sectionRows = await prisma.section.findMany({
     where: subjectId ? { chapter: { textbook: { subjectId } } } : undefined,
     select: { id: true, title: true, chapter: { select: { title: true, textbook: { select: { name: true } } } } },
     orderBy: { id: 'asc' },
   });
-  const [resCounts, paperCounts, weakCounts] = await Promise.all([
-    prisma.netdiskAsset.groupBy({ by: ['sectionId'], where: { ...STUDENT_VISIBLE, sectionId: { not: null } }, _count: { _all: true } }),
-    prisma.examPaper.groupBy({ by: ['sectionId'], where: { sectionId: { not: null } }, _count: { _all: true } }),
-    prisma.studentWrongQuestion.groupBy({ by: ['sectionId'], where: { studentId, sectionId: { not: null }, reviewStatus: { not: 'mastered' } }, _count: { _all: true } }),
-  ]);
+  const resCounts = await prisma.netdiskAsset.groupBy({
+    by: ['sectionId'],
+    where: { ...STUDENT_VISIBLE, sectionId: { not: null } },
+    _count: { _all: true },
+  });
   const resMap = new Map(resCounts.map(r => [r.sectionId as number, r._count._all]));
-  const paperMap = new Map(paperCounts.map(r => [r.sectionId as number, r._count._all]));
-  const weakMap = new Map(weakCounts.map(r => [r.sectionId as number, r._count._all]));
-  // 小节 id → 所属册名（非数学学科按「已挂教材的册」归组视频）
   const sectionBook = new Map<number, string>();
   for (const s of sectionRows) sectionBook.set(s.id, s.chapter?.textbook?.name || '');
 
@@ -399,25 +378,19 @@ export async function getVideoSeries(
       textbookName: s.chapter?.textbook?.name || '',
       chapterTitle: s.chapter?.title || '',
       resourceCount: resMap.get(s.id) || 0,
-      paperCount: paperMap.get(s.id) || 0,
-      weakCount: weakMap.get(s.id) || 0,
     });
   }
   for (const list of sectionsByTag.values()) list.sort((a, b) => a.id - b.id);
 
-  // 3) 组装：系列 → 课程章节（视频 + 关联教材小节）
   const tree = new Map<string, Map<string, VideoSeriesItem[]>>();
   let total = 0;
   for (const r of videoRows) {
     const series = seriesOfPath(r.path);
-    // 学科按「所在目录」判定：文件名里的「化学反应」等词会误判（如生物实验视频）
     const dirPath = r.path.replace(/\/[^/]+$/, '');
     const code = detectSubjectFromText(dirPath) || detectSubjectFromText(series);
     if (subjectCode && code !== subjectCode) continue;
     const rawTag = tagOfName(r.name);
     const normalized = normalizeVideoTag(subjectCode, rawTag, r.name);
-    // 非数学学科（物理/生物/化学）以「视频已挂教材的册名」作为课程章节主线；
-    // 未挂章节的视频（如直播答疑）归入「其他」，避免出现 【暑假】/【秋季】 这类非册名分组
     let tag = normalized;
     if (subjectCode && subjectCode !== 'math') {
       const book = r.sectionId != null ? sectionBook.get(r.sectionId) : '';
@@ -442,7 +415,6 @@ export async function getVideoSeries(
       videos: videos.sort((a, b) => (a.courseNo ?? 9999) - (b.courseNo ?? 9999) || a.id - b.id),
       sections: sectionsByTag.get(tag) || [],
     }));
-    // 没有视频但有教材小节的课程章节也保留（如仅题库/讲义覆盖）
     if (subjectCode) {
       for (const [tag, sections] of sectionsByTag.entries()) {
         if (!groupList.some(g => g.tag === tag)) groupList.push({ tag, videos: [], sections });
@@ -452,7 +424,6 @@ export async function getVideoSeries(
     return { series, groups: groupList, total: groupList.reduce((n, g) => n + g.videos.length, 0) };
   });
 
-  // 指定学科时：把散落在「其他」系列里的同科视频（如高考最后十课）并入该科唯一的系列
   if (subjectCode) {
     const mainSeries = seriesList.filter(s => s.series !== '其他');
     const otherSeries = seriesList.find(s => s.series === '其他');

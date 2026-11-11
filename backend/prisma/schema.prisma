@@ -7,248 +7,56 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model LLMConfig {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  provider    String
-  endpoint    String
-  modelName   String   @map("model_name")
-  apiKey      String?  @map("api_key")
-  isDefault   Boolean  @default(false) @map("is_default")
-  status      String   @default("active")
-  maxTokens   Int?     @default(4096) @map("max_tokens")
-  temperature Float?   @default(0.7)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  @@map("llm_configs")
-}
-
-model LLMCallLog {
-  id               Int      @id @default(autoincrement())
-  modelId          Int      @map("model_id")
-  promptTokens     Int      @default(0) @map("prompt_tokens")
-  completionTokens Int      @default(0) @map("completion_tokens")
-  totalTokens      Int      @default(0) @map("total_tokens")
-  latency          Int
-  success          Boolean  @default(true)
-  errorMessage     String?  @map("error_message")
-  requestHash      String?  @map("request_hash")
-  cached           Boolean  @default(false)
-  createdAt        DateTime @default(now()) @map("created_at")
-
-  @@index([modelId])
-  @@index([createdAt])
-  @@map("llm_call_logs")
-}
-
-model PromptTemplate {
-  id        Int      @id @default(autoincrement())
-  taskType  String   @map("task_type")
-  name      String
-  template  String
-  version   Int      @default(1)
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@unique([taskType, version])
-  @@index([taskType])
-  @@map("prompt_templates")
-}
-
 // Student Management Models
 
 model Class {
-  id        Int      @id @default(autoincrement())
-  name      String   // 班级名称，如"高一(1)班"
-  grade     String   // 年级，如"高一"
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id        Int       @id @default(autoincrement())
+  name      String // 班级名称，如"高一(1)班"
+  grade     String // 年级，如"高一"
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
   students  Student[]
 
   @@map("classes")
 }
 
 model Student {
-  id            Int       @id @default(autoincrement())
-  studentId     String    @unique @map("student_id") // 学号
-  name          String    // 姓名
-  passwordHash  String    @map("password_hash") // 密码哈希
-  classId       Int?      @map("class_id") // 班级ID
-  role          String    @default("student") // student, admin
-  loginAttempts Int       @default(0) @map("login_attempts") // 登录尝试次数
-  lockedUntil   DateTime? @map("locked_until") // 锁定到期时间
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  class         Class?    @relation(fields: [classId], references: [id], onDelete: SetNull)
-  sessions      Session[]
-  difficultyAdjustments DifficultyAdjustment[]
-  examTemplates ExamTemplate[]
-  examSessions  ExamSession[]
-  examSubmissions ExamSubmission[]
-  learningProgress StudentLearningProgress?
-  examSessionAssignments ExamSessionAssignment[]
-  studentWrongQuestions StudentWrongQuestion[]
-  answerSheets  AnswerSheet[]
-  userBadges    UserBadge[]
-  checkIns      CheckIn[]
-  challengeOrganizers Challenge[]
-  challengeParticipants ChallengeParticipant[]
-  incentiveNotifications IncentiveNotification[]
+  id                    Int                      @id @default(autoincrement())
+  studentId             String                   @unique @map("student_id") // 学号
+  name                  String // 姓名
+  passwordHash          String                   @map("password_hash") // 密码哈希
+  classId               Int?                     @map("class_id") // 班级ID
+  role                  String                   @default("student") // student, admin
+  loginAttempts         Int                      @default(0) @map("login_attempts") // 登录尝试次数
+  lockedUntil           DateTime?                @map("locked_until") // 锁定到期时间
+  createdAt             DateTime                 @default(now()) @map("created_at")
+  updatedAt             DateTime                 @updatedAt @map("updated_at")
+  class                 Class?                   @relation(fields: [classId], references: [id], onDelete: SetNull)
+  sessions              Session[]
+  learningProgress      StudentLearningProgress?
 
   @@index([studentId])
   @@index([classId])
   @@map("students")
+  assetOpens StudentAssetOpen[]
+
 }
 
 // ===== Learning Incentive Models =====
 
 // 徽章定义
-model Badge {
-  id              Int      @id @default(autoincrement())
-  name            String   @unique
-  displayName     String   @map("display_name")
-  description     String
-  iconUrl         String?  @map("icon_url")
-  // 徽章类型: practice(练习), progress(进步), persistence(毅力), perfect_score(满分), breakthrough(突破)
-  type            String   @default("practice")
-  // 达成条件 JSON: { type: "practice_count" | "mastery_improvement" | "streak_days" | "perfect_score" | "wrong_mastered", value: number }
-  conditionType   String   @map("condition_type")
-  conditionValue  Int      @map("condition_value")
-  rarity          String   @default("common") // common, rare, epic, legendary
-  isActive        Boolean  @default(true) @map("is_active")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-
-  userBadges      UserBadge[]
-  challengeBadges ChallengeBadge[]
-
-  @@index([type])
-  @@index([isActive])
-  @@map("badges")
-}
 
 // 学生获得徽章记录
-model UserBadge {
-  id          Int      @id @default(autoincrement())
-  studentId   Int      @map("student_id")
-  badgeId     Int      @map("badge_id")
-  progress    Int      @default(0) // 进度值（条件当前值）
-  earned      Boolean  @default(false) // 是否已获得
-  earnedAt    DateTime? @map("earned_at")
-  notifiedAt  DateTime? @map("notified_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  student     Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  badge       Badge   @relation(fields: [badgeId], references: [id], onDelete: Cascade)
-
-  @@unique([studentId, badgeId])
-  @@index([studentId])
-  @@index([earned])
-  @@map("user_badges")
-}
 
 // 每日打卡记录
-model CheckIn {
-  id           Int      @id @default(autoincrement())
-  studentId    Int      @map("student_id")
-  checkInDate  DateTime @map("check_in_date") // 打卡日期（当天0点）
-  streakCount  Int      @default(1) @map("streak_count") // 连续打卡天数
-  // 打卡时学习概要 JSON: { practiceCount, studyMinutes, correctRate }
-  summary      String   @default("{}")
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  student      Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@unique([studentId, checkInDate])
-  @@index([studentId])
-  @@index([checkInDate])
-  @@map("check_ins")
-}
 
 // 学习挑战活动
-model Challenge {
-  id            Int      @id @default(autoincrement())
-  title         String
-  description   String?
-  type          String   @default("class_pk") // class_pk(班级PK), streak_challenge(打卡挑战), score_challenge(分数挑战)
-  classId       Int?     @map("class_id") // 关联班级（班级PK时使用）
-  organizerId  Int      @map("organizer_id") // 组织者（教师）
-  // 挑战参数 JSON: { targetValue, startDate, endDate, metric }
-  parameters    String   @default("{}")
-  status        String   @default("upcoming") // upcoming, active, completed, cancelled
-  startTime     DateTime @map("start_time")
-  endTime       DateTime @map("end_time")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  organizer     Student @relation(fields: [organizerId], references: [id], onDelete: Cascade)
-  participants  ChallengeParticipant[]
-  badges        ChallengeBadge[]
-
-  @@index([organizerId])
-  @@index([status])
-  @@index([classId])
-  @@map("challenges")
-}
 
 // 挑战参与者
-model ChallengeParticipant {
-  id           Int      @id @default(autoincrement())
-  challengeId  Int      @map("challenge_id")
-  studentId    Int      @map("student_id")
-  // 进度值（如练习数、打卡天数、分数）
-  progress     Int      @default(0)
-  rank         Int? // 排名（结束时计算）
-  joinedAt     DateTime @default(now()) @map("joined_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  student      Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@unique([challengeId, studentId])
-  @@index([challengeId])
-  @@index([studentId])
-  @@map("challenge_participants")
-}
 
 // 挑战奖励徽章（挑战结束时颁发）
-model ChallengeBadge {
-  id           Int      @id @default(autoincrement())
-  challengeId  Int      @map("challenge_id")
-  badgeId      Int      @map("badge_id")
-  // 颁发规则 JSON: { rank: 3 } 表示前3名获得
-  rule         String   @default("{}")
-
-  challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  badge        Badge     @relation(fields: [badgeId], references: [id], onDelete: Cascade)
-
-  @@index([challengeId])
-  @@map("challenge_badges")
-}
 
 // 激励消息推送
-model IncentiveNotification {
-  id           Int      @id @default(autoincrement())
-  studentId    Int      @map("student_id")
-  type         String   // badge_earned, check_in_reminder, challenge_update, streak_milestone, progress_improvement
-  title        String
-  content      String
-  // 关联数据 JSON: { badgeId?, challengeId?, streakDays? }
-  metadata     String   @default("{}")
-  isRead       Boolean  @default(false) @map("is_read")
-  readAt       DateTime? @map("read_at")
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  student      Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@index([studentId])
-  @@index([isRead])
-  @@index([createdAt])
-  @@map("incentive_notifications")
-}
 
 // ===== Mock Exam Models =====
 
@@ -257,125 +65,25 @@ model IncentiveNotification {
 model Subject {
   id        Int      @id @default(autoincrement())
   code      String   @unique // math, chinese, english, physics...
-  name      String   // 数学
-  icon      String?  // 图标（emoji 或 icon 名）
-  color     String?  // 主题色（如 #3b82f6）
+  name      String // 数学
+  icon      String? // 图标（emoji 或 icon 名）
+  color     String? // 主题色（如 #3b82f6）
   order     Int      @default(0) // 排序
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  papers         ExamPaper[]
-  questions      Question[]
-  examSessions   ExamSession[]
-  wrongQuestions StudentWrongQuestion[]
-  knowledgePoints KnowledgePoint[]
-  videoResources VideoResource[]
-  textbooks      Textbook[]
+  textbooks       Textbook[]
 
   @@map("subjects")
 }
 
-model ExamSession {
-  id            Int      @id @default(autoincrement())
-  title         String
-  mode          String   @default("online") // whole_paper | online
-  source        String   @default("manual") // library | auto | manual
-  content       String   @default("[]") // JSON: 在线模式=题ID数组, 整卷模式=空
-  paperId       Int?     @map("paper_id") // 整卷模式关联 ExamPaper
-  subjectId     Int?     @map("subject_id") // 学科维度
-  totalScore    Int      @default(100) @map("total_score")
-  duration      Int      @default(120) // 考试时长（分钟）
-  startTime     DateTime? @map("start_time")
-  endTime       DateTime? @map("end_time")
-  status        String   @default("draft") // draft, published, ongoing, graded
-  creatorId     Int      @map("creator_id")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  creator       Student  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  paper         ExamPaper? @relation("ExamPaperExamSessions", fields: [paperId], references: [id], onDelete: SetNull)
-  subject       Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-  submissions   ExamSubmission[]
-  answerSheets  AnswerSheet[]
-  assignments   ExamSessionAssignment[]
-
-  @@index([mode, status])
-  @@index([paperId])
-  @@index([creatorId])
-  @@index([subjectId])
-  @@map("exam_sessions")
-}
-
 // 考试会话分配（班级/学生归属）
-model ExamSessionAssignment {
-  id             Int         @id @default(autoincrement())
-  examSessionId  Int         @map("exam_session_id")
-  studentId      Int         @map("student_id")
-  classId        Int?        @map("class_id")
-  createdAt      DateTime    @default(now()) @map("created_at")
-
-  examSession    ExamSession @relation(fields: [examSessionId], references: [id], onDelete: Cascade)
-  student        Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@unique([examSessionId, studentId])
-  @@index([studentId])
-  @@map("exam_session_assignments")
-}
 
 // 统一答题记录（合并 ExamRecord + AnswerRecord）
 // 整卷模式不创建 ExamSubmission（只关联 AnswerSheet）
-model ExamSubmission {
-  id            Int      @id @default(autoincrement())
-  examSessionId Int      @map("exam_session_id")
-  studentId     Int      @map("student_id")
-  mode          String   @default("online") // whole_paper | online
-  answers       String?  // JSON: [{questionId, answer, timeSpent?, score?, feedback?, isCorrect?}]
-  totalScore    Int?     @map("total_score")
-  status        String   @default("pending") // pending, submitted, graded
-  submittedAt   DateTime? @map("submitted_at")
-  gradedAt      DateTime? @map("graded_at")
-  gradedBy      Int?     @map("graded_by") // Student.id (admin)
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  examSession   ExamSession @relation(fields: [examSessionId], references: [id], onDelete: Cascade)
-  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@unique([examSessionId, studentId])
-  @@index([studentId])
-  @@index([status])
-  @@map("exam_submissions")
-}
 
 // 学生答题纸（整卷/在线测验/模拟考试结束后上传，老师离线阅卷批注）
-model AnswerSheet {
-  id             Int      @id @default(autoincrement())
-  studentId      Int      @map("student_id")
-  // 统一关联 ExamSession（替代旧的 examId/mockExamId/wholePaperId 三字段）
-  examSessionId Int?     @map("exam_session_id")
-  fileUrl        String   @map("file_url")        // 上传的原始答题纸 URL
-  fileType       String   @map("file_type")       // 'image' | 'word'
-  fileName       String?  @map("file_name")       // 原始文件名
-  // 老师批改数据
-  annotations    String?  // 批注 JSON: [{type:'rect'|'circle'|'arrow'|'text'|'pen', x,y,w,h?,color,note?}, ...]
-  gradedFileUrl  String?  @map("graded_file_url") // 老师批改版文件 URL（word 答题纸离线批注后回传）
-  teacherComment String?  @map("teacher_comment") // 老师评语
-  totalScore     Int?     @map("total_score")     // 老师给的总分
-  gradedBy       Int?     @map("graded_by")        // 批改老师 Student.id
-  gradedAt       DateTime? @map("graded_at")
-  status         String   @default("submitted")   // submitted（待批改）, graded（已批改）
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
-  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  examSession    ExamSession? @relation(fields: [examSessionId], references: [id], onDelete: SetNull)
-
-  @@index([studentId])
-  @@index([examSessionId])
-  @@index([status])
-  @@map("answer_sheets")
-}
 
 model Session {
   id        Int      @id @default(autoincrement())
@@ -392,196 +100,19 @@ model Session {
 
 // Knowledge Point Management Models
 
-model KnowledgePoint {
-  id              Int       @id @default(autoincrement())
-  name            String // 文档标题
-  contentMarkdown String?   @map("content_markdown") // Word文档转换后的Markdown内容
-  subjectId       Int?      @map("subject_id") // 学科维度
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-
-  subject Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-
-  // 保留的下游表反向关系（仅用于schema一致性，代码不再读写）
-  @@map("knowledge_points")
-}
-
 // Exam Paper and Question Models
-
-model ExamPaper {
-  id          Int      @id @default(autoincrement())
-  title       String   // 试卷标题
-  source      String?  // 来源（如：2023年全国高考）
-  year        Int?     // 年份
-  region      String?  // 地区
-  examType    String?  @map("exam_type") // 考试类型：高考/中考/期中/期末
-  rawContent  String?  @map("raw_content") // 原始OCR识别内容
-  imageUrl    String?  @map("image_url") // 原始图片URL
-  pdfUrl      String?  @map("pdf_url") // 原始PDF URL
-  status      String   @default("pending") // pending, published
-  totalScore  Int?     @map("total_score") // 总分
-  duration    Int?     // 考试时长（分钟）
-  sourceFormat String? @map("source_format") // pdf | image | word | txt
-  purpose     String   @default("question_source") // whole_paper | question_source
-  subjectId   Int?     @map("subject_id") // 学科外键
-  sectionId   Int?     @map("section_id") // 章节维度（M5 闭环挂载）
-  school      String?  // 学校（自由文本）
-  pageImages  String?  @map("page_images") // JSON array of page image URLs
-  parsedMarkdown String? @map("parsed_markdown") // MinerU parsed Markdown with LaTeX formulas
-  editedMarkdown String? @map("edited_markdown") // User-edited Markdown (calibrated version)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  questions   Question[]
-  enrichmentProposals EnrichmentProposal[]
-  examSessions ExamSession[] @relation("ExamPaperExamSessions")
-  subject      Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-  section      Section? @relation("SectionPapers", fields: [sectionId], references: [id], onDelete: SetNull)
-
-  @@index([year])
-  @@index([sectionId])
-  @@index([region])
-  @@index([examType])
-  @@index([status])
-  @@index([sourceFormat])
-  @@index([subjectId, year, region])
-  @@map("exam_papers")
-}
 
 // AI 题目清洗提议（忠实还原审核）
 // 拆分预览阶段生成，人工逐题接受/驳回后才随 confirm-import 写入 Question
-model EnrichmentProposal {
-  id             Int      @id @default(autoincrement())
-  paperId        Int      @map("paper_id")
-  questionNumber Int      @map("question_number") // 对应 Question.questionNumber
-  originalText   String   @map("original_text") // 清洗前题目全文（含选项）
-  cleanedText    String   @map("cleaned_text") // 清洗后题目全文
-  changes        String   @default("[]") @map("changes") // JSON 数组：逐条修改理由
-  confidence     Float    @default(0) // 0-1，低于阈值标"需复核"
-  status         String   @default("pending") // pending / accepted / rejected
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
-  paper          ExamPaper @relation(fields: [paperId], references: [id], onDelete: Cascade)
-
-  @@unique([paperId, questionNumber])
-  @@index([paperId])
-  @@index([status])
-  @@map("enrichment_proposals")
-}
-
-model Question {
-  id               Int       @id @default(autoincrement())
-  paperId          Int       @map("paper_id")
-  questionNumber   Int       @map("question_number") // 题号
-  content          String    // 题目内容
-  questionType     String    @map("question_type") // choice=选择题, fill=填空题, essay=解答题
-  score            Float?    // 分值
-  difficulty       String?   // 难度：简单/中等/较难/困难
-  analysis         String?   // 解析
-  answer           String?   // 答案
-  options          String?   // 选择题选项（JSON格式）
-  imageUrl         String?   @map("image_url") // 题目图片URL
-  aiAnalyzed       Boolean   @default(false) @map("ai_analyzed") // 是否已AI分析
-  subjectId        Int?      @map("subject_id") // 学科维度
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
-  paper            ExamPaper @relation(fields: [paperId], references: [id], onDelete: Cascade)
-  subject          Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-  @@index([paperId])
-  @@index([questionType])
-  @@index([difficulty])
-  @@index([aiAnalyzed])
-  @@index([subjectId])
-  @@map("questions")
-  difficultyAdjustments DifficultyAdjustment[]
-}
 
 // AI内容审核记录
-model DifficultyAdjustment {
-  id             Int      @id @default(autoincrement())
-  questionId     Int      @map("question_id")
-  oldDifficulty  String?  @map("old_difficulty") // easy, medium, hard, very_hard (null for AI assessment)
-  newDifficulty  String   @map("new_difficulty")
-  reason         String?  // 调整原因
-  adjustedBy     Int?     @map("adjusted_by") // 调整人ID (null for AI assessment)
-  createdAt      DateTime @default(now()) @map("created_at")
-  question       Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  adjuster       Student? @relation(fields: [adjustedBy], references: [id], onDelete: SetNull)
-
-  @@index([questionId])
-  @@index([adjustedBy])
-  @@map("difficulty_adjustments")
-}
 
 // 出卷模板
-model ExamTemplate {
-  id                Int      @id @default(autoincrement())
-  name              String   // 模板名称
-  totalScore        Int      @map("total_score") // 总分
-  duration          Int?     // 考试时长（分钟）
-  questionCount     Int      @map("question_count") // 题目总数
-  
-  // 题型分布 (JSON: {"choice": 10, "fill": 5, "essay": 3})
-  typeDistribution  String   @map("type_distribution") 
-  
-  // 难度分布 (JSON: {"easy": 0.3, "medium": 0.5, "hard": 0.2})
-  difficultyDistribution String @map("difficulty_distribution")
-  
-  // 知识点覆盖 (JSON数组: ["代数", "几何"])
-  knowledgePoints   String?  @map("knowledge_points")
-  
-  // 分值分配 (JSON: {"choice": 5, "fill": 10, "essay": 15})
-  scoreDistribution String   @map("score_distribution")
-  
-  isDefault         Boolean  @default(false) @map("is_default")
-  creatorId         Int?     @map("creator_id")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
-  
-  creator           Student? @relation(fields: [creatorId], references: [id], onDelete: SetNull)
-
-  @@map("exam_templates")
-}
 
 // 掌握度记录
 // 掌握度历史记录
 // 学习报告
 // 学生错题本（独立表，不外键 Question 表）
-model StudentWrongQuestion {
-  id                Int      @id @default(autoincrement())
-  studentId         Int      @map("student_id")
-  source            String   @default("manual") // photo | manual
-  imageUrl          String?  @map("image_url") // 拍照题图片 URL
-  content           String?  // 题面文本（支持 LaTeX，拍照题可后续补录）
-  options           String?  // 选项（JSON 数组，选择题用）
-  myAnswer          String?  @map("my_answer") // 学生原始答案
-  correctAnswer     String?  @map("correct_answer") // 正确答案
-  analysis          String?  // 解析（支持 LaTeX）
-  questionType      String   @default("unknown") @map("question_type") // single_choice/multiple_choice/fill/essay/unknown
-  difficulty        String   @default("unknown") // easy/medium/hard/very_hard/unknown
-  knowledgePointTags String? @map("knowledge_point_tags") // 自由文本逗号分隔
-  notes             String? // 学生笔记
-  subjectId         Int?    @map("subject_id") // 学科维度
-  sectionId         Int?    @map("section_id") // 章节维度（错题聚合）
-  reviewStatus      String  @default("new") @map("review_status") // new/reviewing/mastered
-  wrongCount        Int     @default(1) @map("wrong_count")
-  createdAt         DateTime @default(now()) @map("created_at")
-  lastReviewAt      DateTime? @map("last_review_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
-
-  student           Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  subject           Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-  section           Section? @relation("SectionWrongQuestions", fields: [sectionId], references: [id], onDelete: SetNull)
-
-  @@index([studentId, reviewStatus])
-  @@index([sectionId])
-  @@index([studentId, questionType])
-  @@index([studentId, difficulty])
-  @@index([studentId, createdAt])
-  @@index([studentId, lastReviewAt])
-  @@index([subjectId])
-  @@map("student_wrong_questions")
-}
 
 // ===== Netdisk Integration =====
 model NetdiskConfig {
@@ -602,45 +133,14 @@ model NetdiskConfig {
 }
 
 // ===== Video / Teaching Resource Library =====
-model VideoResource {
-  id            Int       @id @default(autoincrement())
-  title         String
-  subjectId     Int?      @map("subject_id")
-  sectionId     Int?      @map("section_id") // 章节维度（视频/教辅）
-  grade         String?
-  chapter       String?
-  resourceType  String    @default("video") @map("resource_type") // video | document
-  netdiskPath   String    @unique @map("netdisk_path")
-  fsId          BigInt?   @map("fs_id")
-  shareUrl      String?   @map("share_url")
-  fileUrl       String?   @map("file_url")
-  fileSize      BigInt?   @map("file_size")
-  duration      Int?
-  coverUrl      String?   @map("cover_url")
-  description   String?
-  playCount     Int       @default(0) @map("play_count")
-  viewCount     Int       @default(0) @map("view_count")
-  sort          Int       @default(0)
-  isActive      Boolean   @default(true) @map("is_active")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-
-  subject Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-  section Section? @relation("SectionVideoResources", fields: [sectionId], references: [id], onDelete: SetNull)
-
-  @@index([subjectId])
-  @@index([sectionId])
-  @@index([resourceType, isActive])
-  @@map("video_resources")
-}
 
 // ===== Chapter Taxonomy: 教材 -> 章 -> 节 =====
 model Textbook {
   id        Int      @id @default(autoincrement())
   subjectId Int      @map("subject_id")
-  name      String   // 必修第一册 / 必修第二册 / 选择性必修第一册 ...
+  name      String // 必修第一册 / 必修第二册 / 选择性必修第一册 ...
   edition   String   @default("人教A")
-  grade     String?  // 高一上 / 高一下 / 高二上 ...
+  grade     String? // 高一上 / 高一下 / 高二上 ...
   order     Int      @default(0)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -677,16 +177,15 @@ model Section {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  chapter Chapter   @relation(fields: [chapterId], references: [id], onDelete: Cascade)
-  papers         ExamPaper[]           @relation("SectionPapers")
-  videoResources VideoResource[]       @relation("SectionVideoResources")
-  wrongQuestions StudentWrongQuestion[] @relation("SectionWrongQuestions")
-  netdiskAssets  NetdiskAsset[]        @relation("SectionNetdiskAssets")
+  chapter          Chapter                   @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  netdiskAssets    NetdiskAsset[]            @relation("SectionNetdiskAssets")
   learningProgress StudentLearningProgress[] @relation("SectionLearningProgress")
 
   @@unique([chapterId, order])
   @@index([chapterId, order])
   @@map("sections")
+  assetOpens StudentAssetOpen[] @relation("SectionAssetOpens")
+
 }
 
 // ===== 网盘资源索引（M3）=====
@@ -699,7 +198,7 @@ model NetdiskAsset {
   size              BigInt?
   mtime             DateTime?
   assetKind         String    @default("other") @map("asset_kind") // lecture|ppt|answer|practice|exam|plan|audio|video|image|junk|other
-  audience          String    @default("both")   // student|teacher|both
+  audience          String    @default("both") // student|teacher|both
   year              Int?
   region            String?
   series            String?
@@ -712,7 +211,7 @@ model NetdiskAsset {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  section Section? @relation("SectionNetdiskAssets", fields: [sectionId], references: [id], onDelete: SetNull)
+  section          Section?                  @relation("SectionNetdiskAssets", fields: [sectionId], references: [id], onDelete: SetNull)
   learningProgress StudentLearningProgress[] @relation("AssetLearningProgress")
 
   @@index([sectionId])
@@ -721,19 +220,21 @@ model NetdiskAsset {
   @@index([status])
   @@index([mapConfirmed])
   @@map("netdisk_assets")
+  opens StudentAssetOpen[] @relation("AssetOpens")
+
 }
 
 // ===== 网盘扫描状态（单行，用于断点续扫）=====
 model NetdiskScanState {
-  id          Int      @id @default(1)
-  status      String   @default("idle") // idle|running|paused|done|error
-  queue       String   @default("[]")   // JSON: 待扫描目录列表
-  currentDir  String?  @map("current_dir")
-  scannedDirs Int      @default(0) @map("scanned_dirs")
-  totalFiles  Int      @default(0) @map("total_files")
-  lastError   String?  @map("last_error")
+  id          Int       @id @default(1)
+  status      String    @default("idle") // idle|running|paused|done|error
+  queue       String    @default("[]") // JSON: 待扫描目录列表
+  currentDir  String?   @map("current_dir")
+  scannedDirs Int       @default(0) @map("scanned_dirs")
+  totalFiles  Int       @default(0) @map("total_files")
+  lastError   String?   @map("last_error")
   startedAt   DateTime? @map("started_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   @@map("netdisk_scan_state")
 }
@@ -772,4 +273,19 @@ model AiAssistant {
 
   @@index([order])
   @@map("ai_assistants")
+}
+
+model StudentAssetOpen {
+  id        Int      @id @default(autoincrement())
+  studentId Int      @map("student_id")
+  sectionId Int      @map("section_id")
+  assetId   Int?     @map("asset_id")
+  openedAt  DateTime @default(now()) @map("opened_at")
+
+  student Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  section Section       @relation("SectionAssetOpens", fields: [sectionId], references: [id], onDelete: Cascade)
+  asset   NetdiskAsset? @relation("AssetOpens", fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, openedAt])
+  @@map("student_asset_opens")
 }

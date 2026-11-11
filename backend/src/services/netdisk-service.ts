@@ -49,7 +49,7 @@ export async function getConfig(): Promise<NetdiskConfigRow | null> {
   return prisma.netdiskConfig.findUnique({ where: { id: CONF_ID } }) as Promise<NetdiskConfigRow | null>;
 }
 
-export const DEFAULT_REDIRECT_URI = 'http://localhost:3000/api/netdisk/callback';
+export const DEFAULT_REDIRECT_URI = `${(process.env.PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '')}/api/netdisk/callback`;
 
 export async function getEffectiveRedirectUri(): Promise<string> {
   const c = await getConfig();

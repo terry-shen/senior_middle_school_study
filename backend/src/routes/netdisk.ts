@@ -89,44 +89,6 @@ router.get('/files', requireAuth, async (req, res) => {
   } catch (e: unknown) { res.status(toStatusCode(e)).json({ error: (e as Error).message }); }
 });
 
-// POST /api/netdisk/share (admin) — body: resourceIds
-router.post('/share', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const { resourceIds } = req.body ?? {};
-    if (!Array.isArray(resourceIds) || resourceIds.length === 0) return res.status(400).json({ error: 'resourceIds 必填' });
-    const resources = await prisma.videoResource.findMany({ where: { id: { in: resourceIds.map(Number) }, fsId: { not: null } } });
-    const results = [];
-    for (const r of resources) {
-      if (r.fsId == null) { results.push({ id: r.id, error: '无 fsId' }); continue; }
-      try {
-        const s = await netdisk.createShare([Number(r.fsId)]);
-        await prisma.videoResource.update({ where: { id: r.id }, data: { shareUrl: s.shareUrl } });
-        results.push({ id: r.id, shareUrl: s.shareUrl });
-      } catch (e: unknown) { results.push({ id: r.id, error: (e as Error).message }); }
-    }
-    res.json({ success: true, results });
-  } catch (e: unknown) { res.status(toStatusCode(e)).json({ error: (e as Error).message }); }
-});
-
-// POST /api/netdisk/download (admin) — body: resourceIds
-router.post('/download', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const { resourceIds } = req.body ?? {};
-    if (!Array.isArray(resourceIds) || resourceIds.length === 0) return res.status(400).json({ error: 'resourceIds 必填' });
-    const resources = await prisma.videoResource.findMany({ where: { id: { in: resourceIds.map(Number) }, resourceType: 'document', fsId: { not: null } } });
-    const results = [];
-    for (const r of resources) {
-      if (r.fsId == null) { results.push({ id: r.id, error: '无 fsId' }); continue; }
-      try {
-        const d = await netdisk.saveLocalFile(Number(r.fsId), r.title || `file-${r.id}`);
-        await prisma.videoResource.update({ where: { id: r.id }, data: { fileUrl: d.fileUrl, fileSize: BigInt(d.size) } });
-        results.push({ id: r.id, fileUrl: d.fileUrl, size: d.size });
-      } catch (e: unknown) { results.push({ id: r.id, error: (e as Error).message }); }
-    }
-    res.json({ success: true, results });
-  } catch (e: unknown) { res.status(toStatusCode(e)).json({ error: (e as Error).message }); }
-});
-
 // ============ 媒体流代理（video/iframe 无法带 Authorization 头 → 支持 ?token=） ============
 async function mediaAuth(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization;

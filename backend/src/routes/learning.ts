@@ -1,8 +1,8 @@
 /**
- * 学生学习 API（M4）：章节资源 / 学习进度 / 章节地图 / 我的学习工作台
+ * 学习 API（v3）：学科目录 / 小节资源 / 视频主线课程 / 学习进度 / 最近打开
  */
 import { Router } from 'express';
-import { requireAuth, requireAdmin } from '../middleware/permission';
+import { requireAuth } from '../middleware/permission';
 import * as learning from '../services/learning-service';
 
 const router = Router();
@@ -15,6 +15,13 @@ function fail(res: any, e: unknown) {
   res.status((e as { statusCode?: number })?.statusCode ?? 500).json({ error: (e as Error).message });
 }
 
+// 学科目录（含 sectionCount，驱动学科 Tab）
+router.get('/subjects', requireAuth, async (_req, res) => {
+  try {
+    res.json({ success: true, data: await learning.listLearningSubjects() });
+  } catch (e) { fail(res, e); }
+});
+
 router.get('/sections/:id/resources', requireAuth, async (req, res) => {
   try {
     const id = toInt(req.params.id);
@@ -24,24 +31,6 @@ router.get('/sections/:id/resources', requireAuth, async (req, res) => {
     if (mode === 'manage' && req.user?.role !== 'admin') return res.status(403).json({ error: '需要管理员权限' });
     const result = await learning.getSectionResources(id, mode, toInt(req.query.page) ?? 1, toInt(req.query.limit) ?? 12);
     res.json({ success: true, ...result });
-  } catch (e) { fail(res, e); }
-});
-
-router.get('/sections/:id/papers', requireAuth, async (req, res) => {
-  try {
-    const id = toInt(req.params.id);
-    if (id == null) return res.status(400).json({ error: 'id 非法' });
-    res.json({ success: true, data: await learning.getSectionPapers(id) });
-  } catch (e) { fail(res, e); }
-});
-
-router.get('/sections/:id/wrong-questions', requireAuth, async (req, res) => {
-  try {
-    const id = toInt(req.params.id);
-    if (id == null) return res.status(400).json({ error: 'id 非法' });
-    const studentId = toInt(req.query.studentId);
-    const target = req.user?.role === 'admin' && studentId != null ? studentId : req.user!.id;
-    res.json({ success: true, data: await learning.getSectionWrongQuestions(id, target) });
   } catch (e) { fail(res, e); }
 });
 
@@ -60,35 +49,24 @@ router.get('/progress', requireAuth, async (req, res) => {
   catch (e) { fail(res, e); }
 });
 
-router.get('/map', requireAuth, async (req, res) => {
+router.get('/recent', requireAuth, async (req, res) => {
   try {
-    const subjectId = toInt(req.query.subjectId);
-    res.json({ success: true, data: await learning.getLearningMap(req.user!.id, subjectId ?? undefined) });
+    const limit = toInt(req.query.limit) ?? 5;
+    res.json({ success: true, data: await learning.getRecentOpens(req.user!.id, limit) });
   } catch (e) { fail(res, e); }
 });
 
-router.get('/workbench', requireAuth, async (req, res) => {
+router.get('/viewed-counts', requireAuth, async (req, res) => {
   try {
-    const subjectId = toInt(req.query.subjectId);
-    res.json({ success: true, ...(await learning.getWorkbench(req.user!.id, subjectId ?? undefined)) });
+    res.json({ success: true, data: await learning.getViewedSectionCounts(req.user!.id) });
   } catch (e) { fail(res, e); }
 });
 
-// 视频主线课程：按系列 → 章节标签 → 课程序号组织（管理员与学生一致）
+// 视频主线课程：按系列 → 课程章节 → 视频 + 关联教材小节
 router.get('/video-series', requireAuth, async (req, res) => {
   try {
     const subjectId = toInt(req.query.subjectId);
     res.json({ success: true, ...(await learning.getVideoSeries(req.user!.id, subjectId ?? undefined)) });
-  } catch (e) { fail(res, e); }
-});
-
-// 管理端：某学生章节地图（只读，供学生管理入口复用）
-router.get('/map/student/:studentId', requireAuth, requireAdmin, async (req, res) => {
-  try {
-    const studentId = toInt(req.params.studentId);
-    if (studentId == null) return res.status(400).json({ error: 'studentId 非法' });
-    const subjectId = toInt(req.query.subjectId);
-    res.json({ success: true, data: await learning.getLearningMap(studentId, subjectId ?? undefined) });
   } catch (e) { fail(res, e); }
 });
 

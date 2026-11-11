@@ -16,8 +16,6 @@ export interface SectionNode {
   order: number;
   title: string;
   resourceCount: number;
-  paperCount: number;
-  wrongQuestionCount: number;
 }
 
 export interface ChapterNode {
@@ -52,7 +50,7 @@ export async function getTaxonomyTree(subjectId?: number): Promise<TextbookNode[
             orderBy: [{ order: 'asc' }, { id: 'asc' }],
             include: {
               _count: {
-                select: { videoResources: true, papers: true, wrongQuestions: true },
+                select: { netdiskAssets: true },
               },
             },
           },
@@ -78,9 +76,7 @@ export async function getTaxonomyTree(subjectId?: number): Promise<TextbookNode[
         id: s.id,
         order: s.order,
         title: s.title,
-        resourceCount: s._count.videoResources,
-        paperCount: s._count.papers,
-        wrongQuestionCount: s._count.wrongQuestions,
+        resourceCount: s._count.netdiskAssets,
       })),
     })),
   }));
@@ -246,14 +242,10 @@ export async function updateSection(id: number, data: { title?: string; order?: 
   });
 }
 
-/** 统计被引用数量：资源 / 试卷 / 错题 */
+/** 统计被引用数量：网盘资源 */
 export async function countSectionReferences(sectionId: number) {
-  const [resources, papers, wrongQuestions] = await Promise.all([
-    prisma.videoResource.count({ where: { sectionId } }),
-    prisma.examPaper.count({ where: { sectionId } }),
-    prisma.studentWrongQuestion.count({ where: { sectionId } }),
-  ]);
-  return { resources, papers, wrongQuestions, total: resources + papers + wrongQuestions };
+  const resources = await prisma.netdiskAsset.count({ where: { sectionId } });
+  return { resources, total: resources };
 }
 
 export async function deleteSection(id: number) {
@@ -262,7 +254,7 @@ export async function deleteSection(id: number) {
   const refs = await countSectionReferences(id);
   if (refs.total > 0) {
     throw new TaxonomyError(
-      `该小节已被引用（资源 ${refs.resources} / 试卷 ${refs.papers} / 错题 ${refs.wrongQuestions}），请先解除关联`,
+      `该小节已被引用（资源 ${refs.resources} 条），请先解除关联`,
       409
     );
   }
