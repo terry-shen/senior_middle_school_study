@@ -261,6 +261,38 @@ const VIDEO_TAG_RE = /【([^】]+)】/;
 const VIDEO_EXT_RE = /\.(mp4|mkv|mov|avi|flv|wmv|ts|m4v|webm)$/i;
 
 /**
+ * 化学视频常见主题 → 教材节标题
+ * 视频（尤其课外课程/实验演示）用词与教材节标题常常不一致，这里做一次「同义扩充」，
+ * 扩充出的短语只可能命中化学节标题，因此对其它学科无副作用。
+ */
+const CHEM_TOPIC_ALIASES: Array<[RegExp, string]> = [
+  [/物质的分类|物质的转化|分散|胶体|丁达尔/, '物质的分类及转化'],
+  [/电解质|离子反应|离子方程式|离子共存|离子鉴别|离子推断|除杂/, '离子反应'],
+  [/氧化还原|氧还|化合价|电子转移|配平/, '氧化还原反应'],
+  [/钠及其|金属钠|碳酸钠|碳酸氢钠|过氧化钠|焰色/, '钠及其化合物'],
+  [/氯气|氯离子|含氯|次氯酸|漂白|氯水|卤素/, '氯及其化合物'],
+  [/物质的量|物质的浓度|摩尔|化学计量|阿伏加德罗|化学计算|\bmol\b/i, '物质的量'],
+  [/铁及其|铁离子|亚铁|氢氧化铁|铁盐/, '铁及其化合物'],
+  [/铝及其|金属材料|铝合金|合金/, '金属材料'],
+  [/原子结构|元素周期表|核外电子|原子轨道|电子排布/, '原子结构与元素周期表'],
+  [/元素周期律|同族|同周期|递变|位-构-性|位构性/, '元素周期律'],
+  [/化学键|分子间作用力/, '化学键'],
+  [/硫及其|二氧化硫|硫酸|硫单质/, '硫及其化合物'],
+  [/氮及其|氨气|铵盐|硝酸|二氧化氮|氮的化合物/, '氮及其化合物'],
+  [/自然资源的开发|无机非金属|硅及其|硅酸盐/, '自然资源的开发利用'],
+  [/甲烷|烷烃|乙烯|烯烃|炔烃|苯及其|芳香烃/, '认识有机化合物'],
+  [/乙醇|乙酸|酯化|酯的/, '乙醇与乙酸'],
+  [/糖类|葡萄糖|淀粉|油脂|基本营养/, '基本营养物质'],
+];
+
+/** 化学主题词同义扩充（其它学科不受影响：扩充短语均为化学节标题） */
+export function expandChemTopic(topic: string): string {
+  const extra: string[] = [];
+  for (const [re, phrase] of CHEM_TOPIC_ALIASES) if (re.test(topic)) extra.push(phrase);
+  return extra.length ? `${topic} ${extra.join(' ')}` : topic;
+}
+
+/**
  * 视频文件名 → 主题词 + 章节标签
  * 例：`p052 【函数】5.2 指数函数  052].mp4` → { tag: '函数', topic: '指数函数' }
  * 注意：课程自己的编号（5.2）与教材节号无关，这里直接丢弃
@@ -273,7 +305,7 @@ export function videoTopicText(rawName: string): { topic: string; tag: string | 
   t = t.replace(/^\s*\d{1,2}\.\d{1,2}(\.\d+)?\s*/, ''); // 课程序号
   t = t.replace(/\s*\d+\]\s*$/, ' ');
   t = t.replace(/[\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
-  return { topic: t, tag: tagMatch ? tagMatch[1] : null };
+  return { topic: expandChemTopic(t), tag: tagMatch ? tagMatch[1] : null };
 }
 
 /** 视频用候选：不看节号，只看主题词与节标题的契合，外加【标签】与章名的呼应 */
@@ -477,12 +509,16 @@ async function runScanLoop() {
   }
 }
 
-export async function startScan(opts: { restart?: boolean } = {}): Promise<{ started: boolean; status: ScanStatus }> {
+export async function startScan(opts: { restart?: boolean; dirs?: string[] } = {}): Promise<{ started: boolean; status: ScanStatus }> {
   const st = await readState();
   if (running && !opts.restart) return { started: false, status: await getScanStatus() };
+  const fresh = !!opts.restart;
   let queue: string[];
   if (opts.restart) {
     queue = [APP_ROOT];
+  } else if (opts.dirs && opts.dirs.length > 0) {
+    // 增量扫描：只扫指定目录（如新增加的学科资源），保留累计计数
+    queue = opts.dirs.map(d => String(d).trim()).filter(Boolean);
   } else {
     const saved = JSON.parse(st.queue || '[]') as string[];
     queue = saved.length ? saved : (st.status === 'done' ? [APP_ROOT] : [APP_ROOT]);
@@ -493,10 +529,10 @@ export async function startScan(opts: { restart?: boolean } = {}): Promise<{ sta
     status: 'running',
     queue,
     currentDir: null,
-    scannedDirs: opts.restart ? 0 : st.scannedDirs,
-    totalFiles: opts.restart ? 0 : st.totalFiles,
+    scannedDirs: fresh ? 0 : st.scannedDirs,
+    totalFiles: fresh ? 0 : st.totalFiles,
     lastError: null,
-    startedAt: opts.restart || !st.startedAt ? new Date() : st.startedAt,
+    startedAt: fresh || !st.startedAt ? new Date() : st.startedAt,
   });
   runScanLoop();
   return { started: true, status: await getScanStatus() };

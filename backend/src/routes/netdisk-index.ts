@@ -29,7 +29,11 @@ function fail(res: any, e: unknown) {
 router.post('/scan', requireAuth, requireAdmin, async (req, res) => {
   try {
     const restart = !!req.body?.restart;
-    const result = await svc.startScan({ restart });
+    const rawDirs = req.body?.dirs;
+    const dirs = Array.isArray(rawDirs)
+      ? rawDirs.map((d: unknown) => String(d ?? '').trim()).filter((d: string) => d.length > 0)
+      : undefined;
+    const result = await svc.startScan({ restart, dirs });
     res.json({ success: true, ...result });
   } catch (e) { fail(res, e); }
 });
