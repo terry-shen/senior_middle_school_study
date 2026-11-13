@@ -26,6 +26,7 @@ export interface LearningSubject {
   icon: string | null;
   color: string | null;
   sectionCount: number;
+  videoCount: number;
 }
 
 export interface AssetLite {

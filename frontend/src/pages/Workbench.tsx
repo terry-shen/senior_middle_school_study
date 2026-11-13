@@ -183,7 +183,7 @@ export default function Workbench() {
         <h2 className="wb-block-title">🧭 我的学科</h2>
         <div className="wb-subjects">
           {subjects.map((s) => {
-            const pending = s.sectionCount === 0;
+            const pending = s.sectionCount === 0 && (s.videoCount ?? 0) === 0;
             const viewedCount = viewed[String(s.id)] || 0;
             const inner = (
               <>
@@ -193,7 +193,11 @@ export default function Workbench() {
                   {pending && <span className="wb-subject-pending">待建设</span>}
                 </div>
                 <div className="wb-subject-meta">
-                  {pending ? '内容准备中' : `${s.sectionCount} 节 · 已浏览 ${viewedCount} 节`}
+                  {pending
+                    ? '内容准备中'
+                    : s.sectionCount > 0
+                      ? `${s.sectionCount} 节 · 已浏览 ${viewedCount} 节`
+                      : `${s.videoCount} 个视频`}
                 </div>
               </>
             );

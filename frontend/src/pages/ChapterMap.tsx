@@ -73,7 +73,7 @@ export default function ChapterMap() {
   // 2) 该学科的视频主线 + 学习进度
   const loadContent = useCallback(async () => {
     if (!token || !subject) return;
-    if (subject.sectionCount === 0) {
+    if (subject.sectionCount === 0 && (subject.videoCount ?? 0) === 0) {
       setVideoSeries([]);
       setVideoTotal(0);
       setProgress(null);
@@ -147,7 +147,7 @@ export default function ChapterMap() {
     );
   }
 
-  if (subject && subject.sectionCount === 0) {
+  if (subject && subject.sectionCount === 0 && (subject.videoCount ?? 0) === 0) {
     return (
       <div className="chapter-map">
         <div className="cmap-head">

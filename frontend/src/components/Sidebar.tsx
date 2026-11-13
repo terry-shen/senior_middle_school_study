@@ -53,13 +53,11 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     getLearningSubjects(token)
       .then((res) => {
         if (!cancelled) {
-          // 已建设学科（有教材小节）排在前面，待建设学科统一排在后面，各自保持原相对顺序
+          // 有教材小节 > 仅有视频 > 待建设，各自保持原相对顺序
           const list = [...(res.data ?? [])];
-          list.sort((a, b) => {
-            const ra = a.sectionCount > 0 ? 0 : 1;
-            const rb = b.sectionCount > 0 ? 0 : 1;
-            return ra - rb;
-          });
+          const rank = (s: { sectionCount: number; videoCount?: number }) =>
+            s.sectionCount > 0 ? 0 : (s.videoCount ?? 0) > 0 ? 1 : 2;
+          list.sort((a, b) => rank(a) - rank(b));
           setSubjects(list);
         }
       })
@@ -121,7 +119,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             <div className="sidebar-group">
               <div className="sidebar-group-title">学科</div>
               {subjects.map((s) => {
-                const ready = s.sectionCount > 0;
+                const ready = s.sectionCount > 0 || (s.videoCount ?? 0) > 0;
                 const to = `/learning/${s.code}`;
                 if (!ready) {
                   return (
