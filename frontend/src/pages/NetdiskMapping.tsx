@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useSubject } from '../contexts/SubjectContext';
 import { getTaxonomyTree } from '../services/chapters-api';
 import type { TextbookNode } from '../services/chapters-api';
 import {
@@ -18,7 +17,6 @@ const AUD_LABEL: Record<string, string> = { student: '学生', teacher: '教师'
 
 export default function NetdiskMapping() {
   const { token } = useAuth();
-  const { selectedId, selectedSubject } = useSubject();
 
   const [tree, setTree] = useState<TextbookNode[]>([]);
   const [stats, setStats] = useState<IndexStats | null>(null);
@@ -45,6 +43,21 @@ export default function NetdiskMapping() {
     return map;
   }, [stats]);
 
+  const treeGroups = useMemo(() => {
+    const map = new Map<number, { id: number; name: string; icon: string | null; books: TextbookNode[] }>();
+    for (const b of tree) {
+      const g = map.get(b.subjectId) ?? {
+        id: b.subjectId,
+        name: b.subjectName,
+        icon: b.subjectIcon ?? null,
+        books: [],
+      };
+      g.books.push(b);
+      map.set(g.id, g);
+    }
+    return [...map.values()];
+  }, [tree]);
+
   const loadStats = useCallback(async () => {
     if (!token) return;
     try { setStats(await getIndexStats(token)); } catch { /* 忽略 */ }
@@ -53,11 +66,11 @@ export default function NetdiskMapping() {
   const loadTree = useCallback(async () => {
     if (!token) return;
     try {
-      const books = await getTaxonomyTree(token, selectedId ?? undefined);
+      const books = await getTaxonomyTree(token);
       setTree(books);
       if (books[0]) setOpenBooks([books[0].id]);
     } catch (e) { setMessage((e as Error).message); }
-  }, [token, selectedId]);
+  }, [token]);
 
   const loadAssets = useCallback(async () => {
     if (!token) return;
@@ -159,7 +172,7 @@ export default function NetdiskMapping() {
       <div className="nm-head">
         <div>
           <h1>🗃️ 资源映射工作台</h1>
-          <p className="nm-sub">当前学科：{selectedSubject?.icon} {selectedSubject?.name} ｜ 网盘索引 → 章节映射 → 精选收敛</p>
+          <p className="nm-sub">全部学科 ｜ 网盘索引 → 章节映射 → 精选收敛</p>
         </div>
         <div className="nm-scan">
           <span className={`nm-chip nm-chip-${scan?.status ?? 'idle'}`}>{scanLabel}</span>
@@ -198,25 +211,33 @@ export default function NetdiskMapping() {
           <button className={`nm-tree-item ${unmapped ? 'active' : ''}`} onClick={() => { setUnmapped(true); setPage(1); }}>
             仅未映射（{stats?.unmapped ?? 0}）
           </button>
-          {tree.map(book => (
-            <div key={book.id} className="nm-book">
-              <button className="nm-book-head" onClick={() => toggleBook(book.id)}>
-                {openBooks.includes(book.id) ? '▾' : '▸'} {book.name}
-              </button>
-              {openBooks.includes(book.id) && book.chapters.map(ch => (
-                <div key={ch.id} className="nm-chapter">
-                  <button className="nm-chapter-head" onClick={() => toggleChapter(ch.id)}>
-                    {openChapters.includes(ch.id) ? '▾' : '▸'} {ch.order}. {ch.title}
+          {treeGroups.map(g => (
+            <div key={g.id} className="nm-subject">
+              <div className="nm-subject-head">
+                {g.icon} {g.name}
+                <span className="nm-subject-count">{g.books.length} 册</span>
+              </div>
+              {g.books.map(book => (
+                <div key={book.id} className="nm-book">
+                  <button className="nm-book-head" onClick={() => toggleBook(book.id)}>
+                    {openBooks.includes(book.id) ? '▾' : '▸'} {book.name}
                   </button>
-                  {openChapters.includes(ch.id) && ch.sections.map(sec => (
-                    <button
-                      key={sec.id}
-                      className={`nm-section ${!unmapped && selectedSectionId === sec.id ? 'active' : ''}`}
-                      onClick={() => selectSection(sec.id)}
-                    >
-                      {sec.order}. {sec.title}
-                      <span className="nm-count">{sectionCounts.get(sec.id) ?? 0}</span>
-                    </button>
+                  {openBooks.includes(book.id) && book.chapters.map(ch => (
+                    <div key={ch.id} className="nm-chapter">
+                      <button className="nm-chapter-head" onClick={() => toggleChapter(ch.id)}>
+                        {openChapters.includes(ch.id) ? '▾' : '▸'} {ch.order}. {ch.title}
+                      </button>
+                      {openChapters.includes(ch.id) && ch.sections.map(sec => (
+                        <button
+                          key={sec.id}
+                          className={`nm-section ${!unmapped && selectedSectionId === sec.id ? 'active' : ''}`}
+                          onClick={() => selectSection(sec.id)}
+                        >
+                          {sec.order}. {sec.title}
+                          <span className="nm-count">{sectionCounts.get(sec.id) ?? 0}</span>
+                        </button>
+                      ))}
+                    </div>
                   ))}
                 </div>
               ))}

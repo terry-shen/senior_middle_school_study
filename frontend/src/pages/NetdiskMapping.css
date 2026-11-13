@@ -203,3 +203,28 @@
   .nm-layout { grid-template-columns: 1fr; }
   .nm-tree { max-height: 300px; }
 }
+
+
+/* 全量学科分组 */
+.nm-subject {
+  margin-bottom: 10px;
+}
+
+.nm-subject-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  font-size: 13px;
+  color: #1f2d5a;
+  background: #eef2ff;
+  border-radius: 5px;
+  padding: 5px 8px;
+  margin: 6px 0 4px;
+}
+
+.nm-subject-count {
+  font-weight: 400;
+  font-size: 12px;
+  color: #5b6b90;
+}
