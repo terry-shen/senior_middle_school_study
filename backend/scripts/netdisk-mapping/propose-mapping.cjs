@@ -50,12 +50,12 @@ async function main() {
     const isVideo = a.assetKind === 'video';
     let candidates = [];
     let best = null;
-    if (a.assetKind !== 'junk') {
+    if (a.assetKind !== 'junk' && !svc.isGeoStandaloneVideo(a.path)) {
       const index = await indexFor(subjectCode);
       candidates = isVideo
         ? svc.computeVideoCandidates(a.name, index)
         : svc.computeCandidates(`${a.name} ${a.path}`, index);
-      best = isVideo ? svc.pickVideoMap(candidates) : svc.pickAutoMap(candidates);
+      best = isVideo ? svc.pickVideoMap(candidates, svc.videoTopicText(a.name).topic) : svc.pickAutoMap(candidates);
     }
     if (isVideo) {
       videoTotal++;

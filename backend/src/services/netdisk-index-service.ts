@@ -127,8 +127,9 @@ const SUBJECT_WORDS: Array<[RegExp, string]> = [
   [/政治/, 'politics'],
   [/历史/, 'history'],
   [/地理/, 'geography'],
-  [/理综/, 'science'],
-  [/文综/, 'liberal_arts'],
+  // 注意「原理综合」「原理综合题」不是理综，需排除，否则化学视频会被误判为理综
+  [/理综(?!合)/, 'science'],
+  [/文综(?!合)/, 'liberal_arts'],
 ];
 export function detectSubjectFromText(text: string): string | null {
   let best: { pos: number; code: string } | null = null;
@@ -293,6 +294,156 @@ export function expandChemTopic(topic: string): string {
 }
 
 /**
+ * 地理视频常见主题 → 教材节标题（同义扩充，仅命中地理节标题）
+ */
+const GEO_TOPIC_ALIASES: Array<[RegExp, string]> = [
+  [/宇宙|天体|天体系统|太阳系/, '地球的宇宙环境'],
+  [/太阳辐射|太阳活动|太阳对地球/, '太阳对地球的影响'],
+  [/地球历史|地质年代|化石|生物演化/, '地球的历史'],
+  [/圈层|地壳|地幔|地核|岩石圈|莫霍面|古登堡/, '地球的圈层结构'],
+  [/大气组成|大气垂直分层|对流层|平流层|电离层/, '大气的组成和垂直分层'],
+  [/大气受热|热力环流|大气的运动|等压线|风向|大气运动/, '大气受热过程和大气运动'],
+  [/水循环|蒸发|水汽输送|地表径流|下渗/, '水循环'],
+  [/海水性质|海水温度|海水盐度|海水密度/, '海水的性质'],
+  [/海水运动|波浪|潮汐|洋流|风海流|暖流|寒流/, '海水的运动'],
+  [/地貌|喀斯特|风沙|风成|黄土地貌|海岸地貌|冰川地貌|丹霞/, '常见地貌类型'],
+  [/等高线|地形图|地貌观察/, '地貌的观察'],
+  [/植被|森林|草原|荒漠|植被类型/, '植被'],
+  [/土壤|成土因素|土壤剖面/, '土壤'],
+  [/气象灾害|台风|寒潮|干旱|洪涝|暴雨/, '气象灾害'],
+  [/地质灾害|地震|滑坡|泥石流|崩塌/, '地质灾害'],
+  [/防灾|减灾|救灾/, '防灾减灾'],
+  [/3S|遥感|RS|GIS|GPS|地理信息|数字地球/, '地理信息技术在防灾减灾中的应用'],
+  [/自转|公转|黄赤交角|时区|区时|日界线|地转偏向/, '地球的自转和公转'],
+  [/太阳高度|正午太阳高度|昼夜长短|四季更替|五带/, '地球运动的地理意义'],
+  [/地表形态|内力作用|外力作用|板块构造|地质构造|褶皱|断层/, '塑造地表形态的力量'],
+  [/构造地貌|向斜|背斜|地垒|地堑/, '构造地貌的形成'],
+  [/河流地貌|侵蚀地貌|堆积地貌|冲积扇|三角洲|河漫滩/, '河流地貌的发育'],
+  [/天气系统|锋面|冷锋|暖锋|准静止锋|气旋|反气旋/, '常见天气系统'],
+  [/气压带|风带|三圈环流|季风/, '气压带和风带'],
+  [/气候类型|气候特征|气候影响|地中海气候|温带海洋/, '气压带和风带对气候的影响'],
+  [/陆地水体|河流补给|湖泊|地下水|冰雪融水/, '陆地水体及其相互关系'],
+  [/海气|海—气|海气相互作用|厄尔尼诺|拉尼娜/, '海—气相互作用'],
+  [/整体性|自然地理环境整体/, '自然环境的整体性'],
+  [/地域差异|水平地带|垂直地带|雪线|林线/, '自然环境的地域差异性'],
+  [/区域整体性|区域关联|区域差异/, '区域整体性和关联性'],
+  [/区域发展|自然环境基础|区域优势/, '区域发展的自然环境基础'],
+  [/生态脆弱|荒漠化|石漠化|水土流失|盐碱化/, '生态脆弱区的综合治理'],
+  [/资源枯竭|转型发展|鲁尔区|焦作|阜新/, '资源枯竭型城市的转型发展'],
+  [/辐射功能|城市辐射|中心城市|上海对长三角/, '城市的辐射功能'],
+  [/产业结构|产业升级|产业结构变化/, '地区产业结构变化'],
+  [/流域|流域协调|田纳西|黄河调水调沙/, '流域内协调发展'],
+  [/资源调配|南水北调|西气东输|西电东送|北煤南运/, '资源跨区域调配'],
+  [/产业转移|产业迁/, '产业转移'],
+  [/国际合作|一带一路|共建/, '国际合作'],
+  [/人口分布|人口密度|胡焕庸/, '人口分布'],
+  [/人口迁移|人口流动|迁居|民工潮/, '人口迁移'],
+  [/人口容量|环境人口容量|资源环境承载力|人口合理容量/, '人口容量'],
+  [/空间结构|城市功能区|地租|付租能力|同心圆/, '乡村和城镇空间结构'],
+  [/城镇化|城市化|郊区城镇化|逆城镇化|再城镇化/, '城镇化'],
+  [/地域文化|城乡景观|传统民居|建筑风格/, '地域文化与城乡景观'],
+  [/农业区位|农业地域|季风水田|商品谷物|乳畜|种植园|大牧场/, '农业区位因素及其变化'],
+  [/工业区位|工业地域|工业集聚|工业分散/, '工业区位因素及其变化'],
+  [/服务业区位|商业区位|服务范围/, '服务业区位因素及其变化'],
+  [/交通运输布局的影响|交通对区域|交通发展/, '交通运输布局对区域发展的影响'],
+  [/交通布局|铁路|高铁|公路|港口|航空港|交通线/, '区域发展对交通运输布局的影响'],
+  [/环境问题|环境污染|生态破坏|资源短缺/, '人类面临的主要环境问题'],
+  [/可持续发展|人地协调|人地关系/, '走向人地协调——可持续发展'],
+  [/国家发展战略|长江经济带|京津冀|粤港澳|乡村振兴|区域重大战略/, '中国国家发展战略举例'],
+  [/自然环境服务|服务功能|供给服务|调节服务/, '自然环境的服务功能'],
+  [/自然资源|资源利用|资源分布/, '自然资源及其利用'],
+  [/环境危害|环境问题及其危害/, '环境问题及其危害'],
+  [/资源安全|石油安全|矿产资源安全/, '资源安全对国家安全的影响'],
+  [/能源安全|能源结构|新能源|西电东送能源/, '中国的能源安全'],
+  [/耕地|粮食安全|耕地红线/, '中国的耕地资源与粮食安全'],
+  [/海洋空间|海洋资源|海洋权益|蓝色国土/, '海洋空间资源开发与国家安全'],
+  [/环境安全|环境风险|突发环境事件/, '环境安全对国家安全的影响'],
+  [/生态保护|自然保护区|国家公园|生态修复/, '生态保护与国家安全'],
+  [/全球气候变暖|温室效应|气候变暖/, '人类面临的主要环境问题'],
+  [/碳达峰|碳中和|气候变化|绿色发展/, '全球气候变化与国家安全'],
+  [/生态文明|绿色发展|两山/, '走向生态文明'],
+  [/国家战略与政策|环境政策|资源政策/, '国家战略与政策'],
+  // 经纬网/地图基础属高一必修内容（地貌的观察含等高线地形图判读），不归入选必1 地球的运动
+  [/地轴|两极|经线|经度|纬线|纬度|经纬网|经纬线|本初子午线|最短航线|对称点/, '地貌的观察'],
+  [/比例尺|图例|地图三要素|地形剖面/, '地貌的观察'],
+  [/等震线|震级|烈度|震中/, '地质灾害'],
+  [/岩石圈物质循环|岩浆|变质作用|沉积作用/, '塑造地表形态的力量'],
+  [/大气环流|气温|降水|天气|气候成因/, '大气受热过程和大气运动'],
+  [/河流特征|水系特征|水文特征|含沙量|结冰期/, '陆地水体及其相互关系'],
+  [/湿地|沼泽|湖泊萎缩|生物多样性|自然带|垂直分异/, '自然环境的地域差异性'],
+  [/人口增长|人口问题|人口老龄化|人口结构/, '人口迁移'],
+  [/城市功能分区|城市内部空间|中心商务区/, '乡村和城镇空间结构'],
+  [/城市化问题|城市病|城市环境/, '城镇化'],
+  [/农业地域类型|季风水田农业|商品谷物农业|大牧场放牧业/, '农业区位因素及其变化'],
+  [/工业地域|传统工业区|新兴工业区|产业集聚/, '工业区位因素及其变化'],
+  [/交通线区位|交通点区位|港口区位|航空港区位/, '区域发展对交通运输布局的影响'],
+  [/区域可持续发展|区域生态环境建设|区域自然资源综合开发/, '区域发展的自然环境基础'],
+  [/旅游|旅游资源|旅游开发/, '地区产业结构变化'],
+  [/产业升级|产业结构调整|产业转型/, '地区产业结构变化'],
+  // ---- 300讲补充别名（覆盖自然地理基础/人文地理常见讲题主题）----
+  [/最短航线|航线|航向/, '地球运动的地理意义'],
+  [/月相|昼夜更替|晨昏线|光照图|四季|节气|地转偏向|太阳高度|正午太阳/, '地球运动的地理意义'],
+  [/岩石的分类|岩石圈物质|矿物|岩浆|变质作用|沉积作用/, '塑造地表形态的力量'],
+  [/岩层|层序|地质剖面|褶皱|断层|背斜|向斜/, '构造地貌的形成'],
+  [/非地带性|分异规律|地域分异|垂直分异|自然带/, '自然环境的地域差异性'],
+  [/人口金字塔|人口年龄结构|人口统计图|人口及自然增长|人口增长/, '人口分布'],
+  [/城市区位|城市等级|城市群|城市内部空间|中心商务区/, '乡村和城镇空间结构'],
+  [/农业及分类|农业分类|水稻种植|农作物分布|农业生产|农业地域/, '农业区位因素及其变化'],
+  [/工业部门|导向型工业|工业区位选择|工业地域/, '工业区位因素及其变化'],
+  [/等温线|等压面|等压线|气压带风带与降水|高空风与近地面风/, '大气受热过程和大气运动'],
+  [/等值线/, '地貌的观察'],
+  [/逆温|保温作用|受热过程|大气环流/, '大气受热过程和大气运动'],
+  [/地震波|大气圈结构|水圈结构|生物圈结构|圈层结构/, '地球的圈层结构'],
+  [/河流补给|河流开发|流量过程|水位线|水系特征|水文特征/, '陆地水体及其相互关系'],
+  [/海水温度|海水盐度/, '海水的性质'],
+  [/卫星发射基地|航天基地/, '地球的宇宙环境'],
+  [/太阳概况|太阳结构|太阳活动|太阳辐射/, '太阳对地球的影响'],
+  [/地球普通性|存在生命条件|地球的特殊性/, '地球的宇宙环境'],
+  [/认识区域|三大自然区|区域特征/, '多种多样的区域'],
+  [/生物圈结构|生物圈/, '地球的圈层结构'],
+  [/自然地理环境的组成要素|自然地理环境组成/, '自然环境的整体性'],
+  [/聚落/, '河流地貌的发育'],
+  [/工业联系|工业扩散|工业布局|工业区位/, '工业区位因素及其变化'],
+  [/区域特征比较|区域差异|不同区域/, '多种多样的区域'],
+  [/水污染|大气污染|固体废弃物|污染及防治|污染防治/, '环境问题及其危害'],
+  [/森林的破坏|草场退化|土地退化|生物多样性减少|生态破坏/, '生态保护与国家安全'],
+  [/太空|月球|宇宙探索/, '地球的宇宙环境'],
+  [/自然环境差异性|地域分异/, '自然环境的地域差异性'],
+  [/地面辐射|大气辐射|气温日较差|辐射/, '大气受热过程和大气运动'],
+  [/太阳/, '太阳对地球的影响'],
+  [/存在生命的|存在生命条件/, '地球的宇宙环境'],
+  [/水平运动|地转偏向/, '地球运动的地理意义'],
+  [/大气圈|生物圈/, '地球的圈层结构'],
+  [/大气对太阳辐射/, '大气受热过程和大气运动'],
+  [/高空的风|近地面的风/, '大气受热过程和大气运动'],
+  [/气压带风带/, '气压带和风带'],
+  [/河流的主要补|河流的开发利用|等水位/, '陆地水体及其相互关系'],
+  [/海水的温度/, '海水的性质'],
+  [/地租/, '乡村和城镇空间结构'],
+  [/城市空间形态/, '城镇化'],
+  [/工业生产|工业对地理环境/, '工业区位因素及其变化'],
+  [/交通运输/, '区域发展对交通运输布局的影响'],
+  [/能源和矿产|能源的开发/, '资源安全对国家安全的影响'],
+  [/人口增长/, '人口分布'],
+  [/农作物的分布|区域农业|商品粮|东北农业/, '农业区位因素及其变化'],
+  [/生物物体|森林植被|森林资源|荒漠/, '生态保护与国家安全'],
+  [/海岸|海洋及海洋开发/, '海洋空间资源开发与国家安全'],
+];
+
+/** 地理独立视频系列（不参与教材映射，单独成组展示） */
+const GEO_STANDALONE_VIDEO = /高中地理-张艳平/;
+export function isGeoStandaloneVideo(path: string): boolean {
+  return GEO_STANDALONE_VIDEO.test(path);
+}
+
+/** 地理主题词同义扩充（扩充短语均为地理节标题，对其它学科无副作用） */
+export function expandGeoTopic(topic: string): string {
+  const extra: string[] = [];
+  for (const [re, phrase] of GEO_TOPIC_ALIASES) if (re.test(topic)) extra.push(phrase);
+  return extra.length ? `${topic} ${extra.join(' ')}` : topic;
+}
+
+/**
  * 视频文件名 → 主题词 + 章节标签
  * 例：`p052 【函数】5.2 指数函数  052].mp4` → { tag: '函数', topic: '指数函数' }
  * 注意：课程自己的编号（5.2）与教材节号无关，这里直接丢弃
@@ -305,7 +456,7 @@ export function videoTopicText(rawName: string): { topic: string; tag: string | 
   t = t.replace(/^\s*\d{1,2}\.\d{1,2}(\.\d+)?\s*/, ''); // 课程序号
   t = t.replace(/\s*\d+\]\s*$/, ' ');
   t = t.replace(/[\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
-  return { topic: expandChemTopic(t), tag: tagMatch ? tagMatch[1] : null };
+  return { topic: expandGeoTopic(expandChemTopic(t)), tag: tagMatch ? tagMatch[1] : null };
 }
 
 /** 视频用候选：不看节号，只看主题词与节标题的契合，外加【标签】与章名的呼应 */
@@ -347,13 +498,30 @@ export const VIDEO_MAP_THRESHOLD = 4;
 export const VIDEO_MAP_MARGIN = 1;
 
 /** 视频确认：必须有标题实词命中（标签加分不足以独立成锚），且领先第二名 ≥1 */
-export function pickVideoMap(candidates: CandidateSection[]): CandidateSection | null {
+export function pickVideoMap(candidates: CandidateSection[], topic?: string): CandidateSection | null {
   const best = candidates[0];
   if (!best || best.score < VIDEO_MAP_THRESHOLD) return null;
-  if (!best.coreHit && (best.tokenHits ?? 0) === 0) return null;
+  const usable = (c: CandidateSection) => !!c.coreHit || (c.tokenHits ?? 0) > 0;
+  if (!usable(best)) return null;
   const second = candidates[1];
-  if (second && best.score - second.score < VIDEO_MAP_MARGIN) return null;
-  return best;
+  if (!second) return best;
+  const diff = best.score - second.score;
+  if (diff >= VIDEO_MAP_MARGIN) return best;
+  if (diff !== 0 || !topic) return null;
+  const norm = normalizeMatchText(topic);
+  const tied = candidates.filter((c) => c.score === best.score && usable(c));
+  let chosen: CandidateSection | null = null;
+  let chosenAt = Number.MAX_SAFE_INTEGER;
+  for (const c of tied) {
+    // 节标题带节号前缀（如「1.地球的宇宙环境」），需剥离后再比对
+    const titleKey = normalizeMatchText(String(c.title || "")).replace(/^\d+(?:\.\d+)?/, "");
+    const at = titleKey ? norm.indexOf(titleKey) : -1;
+    if (at >= 0 && at < chosenAt) {
+      chosenAt = at;
+      chosen = c;
+    }
+  }
+  return chosen;
 }
 
 // ============ 扫描状态 ============
@@ -422,12 +590,13 @@ async function indexFile(entry: NetdiskFileEntry) {
   const subjectCode = detectSubjectFromText(entry.path);
   const isVideo = assetKind === 'video';
   const index = await sectionIndexForSubjectCode(subjectCode);
-  const candidates = assetKind === 'junk'
+  const isGeoStandalone = isGeoStandaloneVideo(entry.path);
+  const candidates = assetKind === 'junk' || isGeoStandalone
     ? []
     : isVideo
       ? computeVideoCandidates(name, index)
       : computeCandidates(fullText, index);
-  const autoMap = isVideo ? pickVideoMap(candidates) : pickAutoMap(candidates);
+  const autoMap = isVideo ? pickVideoMap(candidates, videoTopicText(name).topic) : pickAutoMap(candidates);
   const data = {
     fsId: BigInt(entry.fsId),
     name,
@@ -749,10 +918,12 @@ export async function remapAll(): Promise<{ scanned: number; mapped: number; per
       const isVideo = a.assetKind === 'video';
       const text = `${a.name} ${a.path}`;
       const index = await sectionIndexForSubjectCode(subjectCode);
-      const candidates = isVideo
+      const candidates = isVideo && !isGeoStandaloneVideo(a.path)
         ? computeVideoCandidates(a.name, index)
-        : computeCandidates(text, index);
-      const best = isVideo ? pickVideoMap(candidates) : pickAutoMap(candidates);
+        : isVideo
+          ? []
+          : computeCandidates(text, index);
+      const best = isVideo ? pickVideoMap(candidates, videoTopicText(a.name).topic) : pickAutoMap(candidates);
       if (best) mapped++;
       ops.push(prisma.netdiskAsset.update({
         where: { id: a.id },
