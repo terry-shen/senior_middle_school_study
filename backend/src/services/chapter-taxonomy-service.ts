@@ -32,6 +32,9 @@ export interface TextbookNode {
   edition: string;
   grade: string | null;
   order: number;
+  subjectId: number;
+  subjectName: string;
+  subjectIcon: string | null;
   chapterCount: number;
   sectionCount: number;
   chapters: ChapterNode[];
@@ -41,8 +44,9 @@ export interface TextbookNode {
 export async function getTaxonomyTree(subjectId?: number): Promise<TextbookNode[]> {
   const textbooks = await prisma.textbook.findMany({
     where: subjectId ? { subjectId } : undefined,
-    orderBy: [{ order: 'asc' }, { id: 'asc' }],
+    orderBy: [{ subject: { order: 'asc' } }, { order: 'asc' }, { id: 'asc' }],
     include: {
+      subject: { select: { id: true, name: true, icon: true } },
       chapters: {
         orderBy: [{ order: 'asc' }, { id: 'asc' }],
         include: {
@@ -65,6 +69,9 @@ export async function getTaxonomyTree(subjectId?: number): Promise<TextbookNode[
     edition: t.edition,
     grade: t.grade,
     order: t.order,
+    subjectId: t.subjectId,
+    subjectName: t.subject.name,
+    subjectIcon: t.subject.icon,
     chapterCount: t.chapters.length,
     sectionCount: t.chapters.reduce((acc, c) => acc + c.sections.length, 0),
     chapters: t.chapters.map((c) => ({
