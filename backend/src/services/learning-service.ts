@@ -3,7 +3,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
-import { detectSubjectFromText } from './netdisk-index-service';
+import { detectSubjectFromText, isGeoStandaloneVideo } from './netdisk-index-service';
 
 const prisma = new PrismaClient();
 
@@ -44,7 +44,7 @@ export type ResourceMode = 'featured' | 'more' | 'manage';
 // ============ 学科目录 ============
 
 export interface LearningSubject {
-  id: number; code: string; name: string; icon: string | null; color: string | null; sectionCount: number;
+  id: number; code: string; name: string; icon: string | null; color: string | null; sectionCount: number; videoCount: number;
 }
 
 export async function listLearningSubjects(): Promise<LearningSubject[]> {
@@ -68,7 +68,31 @@ export async function listLearningSubjects(): Promise<LearningSubject[]> {
     if (sid == null) continue;
     bySubject.set(sid, (bySubject.get(sid) || 0) + row._count._all);
   }
-  return subjects.map(s => ({ ...s, sectionCount: bySubject.get(s.id) || 0 }));
+
+  // 视频数按学科统计：学科判定优先文件名，其次目录，最后系列目录名
+  const videos = await prisma.netdiskAsset.findMany({
+    where: { assetKind: 'video', status: 'active' },
+    select: { path: true, name: true },
+  });
+  const videosByCode = new Map<string, number>();
+  for (const v of videos) {
+    const series = seriesOfPath(v.path);
+    const dirPath = v.path.replace(/\/[^/]+$/, '');
+    const seriesCode = detectSubjectFromText(series);
+    let code = seriesCode || detectSubjectFromText(v.name) || detectSubjectFromText(dirPath);
+    if (code === 'science' || code === 'liberal_arts') {
+      const refined = detectSubjectFromText(v.name) || detectSubjectFromText(dirPath);
+      if (refined && refined !== 'science' && refined !== 'liberal_arts') code = refined;
+    }
+    if (!code) continue;
+    videosByCode.set(code, (videosByCode.get(code) || 0) + 1);
+  }
+
+  return subjects.map(s => ({
+    ...s,
+    sectionCount: bySubject.get(s.id) || 0,
+    videoCount: videosByCode.get(s.code) || 0,
+  }));
 }
 
 // ============ 小节资源 ============
@@ -231,7 +255,7 @@ export async function getViewedSectionCounts(studentId: number): Promise<Record<
 
 // ============ 视频主线课程（系列 → 课程章节 → 视频 + 关联教材小节） ============
 
-export interface VideoSeriesItem { id: number; name: string; courseNo: number | null; fsId: string | null; size: string | null }
+export interface VideoSeriesItem { id: number; name: string; courseNo: number | null; fsId: string | null; size: string | null; sectionId?: number | null; dirRank?: number }
 export interface CourseSectionNode {
   id: number; title: string; textbookName: string; chapterTitle: string; resourceCount: number;
 }
@@ -294,12 +318,75 @@ function normalizeVideoTag(subjectCode: string | null, rawTag: string, videoName
   }
   return rawTag;
 }
+const ENGLISH_MODULE_RULES: Array<[RegExp, string]> = [
+  [/3500词精讲带背/, '词汇 3500'],
+  [/语法精讲/, '语法精讲'],
+  [/读后续写/, '读后续写'],
+  [/做题方法精讲/, '题型方法'],
+  [/阅读记完3500|58篇/, '阅读记单词'],
+];
+const CHINESE_MODULE_RULES: Array<[RegExp, string]> = [
+  [/文言文/, '文言文阅读'],
+  [/现代文阅读\s*(II|Ⅱ|2)/, '现代文阅读 II'],
+  [/现代文阅读\s*(I|Ⅰ|1)|现代文阅读/, '现代文阅读 I'],
+  [/修辞|描写|抒情|叙事|人称/, '语言表达与技巧'],
+  [/矛盾|论证|思辨/, '论述类文本'],
+  [/作文|写作/, '写作'],
+];
+/** 语文/英语为「考试专题」型课程，没有教材目录，按课程模块分组 */
+const isModuleSubject = (code: string | null) => code === 'chinese' || code === 'english';
+
+function moduleTagFor(subjectCode: string | null, path: string, name: string): string {
+  if (subjectCode === 'english') {
+    // 英语：取「视频教学/<系列>/<子目录>」的子目录名
+    const parts = path.split('/');
+    const i = parts.findIndex(x => x.includes('视频教学'));
+    const subDir = i >= 0 ? parts[i + 2] || '' : '';
+    const clean = subDir.replace(/^\d+\s*[、.．]\s*/, '');
+    for (const [re, tag] of ENGLISH_MODULE_RULES) if (re.test(clean)) return tag;
+    return clean || '其他';
+  }
+  if (subjectCode === 'chinese') {
+    const text = `${path} ${name}`;
+    for (const [re, tag] of CHINESE_MODULE_RULES) if (re.test(text)) return tag;
+    return '其他';
+  }
+  return '其他';
+}
+
+const MODULE_ORDER = [
+  // 英语
+  '词汇 3500', '语法精讲', '题型方法', '读后续写', '阅读记单词',
+  // 语文
+  '现代文阅读 I', '现代文阅读 II', '文言文阅读', '语言表达与技巧', '论述类文本', '写作',
+];
+
 function resolveSectionTag(subjectCode: string | null, chapterTitle: string, textbookName: string): string | null {
-  if (subjectCode === 'physics' || subjectCode === 'biology' || subjectCode === 'chemistry') return textbookName || null;
+  if (
+    subjectCode === 'physics' ||
+    subjectCode === 'biology' ||
+    subjectCode === 'chemistry' ||
+    subjectCode === 'geography'
+  ) return textbookName || null;
   return resolveTagForChapter(chapterTitle);
 }
 const TAIL_TAGS = ['其他', '高考最后十课', '最后十课'];
 const isTailTag = (tag: string) => TAIL_TAGS.some(t => tag.includes(t));
+
+const GEO_GROUP_ORDER = [
+  '必修第一册',
+  '必修第二册',
+  '选择性必修1 自然地理基础',
+  '选择性必修2 区域发展',
+  '选择性必修3 资源、环境与国家安全',
+  '高中地理-张艳平',
+  '高中地理300讲上',
+  '高中地理300讲下',
+];
+function geoRank(tag: string): number {
+  const i = GEO_GROUP_ORDER.indexOf(tag);
+  return i === -1 ? 999 : i;
+}
 
 function compareGroups(a: VideoSeriesGroup, b: VideoSeriesGroup): number {
   const ta = isTailTag(a.tag) ? 1 : 0, tb = isTailTag(b.tag) ? 1 : 0;
@@ -308,6 +395,10 @@ function compareGroups(a: VideoSeriesGroup, b: VideoSeriesGroup): number {
   if (ba >= 0 && bb >= 0 && ba !== bb) return ba - bb;
   if (ba >= 0 && bb < 0) return -1;
   if (bb >= 0 && ba < 0) return 1;
+  const ma = MODULE_ORDER.indexOf(a.tag), mb = MODULE_ORDER.indexOf(b.tag);
+  if (ma >= 0 && mb >= 0 && ma !== mb) return ma - mb;
+  if (ma >= 0 && mb < 0) return -1;
+  if (mb >= 0 && ma < 0) return 1;
   const ia = TAG_ORDER.indexOf(a.tag), ib = TAG_ORDER.indexOf(b.tag);
   if (ia >= 0 && ib >= 0 && ia !== ib) return ia - ib;
   if (ia >= 0 && ib < 0) return -1;
@@ -337,6 +428,15 @@ function seriesOfPath(p: string): string {
   return i >= 0 && parts[i + 1] ? parts[i + 1] : '其他';
 }
 
+/** 取「视频教学/<系列>/<子目录>」的子目录名（去掉 "5、" 之类序号前缀） */
+function subFolderOfPath(p: string): string {
+  const parts = p.split('/');
+  const i = parts.findIndex(x => x.includes('视频教学'));
+  const sub = i >= 0 ? parts[i + 2] || '' : '';
+  const clean = sub.replace(/^\d+\s*[、.．]\s*/, '').trim();
+  return clean || '其他';
+}
+
 export async function getVideoSeries(
   studentId: number,
   subjectId?: number,
@@ -355,9 +455,17 @@ export async function getVideoSeries(
 
   const sectionRows = await prisma.section.findMany({
     where: subjectId ? { chapter: { textbook: { subjectId } } } : undefined,
-    select: { id: true, title: true, chapter: { select: { title: true, textbook: { select: { name: true } } } } },
-    orderBy: { id: 'asc' },
+    select: {
+      id: true,
+      title: true,
+      order: true,
+      chapter: { select: { title: true, order: true, textbook: { select: { name: true } } } },
+    },
+    orderBy: [{ chapterId: 'asc' }, { order: 'asc' }, { id: 'asc' }],
   });
+  // 教材顺序排名（册 → 章 → 节），用于把同一分组内的视频按教材顺序排列
+  const sectionRank = new Map<number, number>();
+  sectionRows.forEach((s, i) => sectionRank.set(s.id, i));
   const resCounts = await prisma.netdiskAsset.groupBy({
     by: ['sectionId'],
     where: { ...STUDENT_VISIBLE, sectionId: { not: null } },
@@ -387,14 +495,31 @@ export async function getVideoSeries(
   for (const r of videoRows) {
     const series = seriesOfPath(r.path);
     const dirPath = r.path.replace(/\/[^/]+$/, '');
-    const code = detectSubjectFromText(dirPath) || detectSubjectFromText(series);
+    // 视频教学/<系列>/ 的系列名是权威学科标识（如「3. 李林高中生物」）；
+    // 教辅等混装目录没有学科系列名时，才回退到文件名/目录名判断
+    const seriesCode = detectSubjectFromText(series);
+    let code = seriesCode || detectSubjectFromText(r.name) || detectSubjectFromText(dirPath);
+    // 理综/文综属复合学科：系列名只写「理综」时，按文件名里的具体学科细分（如「化学篇6-…」→ 化学）
+    if (code === 'science' || code === 'liberal_arts') {
+      const refined = detectSubjectFromText(r.name) || detectSubjectFromText(dirPath);
+      if (refined && refined !== 'science' && refined !== 'liberal_arts') code = refined;
+    }
+    // 指定学科时严格要求命中该学科：识别不出学科的素材不应串入任何学科页
     if (subjectCode && code !== subjectCode) continue;
     const rawTag = tagOfName(r.name);
     const normalized = normalizeVideoTag(subjectCode, rawTag, r.name);
     let tag = normalized;
-    if (subjectCode && subjectCode !== 'math') {
+    if (isModuleSubject(subjectCode)) {
+      tag = moduleTagFor(subjectCode, r.path, r.name);
+    } else if (subjectCode === 'geography' && isGeoStandaloneVideo(r.path)) {
+      // 地理独立视频系列：不按教材分组，单独成组展示该文件夹全部视频
+      tag = subFolderOfPath(r.path);
+    } else if (subjectCode && subjectCode !== 'math') {
       const book = r.sectionId != null ? sectionBook.get(r.sectionId) : '';
-      tag = book || (BOOK_ORDER.includes(normalized) ? normalized : '其他');
+      if (book) tag = book;
+      else if (BOOK_ORDER.includes(normalized)) tag = normalized;
+      else if (subjectCode === 'geography') tag = subFolderOfPath(r.path);
+      else tag = '其他';
     }
     if (!tree.has(series)) tree.set(series, new Map());
     const g = tree.get(series)!;
@@ -405,22 +530,42 @@ export async function getVideoSeries(
       courseNo: courseNoOf(r.name),
       fsId: r.fsId != null ? String(r.fsId) : null,
       size: r.size != null ? String(r.size) : null,
+      sectionId: r.sectionId ?? null,
+      dirRank: r.path.includes('300讲上') ? 0 : r.path.includes('300讲下') ? 1 : 2,
     });
     total++;
   }
 
+  // 分组内排序：
+  // - 地理：按 300讲 讲次顺序（先「300讲上」p001→，再「300讲下」p001→），与用户要求的「按视频标识顺序」一致
+  // - 其他学科：按教材节顺序，未挂节的排末尾
+  const sortVideos = (arr: VideoSeriesItem[]) =>
+    arr.sort((a, b) => {
+      if (subjectCode === 'geography') {
+        return (a.dirRank ?? 2) - (b.dirRank ?? 2)
+          || (a.courseNo ?? 9999) - (b.courseNo ?? 9999)
+          || a.id - b.id;
+      }
+      const ra = a.sectionId != null ? (sectionRank.get(a.sectionId) ?? 1e9) : 1e9;
+      const rb = b.sectionId != null ? (sectionRank.get(b.sectionId) ?? 1e9) : 1e9;
+      return ra - rb || (a.courseNo ?? 9999) - (b.courseNo ?? 9999) || a.id - b.id;
+    });
+
   const seriesList: VideoSeries[] = [...tree.entries()].map(([series, groups]) => {
     const groupList: VideoSeriesGroup[] = [...groups.entries()].map(([tag, videos]) => ({
       tag,
-      videos: videos.sort((a, b) => (a.courseNo ?? 9999) - (b.courseNo ?? 9999) || a.id - b.id),
+      videos: sortVideos(videos),
       sections: sectionsByTag.get(tag) || [],
     }));
-    if (subjectCode) {
+    if (subjectCode && !isModuleSubject(subjectCode)) {
       for (const [tag, sections] of sectionsByTag.entries()) {
         if (!groupList.some(g => g.tag === tag)) groupList.push({ tag, videos: [], sections });
       }
     }
     groupList.sort(compareGroups);
+    if (subjectCode === 'geography') {
+      groupList.sort((a, b) => geoRank(a.tag) - geoRank(b.tag));
+    }
     return { series, groups: groupList, total: groupList.reduce((n, g) => n + g.videos.length, 0) };
   });
 
@@ -433,12 +578,15 @@ export async function getVideoSeries(
         const exist = target.groups.find(x => x.tag === g.tag);
         if (exist) {
           exist.videos.push(...g.videos);
-          exist.videos.sort((a, b) => (a.courseNo ?? 9999) - (b.courseNo ?? 9999) || a.id - b.id);
+          sortVideos(exist.videos);
         } else {
           target.groups.push(g);
         }
       }
       target.groups.sort(compareGroups);
+      if (subjectCode === 'geography') {
+        target.groups.sort((a, b) => geoRank(a.tag) - geoRank(b.tag));
+      }
       target.total = target.groups.reduce((n, g) => n + g.videos.length, 0);
       return { series: mainSeries, total: target.total };
     }
