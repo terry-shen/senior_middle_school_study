@@ -21,6 +21,9 @@ export interface TextbookNode {
   edition: string;
   grade: string | null;
   order: number;
+  subjectId: number;
+  subjectName: string;
+  subjectIcon: string | null;
   chapterCount: number;
   sectionCount: number;
   chapters: ChapterNode[];

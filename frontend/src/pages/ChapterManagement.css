@@ -214,3 +214,24 @@
     flex-wrap: wrap;
   }
 }
+
+
+/* 全量学科分组 */
+.cm-subject {
+  margin-bottom: 18px;
+}
+
+.cm-subject-head {
+  background: #eef2ff;
+  border: 1px solid #dbe3ff;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+}
+
+.cm-subject-name {
+  font-weight: 700;
+  font-size: 15px;
+  color: #1f2d5a;
+  margin-right: 12px;
+}
