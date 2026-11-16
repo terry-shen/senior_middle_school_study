@@ -2,8 +2,9 @@
  * 学习 API（v3）：学科目录 / 小节资源 / 视频主线课程 / 学习进度 / 最近打开
  */
 import { Router } from 'express';
-import { requireAuth } from '../middleware/permission';
+import { requireAuth, requireAdmin } from '../middleware/permission';
 import * as learning from '../services/learning-service';
+import * as analytics from '../services/learning-analytics-service';
 
 const router = Router();
 
@@ -67,6 +68,47 @@ router.get('/video-series', requireAuth, async (req, res) => {
   try {
     const subjectId = toInt(req.query.subjectId);
     res.json({ success: true, ...(await learning.getVideoSeries(req.user!.id, subjectId ?? undefined)) });
+  } catch (e) { fail(res, e); }
+});
+
+// 学习行为事件上报（心跳 / 打开 / 视频进度 / 下载 / 登录）
+router.post('/event', requireAuth, async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const result = await analytics.recordEvent({
+      studentId: req.user!.id,
+      type: String(body.type ?? ''),
+      sectionId: toInt(body.sectionId),
+      assetId: toInt(body.assetId),
+      durationSec: toInt(body.durationSec) ?? 0,
+      meta: body.meta,
+    });
+    res.json({ success: true, ...result });
+  } catch (e) { fail(res, e); }
+});
+
+function parseRange(req: any) {
+  const days = Math.min(365, Math.max(1, toInt(req.query.days) ?? 30));
+  const to = new Date();
+  const from = new Date(to.getTime() - days * 86400000);
+  return { from, to };
+}
+
+// 学习分析：学生概览（仅管理员）
+router.get('/analytics/overview', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { from, to } = parseRange(req);
+    res.json({ success: true, data: await analytics.getOverview(from, to) });
+  } catch (e) { fail(res, e); }
+});
+
+// 学习分析：单学生详情（仅管理员）
+router.get('/analytics/students/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const id = toInt(req.params.id);
+    if (!id) return res.status(400).json({ error: '无效的学生 ID' });
+    const { from, to } = parseRange(req);
+    res.json({ success: true, ...(await analytics.getStudentDetail(id, from, to)) });
   } catch (e) { fail(res, e); }
 });
 

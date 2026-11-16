@@ -4,6 +4,7 @@ import axios from 'axios';
 import { requireAuth, requireAdmin } from '../middleware/permission';
 import * as netdisk from '../services/netdisk-service';
 import { detectSubjectFromText } from '../services/netdisk-index-service';
+import { recordEvent } from '../services/learning-analytics-service';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -144,6 +145,13 @@ router.get('/file', mediaAuth, async (req, res) => {
     if (!fsId) return res.status(400).json({ error: 'fsId 必填' });
     const mode = req.query.mode === 'attachment' ? 'attachment' : 'inline';
     const name = typeof req.query.name === 'string' ? req.query.name : undefined;
+    if (mode === 'attachment' && req.user?.id) {
+      // 服务端记录下载事件（客户端上报用于关联 assetId，这里保证不漏）
+      try {
+        const asset = await prisma.netdiskAsset.findFirst({ where: { fsId: BigInt(fsId) }, select: { id: true, sectionId: true } });
+        await recordEvent({ studentId: req.user.id, type: 'download', assetId: asset?.id ?? null, sectionId: asset?.sectionId ?? null, meta: { fsId } });
+      } catch { /* 埋点失败不影响下载 */ }
+    }
     await proxyDlink(req, res, fsId, mode, name);
   } catch (e: unknown) { res.status(toStatusCode(e)).json({ error: (e as Error).message }); }
 });

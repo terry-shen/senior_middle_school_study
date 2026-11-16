@@ -34,6 +34,7 @@ model Student {
   class                 Class?                   @relation(fields: [classId], references: [id], onDelete: SetNull)
   sessions              Session[]
   learningProgress      StudentLearningProgress?
+  learningEvents        LearningEvent[] @relation("StudentLearningEvents")
 
   @@index([studentId])
   @@index([classId])
@@ -185,6 +186,7 @@ model Section {
   @@index([chapterId, order])
   @@map("sections")
   assetOpens StudentAssetOpen[] @relation("SectionAssetOpens")
+  learningEvents LearningEvent[] @relation("SectionLearningEvents")
 
 }
 
@@ -221,6 +223,7 @@ model NetdiskAsset {
   @@index([mapConfirmed])
   @@map("netdisk_assets")
   opens StudentAssetOpen[] @relation("AssetOpens")
+  learningEvents LearningEvent[] @relation("AssetLearningEvents")
 
 }
 
@@ -288,4 +291,23 @@ model StudentAssetOpen {
 
   @@index([studentId, openedAt])
   @@map("student_asset_opens")
+}
+
+model LearningEvent {
+  id          Int      @id @default(autoincrement())
+  studentId   Int      @map("student_id")
+  type        String
+  sectionId   Int?     @map("section_id")
+  assetId     Int?     @map("asset_id")
+  durationSec Int      @default(0) @map("duration_sec")
+  meta        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  student Student       @relation("StudentLearningEvents", fields: [studentId], references: [id], onDelete: Cascade)
+  section Section?      @relation("SectionLearningEvents", fields: [sectionId], references: [id], onDelete: SetNull)
+  asset   NetdiskAsset? @relation("AssetLearningEvents", fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, createdAt])
+  @@index([createdAt])
+  @@map("learning_events")
 }
