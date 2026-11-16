@@ -31,7 +31,10 @@ const adminGroups: NavGroup[] = [
   },
   {
     title: '学生管理',
-    items: [{ to: '/students', label: '学生列表', icon: '👥' }],
+    items: [
+      { to: '/students', label: '学生列表', icon: '👥' },
+      { to: '/analytics', label: '学习分析', icon: '📊' },
+    ],
   },
   {
     title: '系统设置',

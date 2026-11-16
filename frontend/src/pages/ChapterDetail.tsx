@@ -6,9 +6,11 @@ import {
   getFeaturedResources,
   getMoreResources,
   recordProgress,
+  reportLearningEvent,
   type AssetLite,
   type SectionResourcesFeatured,
 } from '../services/learning-api';
+import { setCurrentSectionId } from '../services/study-context';
 import './ChapterDetail.css';
 
 const KIND_LABEL: Record<string, string> = {
@@ -50,6 +52,12 @@ export default function ChapterDetail() {
   const [moreLoading, setMoreLoading] = useState(false);
 
   const [viewing, setViewing] = useState<AssetLite | null>(null);
+
+  // 让全局心跳知道当前正在学习的章节
+  useEffect(() => {
+    setCurrentSectionId(sectionId || null);
+    return () => setCurrentSectionId(null);
+  }, [sectionId]);
 
   const load = useCallback(async () => {
     if (!token || !sectionId) return;
@@ -99,6 +107,7 @@ export default function ChapterDetail() {
     if (!token) return;
     try {
       await recordProgress(token, sectionId, asset.id);
+      reportLearningEvent(token, { type: 'asset_open', sectionId, assetId: asset.id });
     } catch {
       // 进度记录失败不影响阅读
     }
@@ -213,7 +222,7 @@ export default function ChapterDetail() {
         </section>
       )}
 
-      <ResourceViewer asset={viewing} token={token || ''} onClose={() => setViewing(null)} />
+      <ResourceViewer asset={viewing} token={token || ''} sectionId={sectionId} onClose={() => setViewing(null)} />
     </div>
   );
 }

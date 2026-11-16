@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { AssetLite } from '../services/learning-api';
+import { reportLearningEvent } from '../services/learning-api';
 import './ResourceViewer.css';
 
 const API_BASE = '/api';
@@ -11,6 +12,7 @@ interface ResourceViewerProps {
   asset: AssetLite | null;
   token: string;
   onClose: () => void;
+  sectionId?: number | null;
 }
 
 export function viewerKind(asset: AssetLite): 'video' | 'image' | 'pdf' | 'download' {
@@ -21,8 +23,97 @@ export function viewerKind(asset: AssetLite): 'video' | 'image' | 'pdf' | 'downl
   return 'download';
 }
 
-export default function ResourceViewer({ asset, token, onClose }: ResourceViewerProps) {
+export default function ResourceViewer({ asset, token, onClose, sectionId = null }: ResourceViewerProps) {
   const kind = useMemo(() => (asset ? viewerKind(asset) : 'download'), [asset]);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const playedRef = useRef(0);
+  const lastTimeRef = useRef(0);
+  const lastFlushRef = useRef(Date.now());
+  const positionRef = useRef(0);
+  const durationRef = useRef(0);
+
+  // 资源停留埋点：记录本次打开该资源、页面可见的停留秒数（所有类型都记）
+  useEffect(() => {
+    if (!asset) return;
+    let acc = 0;
+    let last = Date.now();
+    const flush = () => {
+      const sec = Math.round(acc);
+      acc = 0;
+      if (sec <= 0) return;
+      reportLearningEvent(token, {
+        type: 'asset_dwell',
+        assetId: asset.id,
+        sectionId,
+        durationSec: Math.min(sec, 7200),
+        meta: { name: asset.name, kind: viewerKind(asset) },
+      });
+    };
+    const tick = () => {
+      const now = Date.now();
+      const delta = Math.round((now - last) / 1000);
+      last = now;
+      if (delta > 0 && delta < 120 && document.visibilityState === 'visible') acc += Math.min(delta, 60);
+    };
+    const onVisibility = () => { tick(); if (document.visibilityState === 'hidden') flush(); };
+    const id = window.setInterval(tick, 10000);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      tick();
+      flush();
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [asset, token, sectionId]);
+
+  // 视频播放埋点：只累计实际播放秒数（暂停/拖动不计）
+  useEffect(() => {
+    if (!asset || kind !== 'video') return;
+    playedRef.current = 0;
+    lastTimeRef.current = 0;
+    lastFlushRef.current = Date.now();
+    positionRef.current = 0;
+    durationRef.current = 0;
+
+    const flush = () => {
+      const sec = Math.round(playedRef.current);
+      if (sec <= 0) return;
+      playedRef.current = 0;
+      lastFlushRef.current = Date.now();
+      reportLearningEvent(token, {
+        type: 'video_progress',
+        assetId: asset.id,
+        sectionId,
+        durationSec: Math.min(sec, 600),
+        meta: { name: asset.name, position: Math.round(positionRef.current), duration: Math.round(durationRef.current) },
+      });
+    };
+
+    const onTimeUpdate = () => {
+      const video = videoRef.current;
+      if (!video) return;
+      positionRef.current = video.currentTime || 0;
+      durationRef.current = Number.isFinite(video.duration) ? video.duration : 0;
+      if (video.paused) { lastTimeRef.current = video.currentTime || 0; return; }
+      const t = video.currentTime || 0;
+      const delta = t - lastTimeRef.current;
+      if (delta > 0 && delta < 2) playedRef.current += delta;
+      lastTimeRef.current = t;
+      if (Date.now() - lastFlushRef.current >= 15000) flush();
+    };
+
+    const video = videoRef.current;
+    video?.addEventListener('timeupdate', onTimeUpdate);
+    return () => {
+      video?.removeEventListener('timeupdate', onTimeUpdate);
+      flush();
+    };
+  }, [asset, token, sectionId, kind]);
+
+  function reportDownload() {
+    if (!asset) return;
+    reportLearningEvent(token, { type: 'download', assetId: asset.id, sectionId, meta: { name: asset.name } });
+  }
 
   useEffect(() => {
     if (!asset) return;
@@ -52,7 +143,7 @@ export default function ResourceViewer({ asset, token, onClose }: ResourceViewer
           </div>
           <div className="rv-actions">
             {fsId && (
-              <a className="rv-btn" href={attachUrl} download={asset.name}>
+              <a className="rv-btn" href={attachUrl} download={asset.name} onClick={reportDownload}>
                 ⬇ 下载
               </a>
             )}
@@ -64,7 +155,7 @@ export default function ResourceViewer({ asset, token, onClose }: ResourceViewer
           {!fsId && <div className="rv-empty">该资源缺少网盘文件标识，无法打开。</div>}
 
           {fsId && kind === 'video' && (
-            <video className="rv-video-el" controls autoPlay src={streamUrl} />
+            <video ref={videoRef} className="rv-video-el" controls autoPlay src={streamUrl} />
           )}
 
           {fsId && kind === 'image' && (
@@ -81,7 +172,7 @@ export default function ResourceViewer({ asset, token, onClose }: ResourceViewer
             <div className="rv-download-panel">
               <div className="rv-download-icon">📄</div>
               <div className="rv-download-title">该格式（.{(asset.ext || '?').toLowerCase()}）无法在浏览器内直接预览</div>
-              <a className="rv-btn rv-btn-primary" href={attachUrl} download={asset.name}>
+              <a className="rv-btn rv-btn-primary" href={attachUrl} download={asset.name} onClick={reportDownload}>
                 ⬇ 下载文件
               </a>
             </div>

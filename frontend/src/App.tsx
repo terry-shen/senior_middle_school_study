@@ -10,10 +10,12 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import './App.css';
 import Sidebar from './components/Sidebar';
+import { useStudyHeartbeat } from './hooks/useStudyHeartbeat';
 import Workbench from './pages/Workbench';
 
 // Lazy-loaded pages for code splitting
 const StudentManagement = lazy(() => import('./pages/StudentManagement'));
+const LearningAnalytics = lazy(() => import('./pages/LearningAnalytics'));
 const ChapterManagement = lazy(() => import('./pages/ChapterManagement'));
 const ChapterMap = lazy(() => import('./pages/ChapterMap'));
 const ChapterDetail = lazy(() => import('./pages/ChapterDetail'));
@@ -89,6 +91,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/analytics"
+        element={
+          <ProtectedRoute requireAdmin>
+            <LearningAnalytics />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/netdisk-index"
         element={
           <ProtectedRoute requireAdmin>
@@ -136,8 +146,9 @@ function AppRoutes() {
 }
 
 function AppContent() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, token } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  useStudyHeartbeat(token, isAuthenticated && user?.role === 'student');
 
   return (
     <div className="app-layout">

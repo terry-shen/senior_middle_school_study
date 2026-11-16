@@ -174,3 +174,67 @@ export async function getVideoSeries(token: string) {
     withSubjectParam('/learning/video-series'),
   );
 }
+
+// ---------------- 学习行为统计 ----------------
+
+export interface LearningEventInput {
+  type: 'heartbeat' | 'asset_open' | 'asset_dwell' | 'video_progress' | 'download' | 'login';
+  sectionId?: number | null;
+  assetId?: number | null;
+  durationSec?: number;
+  meta?: unknown;
+}
+
+/** 上报学习行为事件；失败静默（埋点不应影响学习流程） */
+export async function reportLearningEvent(token: string, input: LearningEventInput): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/learning/event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(input),
+      keepalive: true,
+    });
+  } catch { /* ignore */ }
+}
+
+export interface AnalyticsOverviewRow {
+  studentId: number;
+  studentNo: string;
+  name: string;
+  className: string | null;
+  studySec: number;
+  videoSec: number;
+  opens: number;
+  downloads: number;
+  activeDays: number;
+  streak: number;
+  lastActiveAt: string | null;
+  videoCompletion: number | null;
+}
+
+export async function getAnalyticsOverview(token: string, days = 30) {
+  return req<{ success: boolean; data: AnalyticsOverviewRow[] }>(token, `/learning/analytics/overview?days=${days}`);
+}
+
+export interface AnalyticsDetail {
+  success: boolean;
+  student: { id: number; studentId: string; name: string; class: { name: string } | null };
+  totals: { studySec: number; videoSec: number; dwellSec: number; opens: number; downloads: number; events: number };
+  daily: { date: string; sec: number; videoSec: number; opens: number }[];
+  hours: number[];
+  topSections: { sectionId: number; title: string; chapterTitle: string | null; textbookName: string | null; subjectName: string | null; sec: number }[];
+  topAssets: {
+    assetId: number | null; name: string; sectionId: number | null; sec: number; videoSec: number; opens: number; lastAt: string;
+    sectionTitle: string | null; chapterTitle: string | null; subjectName: string | null;
+  }[];
+  subjectShare: { name: string; sec: number }[];
+  recent: {
+    id: number; type: string; sectionId: number | null; assetId: number | null; durationSec: number; createdAt: string;
+    assetName: string | null; sectionTitle: string | null; chapterTitle: string | null; textbookName: string | null; subjectName: string | null;
+    meta: Record<string, unknown> | null;
+  }[];
+}
+
+export async function getAnalyticsStudent(token: string, studentId: number, days = 30) {
+  return req<AnalyticsDetail>(token, `/learning/analytics/students/${studentId}?days=${days}`);
+}
