@@ -228,3 +228,203 @@
   font-size: 12px;
   color: #5b6b90;
 }
+
+/* ===== 三视图改造 ===== */
+.nm-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0 10px;
+  border-bottom: 1px solid #e3e8f0;
+  padding-bottom: 8px;
+}
+
+.nm-tab {
+  border: 1px solid #d8e0ec;
+  background: #fff;
+  color: #344567;
+  border-radius: 18px;
+  padding: 6px 16px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.nm-tab.active {
+  background: #1f4bd8;
+  border-color: #1f4bd8;
+  color: #fff;
+  font-weight: 600;
+}
+
+.nm-vis {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.nm-vis-visible { color: #1b7a3d; }
+.nm-vis-unmapped { color: #b26a00; }
+.nm-vis-unconfirmed { color: #6b7280; }
+.nm-vis-teacher { color: #8a4b00; }
+.nm-vis-archived,
+.nm-vis-ignored { color: #9aa3b2; }
+
+.nm-layout-conv {
+  grid-template-columns: 260px minmax(0, 1fr) 320px;
+}
+
+.nm-preview {
+  background: #fbfcff;
+  border: 1px solid #e3e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  align-self: start;
+  max-height: 74vh;
+  overflow: auto;
+}
+
+.nm-prev-group { margin-bottom: 10px; }
+.nm-prev-title { font-size: 12.5px; font-weight: 700; color: #1f2d5a; margin-bottom: 4px; }
+.nm-prev-item { font-size: 12.5px; color: #3b4a66; padding: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nm-prev-more { font-size: 12.5px; color: #5b6b90; margin-top: 8px; }
+
+.nm-conv-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.nm-conv-head h2 { margin: 0; font-size: 18px; color: #1f2d5a; }
+
+.nm-lamp {
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  white-space: nowrap;
+}
+
+.nm-lamp.ok { background: #e7f7ec; color: #1b7a3d; }
+.nm-lamp.warn { background: #fff4e5; color: #b26a00; }
+.nm-lamp span { margin-left: 8px; font-size: 12px; opacity: .85; }
+
+.nm-conv-block {
+  background: #fff;
+  border: 1px solid #e3e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.nm-cand,
+.nm-mapped {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 2px;
+  border-bottom: 1px dashed #eef1f6;
+  font-size: 13px;
+}
+
+.nm-cand:last-child,
+.nm-mapped:last-child { border-bottom: none; }
+
+.nm-cand-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nm-reason { font-size: 11.5px; color: #7b87a3; }
+.nm-score { font-size: 11.5px; color: #1f4bd8; font-weight: 700; min-width: 18px; text-align: right; }
+.nm-badge { font-size: 11.5px; color: #4a5878; background: #f1f4fa; border-radius: 10px; padding: 1px 8px; }
+.nm-row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.nm-btn-xs { padding: 2px 8px; font-size: 12px; }
+.nm-empty-inline { font-size: 12.5px; color: #8a94a8; padding: 8px 0; }
+.nm-empty-box {
+  border: 1px dashed #cfd8e6;
+  border-radius: 10px;
+  padding: 40px 16px;
+  text-align: center;
+  color: #7b87a3;
+  font-size: 13px;
+}
+
+.nm-inbox { display: flex; flex-direction: column; gap: 10px; }
+.nm-batchbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f4f7ff;
+  border: 1px solid #d8e2f8;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.nm-batchbar select { min-width: 260px; padding: 5px 8px; border: 1px solid #d8e0ec; border-radius: 6px; }
+.nm-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #3b4a66; }
+.nm-cap { font-size: 12px; color: #7b87a3; }
+
+.nm-dirs { display: flex; flex-direction: column; gap: 10px; }
+.nm-dirs-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.nm-dir {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #e3e8f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fff;
+}
+.nm-dir-name { font-weight: 600; color: #1f2d5a; font-size: 13.5px; }
+.nm-dir-meta { font-size: 12.5px; color: #5b6b90; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.nm-dir-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+.nm-act-group { margin-bottom: 10px; }
+.nm-act-title { font-size: 12px; font-weight: 700; color: #1f2d5a; margin-bottom: 4px; }
+.nm-act-hint { font-size: 11.5px; color: #8a94a8; line-height: 1.5; margin: 2px 0 0; }
+.nm-act-danger { border-top: 1px dashed #f0c8c8; padding-top: 8px; }
+.nm-more-toggle {
+  width: 100%;
+  background: none;
+  border: none;
+  color: #7b87a3;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 6px 0;
+  text-align: left;
+}
+
+.nm-undo {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #1f2d5a;
+  color: #fff;
+  border-radius: 10px;
+  padding: 10px 16px;
+  box-shadow: 0 8px 24px rgba(31, 45, 90, .28);
+  font-size: 13px;
+  z-index: 60;
+}
+.nm-undo .nm-btn { background: #fff; color: #1f2d5a; border-color: #fff; }
+.nm-undo .nm-btn-primary { background: #4d7cff; color: #fff; border-color: #4d7cff; }
+
+@media (max-width: 1100px) {
+  .nm-layout-conv { grid-template-columns: 1fr; }
+  .nm-preview { max-height: none; }
+  .nm-dir { flex-direction: column; align-items: flex-start; }
+}
+
+/* list alignment + create section modal */
+.nm-table th,
+.nm-table td { text-align: left; }
+.nm-check { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: #334155; }
+.nm-cap { color: #94a3b8; }
+.nm-modal-mask { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: flex; align-items: center; justify-content: center; z-index: 60; }
+.nm-modal { width: min(520px, 94vw); background: #fff; border-radius: 10px; padding: 20px 22px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25); }
+.nm-modal h3 { margin: 0 0 6px; font-size: 16px; color: #0f172a; }
+.nm-form-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+.nm-form-row > span { width: 72px; color: #475569; font-size: 13px; }
+.nm-form-row select,
+.nm-form-row input { flex: 1; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }
+.nm-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }

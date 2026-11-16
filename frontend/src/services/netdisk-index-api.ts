@@ -28,6 +28,8 @@ export interface IndexStats {
   bySection: { sectionId: number; title: string; count: number }[];
 }
 
+export type AssetVisibility = 'visible' | 'unmapped' | 'unconfirmed' | 'teacher' | 'archived' | 'ignored';
+
 export interface AssetRow {
   id: number;
   fsId: string | null;
@@ -46,6 +48,8 @@ export interface AssetRow {
   isPinned: boolean;
   status: string;
   candidateSections: string | null;
+  visibility?: AssetVisibility;
+  subjectCode?: string | null;
   section?: { id: number; title: string; chapter?: { title: string; textbook?: { name: string } } } | null;
 }
 
@@ -59,6 +63,8 @@ export interface AssetFilters {
   unmapped?: boolean;
   assetKind?: string;
   audience?: string;
+  subjectCode?: string;
+  audienceGroup?: 'student';
   status?: string;
   q?: string;
   mapConfirmed?: boolean;
@@ -104,6 +110,8 @@ export async function listAssets(token: string, f: AssetFilters = {}): Promise<A
   if (f.unmapped) qs.set('unmapped', '1');
   if (f.assetKind) qs.set('assetKind', f.assetKind);
   if (f.audience) qs.set('audience', f.audience);
+  if (f.audienceGroup) qs.set('audienceGroup', f.audienceGroup);
+  if (f.subjectCode) qs.set('subjectCode', f.subjectCode);
   if (f.status) qs.set('status', f.status);
   if (f.q) qs.set('q', f.q);
   if (f.mapConfirmed !== undefined) qs.set('mapConfirmed', f.mapConfirmed ? '1' : '0');
@@ -125,7 +133,7 @@ export async function updateAsset(token: string, id: number, payload: Record<str
 
 export type BatchAction = 'confirm' | 'move' | 'pin' | 'unpin' | 'archive' | 'restore' | 'ignore' | 'unmap';
 
-export async function batchAction(token: string, ids: number[], action: BatchAction, sectionId?: number | null): Promise<{ success: boolean; affected: number }> {
+export async function batchAction(token: string, ids: number[], action: BatchAction, sectionId?: number | null): Promise<{ success: boolean; affected: number; undoToken?: string | null }> {
   const r = await fetch(`${API_BASE}/netdisk-index/assets/batch`, {
     method: 'POST',
     headers: H(token),
@@ -133,6 +141,67 @@ export async function batchAction(token: string, ids: number[], action: BatchAct
   });
   const d = await r.json();
   if (!r.ok) throw new Error(d.error || '批量操作失败');
+  return d;
+}
+
+// ===== 目录清理 =====
+
+export interface DirectoryStat {
+  dir: string;
+  name: string;
+  total: number;
+  teacher: number;
+  studentOrBoth: number;
+  kinds: Record<string, number>;
+}
+
+export async function getDirectories(token: string): Promise<{ success: boolean; data: DirectoryStat[] }> {
+  const r = await fetch(`${API_BASE}/netdisk-index/directories`, { headers: H(token) });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || '获取目录统计失败');
+  return d;
+}
+
+export type DirectoryAction = 'archive' | 'ignore' | 'restore';
+
+export async function directoryAction(token: string, dir: string, action: DirectoryAction): Promise<{ success: boolean; affected: number; undoToken?: string | null }> {
+  const r = await fetch(`${API_BASE}/netdisk-index/directories/action`, {
+    method: 'POST',
+    headers: H(token),
+    body: JSON.stringify({ dir, action }),
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || '目录操作失败');
+  return d;
+}
+
+// ===== 单节收敛 =====
+
+export interface ConvergenceCandidate extends AssetRow {
+  score: number;
+  reason: string[];
+}
+
+export interface SectionConvergence {
+  success: boolean;
+  section: { id: number; title: string; chapterTitle: string; textbookName: string; subjectId: number };
+  mapped: AssetRow[];
+  candidates: ConvergenceCandidate[];
+  metrics: { pinned: number; more: number; visible: number; ok: boolean };
+  preview: { groups: { key: string; label: string; items: { id: number; name: string; assetKind: string }[] }[]; moreCount: number };
+}
+
+export async function getSectionConvergence(token: string, sectionId: number): Promise<SectionConvergence> {
+  const r = await fetch(`${API_BASE}/netdisk-index/sections/${sectionId}/convergence`, { headers: H(token) });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || '获取收敛详情失败');
+  return d;
+}
+
+export async function undoBatch(token: string, undoToken: string): Promise<{ success: boolean; restored: number }> {
+  const r = await fetch(`${API_BASE}/netdisk-index/undo/${encodeURIComponent(undoToken)}`, { method: 'POST', headers: H(token), body: '{}' });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || '撤销失败');
   return d;
 }
 

@@ -719,6 +719,10 @@ export interface AssetFilters {
   unmapped?: boolean;
   assetKind?: string;
   audience?: string;
+  /** 仅看学生可见候选（student + both） */
+  audienceGroup?: 'student';
+  /** 按自动识别的学科过滤（path/name 关键词） */
+  subjectCode?: string;
   status?: string;
   q?: string;
   mapConfirmed?: boolean;
@@ -727,18 +731,63 @@ export interface AssetFilters {
   limit?: number;
 }
 
+export type AssetVisibility = 'visible' | 'unmapped' | 'unconfirmed' | 'teacher' | 'archived' | 'ignored';
+
+/** 学生端可见性判定（与 learning-service 的 STUDENT_VISIBLE 保持一致） */
+export function computeVisibility(a: {
+  status?: string | null;
+  audience?: string | null;
+  mapConfirmed?: boolean | null;
+  sectionId?: number | null;
+}): AssetVisibility {
+  if (a.status === 'ignored') return 'ignored';
+  if (a.status !== 'active') return 'archived';
+  if (a.audience === 'teacher') return 'teacher';
+  if (a.sectionId == null) return 'unmapped';
+  if (!a.mapConfirmed) return 'unconfirmed';
+  return 'visible';
+}
+
 export async function listAssets(f: AssetFilters) {
   const where: Record<string, unknown> = {};
   if (f.unmapped) where.sectionId = null;
   else if (f.sectionId != null) where.sectionId = f.sectionId;
   if (f.assetKind) where.assetKind = f.assetKind;
   if (f.audience) where.audience = f.audience;
+  else if (f.audienceGroup === 'student') where.audience = { in: ['student', 'both'] };
   if (f.status) where.status = f.status;
   if (f.mapConfirmed !== undefined) where.mapConfirmed = f.mapConfirmed;
   if (f.isPinned !== undefined) where.isPinned = f.isPinned;
   if (f.q) where.name = { contains: f.q };
   const page = Math.max(1, f.page ?? 1);
   const limit = Math.min(200, Math.max(1, f.limit ?? 50));
+  const sectionInclude = { section: { select: { id: true, title: true, chapter: { select: { title: true, textbook: { select: { name: true } } } } } } };
+
+  if (f.subjectCode) {
+    // 学科不在表里，需按路径/文件名识别后过滤，因此在内存中分页
+    const all = await prisma.netdiskAsset.findMany({
+      where,
+      orderBy: [{ isPinned: 'desc' }, { id: 'asc' }],
+      select: { id: true, path: true, name: true },
+    });
+    const matched = all.filter((r) => (detectSubjectFromText(r.path) || detectSubjectFromText(r.name)) === f.subjectCode);
+    const total = matched.length;
+    const pageIds = matched.slice((page - 1) * limit, page * limit).map((r) => r.id);
+    const rows = pageIds.length
+      ? await prisma.netdiskAsset.findMany({ where: { id: { in: pageIds } }, include: sectionInclude })
+      : [];
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const data = pageIds.map((id) => byId.get(id)).filter((r): r is NonNullable<typeof r> => !!r);
+    return {
+      data: data.map((row) => ({
+        ...row,
+        visibility: computeVisibility(row),
+        subjectCode: detectSubjectFromText(row.path) || detectSubjectFromText(row.name),
+      })),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
   const [total, data] = await Promise.all([
     prisma.netdiskAsset.count({ where }),
     prisma.netdiskAsset.findMany({
@@ -746,10 +795,17 @@ export async function listAssets(f: AssetFilters) {
       orderBy: [{ isPinned: 'desc' }, { id: 'asc' }],
       skip: (page - 1) * limit,
       take: limit,
-      include: { section: { select: { id: true, title: true, chapter: { select: { title: true, textbook: { select: { name: true } } } } } } },
+      include: sectionInclude,
     }),
   ]);
-  return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  return {
+    data: data.map((row) => ({
+      ...row,
+      visibility: computeVisibility(row),
+      subjectCode: detectSubjectFromText(row.path) || detectSubjectFromText(row.name),
+    })),
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  };
 }
 
 export async function getStats() {
@@ -873,7 +929,21 @@ export async function batchAction(ids: number[], action: BatchAction, sectionId?
   } else {
     throw new IndexError('未知操作');
   }
-  return { success: true, affected: ids.length };
+  invalidateDirectoryCache();
+  const undoToken =
+    action === 'ignore' || action === 'unmap'
+      ? rememberUndo(
+          assets.map((a) => ({
+            id: a.id,
+            sectionId: a.sectionId,
+            mapSource: a.mapSource,
+            mapConfirmed: a.mapConfirmed,
+            isPinned: a.isPinned,
+            status: a.status,
+          })),
+        )
+      : null;
+  return { success: true, affected: ids.length, undoToken };
 }
 
 /** 抽检：某节的精选与可用资源数 */
@@ -891,6 +961,205 @@ export async function sectionConvergence(sectionIds: number[]) {
   return result;
 }
 
+
+// ===== 目录清理 =====
+
+export interface DirectoryStat {
+  dir: string;
+  name: string;
+  total: number;
+  teacher: number;
+  studentOrBoth: number;
+  kinds: Record<string, number>;
+}
+
+const DIRECTORY_CACHE_TTL = 60_000;
+let directoryCache: { at: number; data: DirectoryStat[] } | null = null;
+
+function dirKeyOf(p: string): string {
+  const parts = p.split('/');
+  // 形如 ['', 'apps', '高中学习系统', '教辅材料', '8. 教辅资料', '教辅资料合集', ...]
+  return parts.slice(0, 6).join('/');
+}
+
+/** 按目录（根下两级）聚合 active 资源，用于「目录清理」视图 */
+export async function getDirectoryStats(): Promise<DirectoryStat[]> {
+  if (directoryCache && Date.now() - directoryCache.at < DIRECTORY_CACHE_TTL) return directoryCache.data;
+  const rows = await prisma.netdiskAsset.findMany({
+    where: { status: 'active' },
+    select: { path: true, audience: true, assetKind: true },
+  });
+  const map = new Map<string, DirectoryStat>();
+  for (const r of rows) {
+    const dir = dirKeyOf(r.path);
+    let item = map.get(dir);
+    if (!item) {
+      const name = dir.split('/').filter(Boolean).slice(2).join(' / ') || dir;
+      item = { dir, name, total: 0, teacher: 0, studentOrBoth: 0, kinds: {} };
+      map.set(dir, item);
+    }
+    item.total += 1;
+    if (r.audience === 'teacher') item.teacher += 1;
+    else item.studentOrBoth += 1;
+    item.kinds[r.assetKind] = (item.kinds[r.assetKind] ?? 0) + 1;
+  }
+  const data = Array.from(map.values()).sort((a, b) => b.total - a.total);
+  directoryCache = { at: Date.now(), data };
+  return data;
+}
+
+export function invalidateDirectoryCache() {
+  directoryCache = null;
+}
+
+export type DirectoryAction = 'archive' | 'ignore' | 'restore';
+
+/** 目录级批量操作：对该目录及其全部子目录生效 */
+export async function batchDirectoryAction(dir: string, action: DirectoryAction) {
+  const normalized = String(dir ?? '').trim().replace(/\/+$/, '');
+  if (!normalized.startsWith('/apps/高中学习系统')) {
+    throw new IndexError('目录必须位于 /apps/高中学习系统 下', 400);
+  }
+  const where = { path: { startsWith: `${normalized}/` } };
+  const before = await prisma.netdiskAsset.findMany({
+    where,
+    select: { id: true, sectionId: true, mapSource: true, mapConfirmed: true, isPinned: true, status: true },
+    take: 5000,
+  });
+  let affected = 0;
+  if (action === 'archive') {
+    const r = await prisma.netdiskAsset.updateMany({ where: { ...where, status: 'active' }, data: { status: 'archive' } });
+    affected = r.count;
+  } else if (action === 'ignore') {
+    const r = await prisma.netdiskAsset.updateMany({ where: { ...where, status: { not: 'ignored' } }, data: { status: 'ignored' } });
+    affected = r.count;
+  } else if (action === 'restore') {
+    const r = await prisma.netdiskAsset.updateMany({ where: { ...where, status: { in: ['archive', 'ignored'] } }, data: { status: 'active' } });
+    affected = r.count;
+  } else {
+    throw new IndexError('未知的目录操作', 400);
+  }
+  invalidateDirectoryCache();
+  const undoToken = action === 'restore' ? null : rememberUndo(before);
+  return { success: true, affected, dir: normalized, undoToken };
+}
+
+// ===== 撤销快照（内存，60 秒） =====
+
+interface UndoRow {
+  id: number;
+  sectionId: number | null;
+  mapSource: string;
+  mapConfirmed: boolean;
+  isPinned: boolean;
+  status: string;
+}
+
+const UNDO_TTL = 60_000;
+const UNDO_MAX_TOKENS = 10;
+const undoTokens = new Map<string, { expiresAt: number; rows: UndoRow[] }>();
+
+function rememberUndo(rows: UndoRow[]): string | null {
+  if (!rows.length || rows.length > 5000) return null;
+  while (undoTokens.size >= UNDO_MAX_TOKENS) {
+    const oldest = undoTokens.keys().next().value as string | undefined;
+    if (!oldest) break;
+    undoTokens.delete(oldest);
+  }
+  const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  undoTokens.set(token, { expiresAt: Date.now() + UNDO_TTL, rows });
+  return token;
+}
+
+export async function undoBatch(token: string) {
+  const entry = undoTokens.get(String(token));
+  if (!entry || entry.expiresAt < Date.now()) {
+    if (entry) undoTokens.delete(String(token));
+    throw new IndexError('撤销已失效，请刷新后重试', 410);
+  }
+  for (const row of entry.rows) {
+    await prisma.netdiskAsset.update({
+      where: { id: row.id },
+      data: {
+        sectionId: row.sectionId,
+        mapSource: row.mapSource,
+        mapConfirmed: row.mapConfirmed,
+        isPinned: row.isPinned,
+        status: row.status,
+      },
+    });
+  }
+  undoTokens.delete(String(token));
+  invalidateDirectoryCache();
+  return { success: true, restored: entry.rows.length };
+}
+
+// ===== 单节收敛详情 =====
+
+export async function getSectionConvergenceDetail(sectionId: number) {
+  const section = await prisma.section.findUnique({
+    where: { id: sectionId },
+    select: { id: true, title: true, order: true, chapter: { select: { title: true, textbook: { select: { name: true, subjectId: true } } } } },
+  });
+  if (!section) throw new IndexError('小节不存在', 404);
+
+  const mappedRows = await prisma.netdiskAsset.findMany({
+    where: { sectionId },
+    orderBy: [{ isPinned: 'desc' }, { id: 'asc' }],
+    take: 200,
+    select: { id: true, name: true, ext: true, assetKind: true, audience: true, isPinned: true, status: true, mapSource: true, mapConfirmed: true, sectionId: true },
+  });
+  const mapped = mappedRows.map((r) => ({ ...r, visibility: computeVisibility(r) }));
+
+  const tok = sectionTokens(section.title);
+  const keywords = tok.tokens.filter((t) => t.length >= 2).slice(0, 6);
+  const orConds = keywords.map((k) => ({ name: { contains: k } }));
+
+  const candidateRows = await prisma.netdiskAsset.findMany({
+    where: {
+      sectionId: null,
+      status: 'active',
+      audience: { in: ['student', 'both'] },
+      ...(orConds.length ? { OR: orConds } : {}),
+    },
+    orderBy: { id: 'asc' },
+    take: 400,
+    select: { id: true, name: true, ext: true, assetKind: true, audience: true, isPinned: true, status: true, mapSource: true, mapConfirmed: true, sectionId: true },
+  });
+
+  const miniIndex = { sections: [{ id: section.id, title: section.title, ...tok }] } as unknown as SectionKeywordIndex;
+  const candidates = candidateRows
+    .map((row) => {
+      const isVideo = row.assetKind === 'video';
+      const text = isVideo ? videoTopicText(row.name).topic : row.name;
+      const hit = computeCandidates(text, miniIndex, 1)[0];
+      if (!hit || hit.score < 3) return null;
+      const normText = normalizeMatchText(text);
+      const reason = keywords.filter((k) => normText.includes(k));
+      return { ...row, visibility: computeVisibility(row), score: hit.score, reason };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 20);
+
+  const [conv] = await sectionConvergence([sectionId]);
+  const visible = await prisma.netdiskAsset.count({
+    where: { sectionId, status: 'active', audience: { in: ['student', 'both'] }, mapConfirmed: true },
+  });
+
+  return {
+    section: {
+      id: section.id,
+      title: section.title,
+      chapterTitle: section.chapter.title,
+      textbookName: section.chapter.textbook.name,
+      subjectId: section.chapter.textbook.subjectId,
+    },
+    mapped,
+    candidates,
+    metrics: { pinned: conv?.pinned ?? 0, more: conv?.more ?? 0, visible, ok: conv?.ok ?? false },
+  };
+}
 
 /**
  * 全量重新自动映射（人工确认过的条目不覆盖）

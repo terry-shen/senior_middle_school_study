@@ -4,6 +4,7 @@
 import { Router } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/permission';
 import * as svc from '../services/netdisk-index-service';
+import * as learning from '../services/learning-service';
 
 const router = Router();
 
@@ -63,6 +64,8 @@ router.get('/assets', requireAuth, requireAdmin, async (req, res) => {
       unmapped: q.unmapped === '1' || q.unmapped === 'true',
       assetKind: q.assetKind,
       audience: q.audience,
+      audienceGroup: q.audienceGroup === 'student' ? 'student' : undefined,
+      subjectCode: q.subjectCode || undefined,
       status: q.status,
       q: q.q,
       mapConfirmed: q.mapConfirmed === undefined ? undefined : q.mapConfirmed === '1' || q.mapConfirmed === 'true',
@@ -122,6 +125,51 @@ router.get('/convergence', requireAuth, requireAdmin, async (req, res) => {
     if (!ids.length) return res.status(400).json({ error: 'sectionIds 必填' });
     res.json({ success: true, sections: await svc.sectionConvergence(ids) });
   } catch (e) { fail(res, e); }
+});
+
+// ===== 目录清理 =====
+router.get('/directories', requireAuth, requireAdmin, async (_req, res) => {
+  try { res.json({ success: true, data: await svc.getDirectoryStats() }); }
+  catch (e) { fail(res, e); }
+});
+
+router.post('/directories/action', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const dir = String(req.body?.dir ?? '');
+    const action = String(req.body?.action ?? '') as svc.DirectoryAction;
+    if (!dir) return res.status(400).json({ error: 'dir 必填' });
+    if (!['archive', 'ignore', 'restore'].includes(action)) return res.status(400).json({ error: 'action 非法' });
+    res.json(await svc.batchDirectoryAction(dir, action));
+  } catch (e) { fail(res, e); }
+});
+
+// ===== 单节收敛详情（含学生端预览） =====
+router.get('/sections/:id/convergence', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const id = toInt(req.params.id);
+    if (id == null) return res.status(400).json({ error: 'id 非法' });
+    const detail = await svc.getSectionConvergenceDetail(id);
+    const [featured, more] = await Promise.all([
+      learning.getSectionResources(id, 'featured'),
+      learning.getSectionResources(id, 'more', 1, 1),
+    ]);
+    const featuredGroups = (featured as { groups?: { key: string; label: string; items: { id: number; name: string; assetKind: string }[] }[] }).groups ?? [];
+    const moreTotal = (more as { pagination?: { total?: number } }).pagination?.total ?? 0;
+    res.json({
+      success: true,
+      ...detail,
+      preview: {
+        groups: featuredGroups.map((g) => ({ key: g.key, label: g.label, items: g.items.map((i) => ({ id: i.id, name: i.name, assetKind: i.assetKind })) })),
+        moreCount: moreTotal,
+      },
+    });
+  } catch (e) { fail(res, e); }
+});
+
+// ===== 撤销 =====
+router.post('/undo/:token', requireAuth, requireAdmin, async (req, res) => {
+  try { res.json(await svc.undoBatch(String(req.params.token))); }
+  catch (e) { fail(res, e); }
 });
 
 export default router;
