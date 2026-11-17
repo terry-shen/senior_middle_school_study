@@ -94,42 +94,78 @@ export default function LearningAnalytics() {
 
       <section className="la-card">
         <h2>学生概览</h2>
-        {loading ? <p className="la-hint">加载中…</p> : (
-          <table className="la-table">
-            <thead>
-              <tr>
-                <th>学生</th><th>班级</th><th>内容学习时长</th><th>视频观看</th><th>覆盖章节</th>
-                <th>回访资源</th><th>打开</th><th>下载</th><th>视频完成率</th><th>活跃天数</th>
-                <th>连续天数</th><th>最后活跃</th>
-              </tr>
-            </thead>
-            <tbody>
+        {loading ? <p className="la-hint">加载中…</p> : rows.length === 0 ? (
+          <p className="la-empty">暂无学生数据</p>
+        ) : (
+          <>
+            <div className="la-table-wrap">
+              <table className="la-table">
+                <thead>
+                  <tr>
+                    <th className="la-col-name">学生</th>
+                    <th>内容学习</th><th>视频观看</th><th>覆盖章节</th><th>回访</th>
+                    <th>打开 / 下载</th><th>完成率</th><th>活跃 / 连续</th><th>最后活跃</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => {
+                    const silent = r.contentSec === 0 && r.videoSec === 0;
+                    return (
+                      <tr
+                        key={r.studentId}
+                        className={`${selected === r.studentId ? 'selected' : ''} ${silent ? 'silent' : ''}`}
+                        onClick={() => setSelected(r.studentId)}
+                      >
+                        <td className="la-col-name">
+                          <span className="la-name">{r.name}</span>
+                          <span className="la-meta">{r.studentNo} · {r.className ?? '未分班'}</span>
+                          {silent && <span className="la-silent-tag">沉默</span>}
+                        </td>
+                        <td>{fmtDuration(r.contentSec)}</td>
+                        <td>{fmtDuration(r.videoSec)}</td>
+                        <td>{r.coveredSections}</td>
+                        <td>{r.revisitAssets}</td>
+                        <td>{r.opens} / {r.downloads}</td>
+                        <td>{r.videoCompletion == null ? '—' : `${r.videoCompletion}%`}</td>
+                        <td>{r.activeDays} / {r.streak}</td>
+                        <td>{fmtDate(r.lastActiveAt)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="la-scards">
               {rows.map((r) => {
                 const silent = r.contentSec === 0 && r.videoSec === 0;
                 return (
-                  <tr
+                  <button
                     key={r.studentId}
-                    className={`${selected === r.studentId ? 'selected' : ''} ${silent ? 'silent' : ''}`}
+                    type="button"
+                    className={`la-scard ${selected === r.studentId ? 'selected' : ''} ${silent ? 'silent' : ''}`}
                     onClick={() => setSelected(r.studentId)}
                   >
-                    <td>{r.name} <span className="la-no">{r.studentNo}</span>{silent && <span className="la-silent-tag">沉默</span>}</td>
-                    <td>{r.className ?? '—'}</td>
-                    <td>{fmtDuration(r.contentSec)}</td>
-                    <td>{fmtDuration(r.videoSec)}</td>
-                    <td>{r.coveredSections}</td>
-                    <td>{r.revisitAssets}</td>
-                    <td>{r.opens}</td>
-                    <td>{r.downloads}</td>
-                    <td>{r.videoCompletion == null ? '—' : `${r.videoCompletion}%`}</td>
-                    <td>{r.activeDays}</td>
-                    <td>{r.streak}</td>
-                    <td>{fmtDate(r.lastActiveAt)}</td>
-                  </tr>
+                    <div className="la-scard-head">
+                      <span className="la-name">{r.name}</span>
+                      <span className="la-meta">{r.studentNo} · {r.className ?? '未分班'}</span>
+                      {silent && <span className="la-silent-tag">沉默</span>}
+                    </div>
+                    <dl className="la-scard-grid">
+                      <div><dt>内容学习</dt><dd>{fmtDuration(r.contentSec)}</dd></div>
+                      <div><dt>视频观看</dt><dd>{fmtDuration(r.videoSec)}</dd></div>
+                      <div><dt>覆盖章节</dt><dd>{r.coveredSections}</dd></div>
+                      <div><dt>回访资源</dt><dd>{r.revisitAssets}</dd></div>
+                      <div><dt>打开 / 下载</dt><dd>{r.opens} / {r.downloads}</dd></div>
+                      <div><dt>完成率</dt><dd>{r.videoCompletion == null ? '—' : `${r.videoCompletion}%`}</dd></div>
+                      <div><dt>活跃 / 连续</dt><dd>{r.activeDays} / {r.streak}</dd></div>
+                      <div><dt>最后活跃</dt><dd>{fmtDate(r.lastActiveAt)}</dd></div>
+                    </dl>
+                  </button>
                 );
               })}
-              {rows.length === 0 && <tr><td colSpan={12} className="la-empty">暂无学生数据</td></tr>}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </section>
 
