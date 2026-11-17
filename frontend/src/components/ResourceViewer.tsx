@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { AssetLite } from '../services/learning-api';
 import { reportLearningEvent } from '../services/learning-api';
+import { useModalDialog } from '../hooks/useModalDialog';
 import './ResourceViewer.css';
 
 const API_BASE = '/api';
@@ -25,6 +26,7 @@ export function viewerKind(asset: AssetLite): 'video' | 'image' | 'pdf' | 'downl
 
 export default function ResourceViewer({ asset, token, onClose, sectionId = null }: ResourceViewerProps) {
   const kind = useMemo(() => (asset ? viewerKind(asset) : 'download'), [asset]);
+  const modalRef = useModalDialog<HTMLDivElement>(!!asset, onClose);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const playedRef = useRef(0);
   const lastTimeRef = useRef(0);
@@ -133,7 +135,7 @@ export default function ResourceViewer({ asset, token, onClose, sectionId = null
 
   return (
     <div className="rv-overlay" onClick={onClose}>
-      <div className={`rv-modal rv-kind-${kind}`} onClick={(e) => e.stopPropagation()}>
+      <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} className={`rv-modal rv-kind-${kind}`} onClick={(e) => e.stopPropagation()}>
         <div className="rv-head">
           <div className="rv-title">
             <span className="rv-kind">
@@ -155,7 +157,7 @@ export default function ResourceViewer({ asset, token, onClose, sectionId = null
           {!fsId && <div className="rv-empty">该资源缺少网盘文件标识，无法打开。</div>}
 
           {fsId && kind === 'video' && (
-            <video ref={videoRef} className="rv-video-el" controls autoPlay src={streamUrl} />
+            <video ref={videoRef} className="rv-video-el" controls autoPlay tabIndex={-1} src={streamUrl} onClick={() => modalRef.current?.focus({ preventScroll: true })} />
           )}
 
           {fsId && kind === 'image' && (

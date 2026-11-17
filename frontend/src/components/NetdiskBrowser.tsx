@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useModalDialog } from '../hooks/useModalDialog';
 import { listNetdiskFiles, getNetdiskPublicStatus } from '../services/netdisk-api';
 import type { NetdiskFile } from '../services/netdisk-api';
 import { reportLearningEvent } from '../services/learning-api';
@@ -181,6 +182,7 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
   };
 
   const closeViewer = () => setViewer(null);
+  const modalRef = useModalDialog<HTMLDivElement>(viewer !== null, closeViewer);
 
   if (bound === null) return null;
   if (!bound) {
@@ -260,7 +262,7 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
       {/* 视频播放弹窗 */}
       {viewer?.kind === 'video' && (
         <div className="nb-modal-overlay" onClick={closeViewer}>
-          <div className="nb-modal nb-modal-video" onClick={(e) => e.stopPropagation()}>
+          <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} className="nb-modal nb-modal-video" onClick={(e) => e.stopPropagation()}>
             <div className="nb-modal-head">
               <b>🎬 {viewer.f.filename}</b>
               <button className="nb-btn" onClick={closeViewer}>✕ 关闭</button>
@@ -272,6 +274,8 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
               controls
               autoPlay
               preload="metadata"
+              tabIndex={-1}
+              onClick={() => modalRef.current?.focus({ preventScroll: true })}
             />
             <div className="nb-modal-foot">
               <span className="nb-size-tag">{fmtSize(viewer.f.size)}</span>
@@ -284,7 +288,7 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
       {/* 图片查看弹窗 */}
       {viewer?.kind === 'image' && (
         <div className="nb-modal-overlay" onClick={closeViewer}>
-          <div className="nb-modal nb-modal-image" onClick={(e) => e.stopPropagation()}>
+          <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} className="nb-modal nb-modal-image" onClick={(e) => e.stopPropagation()}>
             <div className="nb-modal-head">
               <b>🖼️ {viewer.f.filename}</b>
               <button className="nb-btn" onClick={closeViewer}>✕ 关闭</button>
@@ -297,7 +301,7 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
       {/* 文档操作弹窗：在线查看 / 下载 */}
       {viewer?.kind === 'doc' && (
         <div className="nb-modal-overlay" onClick={closeViewer}>
-          <div className="nb-modal nb-modal-doc" onClick={(e) => e.stopPropagation()}>
+          <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} className="nb-modal nb-modal-doc" onClick={(e) => e.stopPropagation()}>
             <div className="nb-modal-head">
               <b>📄 {viewer.f.filename}</b>
               <button className="nb-btn" onClick={closeViewer}>✕ 关闭</button>
