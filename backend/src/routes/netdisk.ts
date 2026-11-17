@@ -156,4 +156,42 @@ router.get('/file', mediaAuth, async (req, res) => {
   } catch (e: unknown) { res.status(toStatusCode(e)).json({ error: (e as Error).message }); }
 });
 
+// ============ 安卓 App 安装包（取自网盘根目录） ============
+const APK_ROOT_DIR = '/apps/高中学习系统';
+
+async function findLatestApk() {
+  const files = await netdisk.listFiles(APK_ROOT_DIR);
+  const apks = files
+    .filter(f => f.isDir === 0 && /\.apk$/i.test(f.name))
+    .sort((a, b) => (Date.parse(b.modifyTime) || 0) - (Date.parse(a.modifyTime) || 0));
+  return apks[0] ?? null;
+}
+
+// GET /api/netdisk/apk/info — 安装包元信息（无包时返回 found:false）
+router.get('/apk/info', requireAuth, async (_req, res) => {
+  try {
+    const apk = await findLatestApk();
+    if (!apk) return res.json({ success: true, found: false });
+    res.json({
+      success: true,
+      found: true,
+      name: apk.name,
+      fsId: String(apk.fsId),
+      size: apk.size != null ? String(apk.size) : null,
+      updatedAt: Number.isNaN(Date.parse(apk.modifyTime)) ? null : new Date(apk.modifyTime).toISOString(),
+    });
+  } catch (e: unknown) {
+    res.status(toStatusCode(e)).json({ error: (e as Error).message });
+  }
+});
+
+// GET /api/netdisk/apk?token= — 下载安装包（浏览器导航无法带 Authorization，故支持 query token）
+router.get('/apk', mediaAuth, async (req, res) => {
+  try {
+    const apk = await findLatestApk();
+    if (!apk) return res.status(404).json({ error: '网盘根目录暂无 apk 安装包' });
+    await proxyDlink(req, res, Number(apk.fsId), 'attachment', apk.name);
+  } catch (e: unknown) { res.status(toStatusCode(e)).json({ error: (e as Error).message }); }
+});
+
 export default router;
