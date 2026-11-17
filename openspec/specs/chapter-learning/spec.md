@@ -7,7 +7,7 @@
 
 ### Requirement: 章节详情页
 
-系统 SHALL 为每个 Section 提供详情页，聚合该节的精选视频、讲义、练习资源。
+系统 SHALL 为每个 Section 提供详情页，聚合该节的精选视频、讲义、练习资源，并在学生打开资源时记录学习进度与行为事件。
 
 #### Scenario: 精选资源分组展示
 - **WHEN** 学生打开某节详情页
@@ -23,6 +23,11 @@
 - **WHEN** 学生点击「更多资源」
 - **THEN** 展开该节全部学生侧可见资源并按类型分段
 - **AND** 学生可直接点击任意资源打开阅读器
+
+#### Scenario: 打开资源记录进度与事件
+- **WHEN** 学生点击某节下的任一资源
+- **THEN** 系统更新该学生的「最近学习节」与最近访问时间
+- **AND** 同时上报一条 `asset_open` 学习行为事件
 
 ### Requirement: 统一资源阅读器
 
@@ -141,3 +146,16 @@
 - **WHEN** 学生直接输入 /paper-library、/question-bank、/mock-exams、/answer-sheets、/wrong-questions、/incentive 等已下线路径
 - **THEN** 系统重定向到 /learning
 - **AND** 不请求任何已下线接口
+
+### Requirement: 资源观看与下载埋点
+
+系统 SHALL 在资源查看器中对视频播放与文件下载进行埋点上报。
+
+#### Scenario: 视频播放计时
+- **WHEN** 学生在查看器中播放视频
+- **THEN** 客户端累计实际播放秒数并周期性上报
+- **AND** 关闭查看器时补报剩余秒数
+
+#### Scenario: 教辅下载
+- **WHEN** 学生在查看器中下载文件
+- **THEN** 客户端上报 `download` 事件，服务端同时记录一条下载事件
