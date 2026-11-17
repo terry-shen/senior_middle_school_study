@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getTaxonomyTree, type TextbookNode } from '../services/chapters-api';
 import { getIndexStats, type IndexStats } from '../services/netdisk-index-api';
+import { getApkInfo, apkDownloadUrl, type ApkInfo } from '../services/app-api';
 import {
   getLearningSubjects,
   getProgress,
@@ -145,6 +146,8 @@ export default function Workbench() {
           </div>
         </section>
 
+        <ApkDownloadBlock token={token} />
+
         {loading && <p className="wb-loading">加载中...</p>}
       </div>
     );
@@ -247,7 +250,46 @@ export default function Workbench() {
         )}
       </section>
 
+      <ApkDownloadBlock token={token} />
+
       {loading && <p className="wb-loading">加载中...</p>}
     </div>
+  );
+}
+
+function ApkDownloadBlock({ token }: { token: string | null }) {
+  const [info, setInfo] = useState<ApkInfo | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    let alive = true;
+    getApkInfo(token)
+      .then((r) => { if (alive) setInfo(r); })
+      .catch(() => { if (alive) setInfo({ success: false, found: false }); });
+    return () => { alive = false; };
+  }, [token]);
+
+  const sizeText = info?.size ? `${(Number(info.size) / 1048576).toFixed(1)} MB` : '';
+  const dateText = info?.updatedAt ? new Date(info.updatedAt).toLocaleDateString('zh-CN') : '';
+  const meta = [sizeText, dateText ? `更新于 ${dateText}` : ''].filter(Boolean).join(' · ');
+
+  return (
+    <section className="wb-block">
+      <h2 className="wb-block-title">📱 安卓 App</h2>
+      <div className="wb-apk">
+        <div className="wb-apk-info">
+          <div className="wb-apk-name">{info?.found ? info.name : '高中学习系统 Android 客户端'}</div>
+          <div className="wb-apk-meta">
+            {info === null ? '查询安装包中…' : info.found ? meta || '安装包已就绪' : '安装包暂未上传到网盘根目录'}
+          </div>
+        </div>
+        {info?.found && token ? (
+          <a className="wb-btn wb-btn-primary" href={apkDownloadUrl(token)}>⬇ 下载 APK</a>
+        ) : (
+          <button className="wb-btn" disabled>暂不可下载</button>
+        )}
+      </div>
+      <p className="wb-apk-hint">安卓手机下载后允许「安装未知来源应用」即可安装；iOS 暂不支持。</p>
+    </section>
   );
 }
