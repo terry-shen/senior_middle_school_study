@@ -24,107 +24,78 @@ export function viewerKind(asset: AssetLite): 'video' | 'image' | 'pdf' | 'downl
   return 'download';
 }
 
+/** 打开资源时开始计时，关闭时上报一条 asset_session */
 export default function ResourceViewer({ asset, token, onClose, sectionId = null }: ResourceViewerProps) {
   const kind = useMemo(() => (asset ? viewerKind(asset) : 'download'), [asset]);
   const modalRef = useModalDialog<HTMLDivElement>(!!asset, onClose);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const playedRef = useRef(0);
   const lastTimeRef = useRef(0);
-  const lastFlushRef = useRef(Date.now());
-  const positionRef = useRef(0);
-  const durationRef = useRef(0);
 
-  // 资源停留埋点：记录本次打开该资源、页面可见的停留秒数（所有类型都记）
   useEffect(() => {
     if (!asset) return;
-    let acc = 0;
+    const session = { dwell: 0, play: 0, position: 0, duration: 0 };
     let last = Date.now();
-    const flush = () => {
-      const sec = Math.round(acc);
-      acc = 0;
-      if (sec <= 0) return;
-      reportLearningEvent(token, {
-        type: 'asset_dwell',
-        assetId: asset.id,
-        sectionId,
-        durationSec: Math.min(sec, 7200),
-        meta: { name: asset.name, kind: viewerKind(asset) },
-      });
-    };
+    lastTimeRef.current = 0;
+
     const tick = () => {
       const now = Date.now();
-      const delta = Math.round((now - last) / 1000);
+      const delta = (now - last) / 1000;
       last = now;
-      if (delta > 0 && delta < 120 && document.visibilityState === 'visible') acc += Math.min(delta, 60);
-    };
-    const onVisibility = () => { tick(); if (document.visibilityState === 'hidden') flush(); };
-    const id = window.setInterval(tick, 10000);
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      tick();
-      flush();
-      window.clearInterval(id);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [asset, token, sectionId]);
-
-  // 视频播放埋点：只累计实际播放秒数（暂停/拖动不计）
-  useEffect(() => {
-    if (!asset || kind !== 'video') return;
-    playedRef.current = 0;
-    lastTimeRef.current = 0;
-    lastFlushRef.current = Date.now();
-    positionRef.current = 0;
-    durationRef.current = 0;
-
-    const flush = () => {
-      const sec = Math.round(playedRef.current);
-      if (sec <= 0) return;
-      playedRef.current = 0;
-      lastFlushRef.current = Date.now();
-      reportLearningEvent(token, {
-        type: 'video_progress',
-        assetId: asset.id,
-        sectionId,
-        durationSec: Math.min(sec, 600),
-        meta: { name: asset.name, position: Math.round(positionRef.current), duration: Math.round(durationRef.current) },
-      });
+      if (delta > 0 && delta < 120 && document.visibilityState === 'visible') {
+        session.dwell += Math.min(delta, 60);
+      }
     };
 
     const onTimeUpdate = () => {
-      const video = videoRef.current;
-      if (!video) return;
-      positionRef.current = video.currentTime || 0;
-      durationRef.current = Number.isFinite(video.duration) ? video.duration : 0;
-      if (video.paused) { lastTimeRef.current = video.currentTime || 0; return; }
-      const t = video.currentTime || 0;
-      const delta = t - lastTimeRef.current;
-      if (delta > 0 && delta < 2) playedRef.current += delta;
+      const v = videoRef.current;
+      if (!v) return;
+      const t = v.currentTime || 0;
+      session.position = t;
+      if (Number.isFinite(v.duration)) session.duration = v.duration;
+      if (!v.paused) {
+        const d = t - lastTimeRef.current;
+        if (d > 0 && d < 2) session.play += d;
+      }
       lastTimeRef.current = t;
-      if (Date.now() - lastFlushRef.current >= 15000) flush();
     };
 
+    const id = window.setInterval(tick, 5000);
     const video = videoRef.current;
     video?.addEventListener('timeupdate', onTimeUpdate);
-    return () => {
-      video?.removeEventListener('timeupdate', onTimeUpdate);
-      flush();
+
+    const flush = () => {
+      tick();
+      const dwellSec = Math.min(7200, Math.round(session.dwell));
+      const playSec = Math.round(session.play);
+      if (dwellSec <= 0 && playSec <= 0) return;
+      reportLearningEvent(token, {
+        type: 'asset_session',
+        assetId: asset.id,
+        sectionId,
+        durationSec: dwellSec,
+        meta: {
+          name: asset.name,
+          kind: viewerKind(asset),
+          playSec,
+          position: Math.round(session.position),
+          duration: Math.round(session.duration),
+        },
+      });
+      session.dwell = 0;
+      session.play = 0;
     };
-  }, [asset, token, sectionId, kind]);
+
+    return () => {
+      flush();
+      window.clearInterval(id);
+      video?.removeEventListener('timeupdate', onTimeUpdate);
+    };
+  }, [asset, token, sectionId]);
 
   function reportDownload() {
     if (!asset) return;
     reportLearningEvent(token, { type: 'download', assetId: asset.id, sectionId, meta: { name: asset.name } });
   }
-
-  useEffect(() => {
-    if (!asset) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [asset, onClose]);
 
   if (!asset) return null;
 

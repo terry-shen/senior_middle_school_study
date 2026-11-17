@@ -54,77 +54,56 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
   const [viewer, setViewer] = useState<Viewer | null>(null);
   const [inlineDoc, setInlineDoc] = useState<NetdiskFile | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const dwellRef = useRef({ acc: 0, last: Date.now(), name: '' });
 
-  // 停留埋点：记录打开某个文件后页面可见的停留秒数（含视频/图片/文档）
+  // 资源会话：打开→关闭记一条 asset_session（视频附实际播放秒数）
   useEffect(() => {
     if (!viewer || !token) return;
-    const name = viewer.f.filename;
-    const fsId = viewer.f.fsId;
-    dwellRef.current = { acc: 0, last: Date.now(), name };
-    const flush = () => {
-      const sec = Math.round(dwellRef.current.acc);
-      dwellRef.current.acc = 0;
-      if (sec <= 0) return;
-      reportLearningEvent(token, {
-        type: 'asset_dwell',
-        sectionId: getCurrentSectionId(),
-        durationSec: Math.min(sec, 7200),
-        meta: { name, fsId, source: 'browser' },
-      });
-    };
+    const f = viewer.f;
+    const session = { dwell: 0, play: 0, position: 0, duration: 0 };
+    let last = Date.now();
+    let lastT = 0;
     const tick = () => {
       const now = Date.now();
-      const delta = Math.round((now - dwellRef.current.last) / 1000);
-      dwellRef.current.last = now;
-      if (delta > 0 && delta < 120 && document.visibilityState === 'visible') dwellRef.current.acc += Math.min(delta, 60);
-    };
-    const id = window.setInterval(tick, 10000);
-    return () => {
-      tick();
-      flush();
-      window.clearInterval(id);
-    };
-  }, [viewer, token]);
-
-  // 视频播放埋点：只累计实际播放秒数
-  useEffect(() => {
-    if (!viewer || viewer.kind !== 'video' || !token) return;
-    const name = viewer.f.filename;
-    const fsId = viewer.f.fsId;
-    let played = 0;
-    let lastT = 0;
-    let lastFlush = Date.now();
-    let pos = 0;
-    let dur = 0;
-    const flush = () => {
-      const sec = Math.round(played);
-      if (sec <= 0) return;
-      played = 0;
-      lastFlush = Date.now();
-      reportLearningEvent(token, {
-        type: 'video_progress',
-        sectionId: getCurrentSectionId(),
-        durationSec: Math.min(sec, 600),
-        meta: { name, fsId, source: 'browser', position: Math.round(pos), duration: Math.round(dur) },
-      });
+      const delta = (now - last) / 1000;
+      last = now;
+      if (delta > 0 && delta < 120 && document.visibilityState === 'visible') session.dwell += Math.min(delta, 60);
     };
     const onTimeUpdate = () => {
       const v = videoRef.current;
       if (!v) return;
-      pos = v.currentTime || 0;
-      dur = Number.isFinite(v.duration) ? v.duration : 0;
-      if (v.paused) { lastT = v.currentTime || 0; return; }
-      const delta = pos - lastT;
-      if (delta > 0 && delta < 2) played += delta;
-      lastT = pos;
-      if (Date.now() - lastFlush >= 15000) flush();
+      const t = v.currentTime || 0;
+      session.position = t;
+      if (Number.isFinite(v.duration)) session.duration = v.duration;
+      if (!v.paused) {
+        const d = t - lastT;
+        if (d > 0 && d < 2) session.play += d;
+      }
+      lastT = t;
     };
+    const id = window.setInterval(tick, 5000);
     const v = videoRef.current;
     v?.addEventListener('timeupdate', onTimeUpdate);
     return () => {
+      tick();
+      window.clearInterval(id);
       v?.removeEventListener('timeupdate', onTimeUpdate);
-      flush();
+      const dwellSec = Math.min(7200, Math.round(session.dwell));
+      const playSec = Math.round(session.play);
+      if (dwellSec > 0 || playSec > 0) {
+        reportLearningEvent(token, {
+          type: 'asset_session',
+          sectionId: getCurrentSectionId(),
+          durationSec: dwellSec,
+          meta: {
+            name: f.filename,
+            fsId: f.fsId,
+            source: 'browser',
+            playSec,
+            position: Math.round(session.position),
+            duration: Math.round(session.duration),
+          },
+        });
+      }
     };
   }, [viewer, token]);
 

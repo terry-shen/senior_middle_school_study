@@ -79,3 +79,11 @@
 .la-kpis { flex-wrap: wrap; }
 .la-ev-what { flex: 1 1 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #1f2937; }
 .la-ev-sec { color: #6b7280; font-size: 12px; }
+
+.la-buckets{display:flex;align-items:flex-end;gap:6px;height:120px;margin-bottom:14px;}
+.la-bucket{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;}
+.la-bucket-bar{width:100%;background:#93c5fd;border-radius:3px 3px 0 0;min-height:3px;}
+.la-bucket-label{font-size:10px;color:#64748b;margin-top:4px;white-space:nowrap;}
+.la-bucket-count{font-size:11px;color:#1e293b;font-weight:600;}
+.la-progress-list .la-rank-bar i{background:#2563eb;}
+.la-ev-download{background:#fef3c7;color:#92400e;}

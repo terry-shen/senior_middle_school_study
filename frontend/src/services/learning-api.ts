@@ -178,7 +178,7 @@ export async function getVideoSeries(token: string) {
 // ---------------- 学习行为统计 ----------------
 
 export interface LearningEventInput {
-  type: 'heartbeat' | 'asset_open' | 'asset_dwell' | 'video_progress' | 'download' | 'login';
+  type: 'asset_open' | 'asset_session' | 'download' | 'login';
   sectionId?: number | null;
   assetId?: number | null;
   durationSec?: number;
@@ -202,8 +202,10 @@ export interface AnalyticsOverviewRow {
   studentNo: string;
   name: string;
   className: string | null;
-  studySec: number;
+  contentSec: number;
   videoSec: number;
+  coveredSections: number;
+  revisitAssets: number;
   opens: number;
   downloads: number;
   activeDays: number;
@@ -219,15 +221,28 @@ export async function getAnalyticsOverview(token: string, days = 30) {
 export interface AnalyticsDetail {
   success: boolean;
   student: { id: number; studentId: string; name: string; class: { name: string } | null };
-  totals: { studySec: number; videoSec: number; dwellSec: number; opens: number; downloads: number; events: number };
+  totals: { contentSec: number; videoSec: number; opens: number; downloads: number; coveredSections: number; revisitAssets: number; events: number; videoCompletion: number | null };
   daily: { date: string; sec: number; videoSec: number; opens: number }[];
   hours: number[];
   topSections: { sectionId: number; title: string; chapterTitle: string | null; textbookName: string | null; subjectName: string | null; sec: number }[];
   topAssets: {
-    assetId: number | null; name: string; sectionId: number | null; sec: number; videoSec: number; opens: number; lastAt: string;
+    assetId: number | null; name: string; sectionId: number | null; dwellSec: number; playSec: number; opens: number; duration: number; lastAt: string;
     sectionTitle: string | null; chapterTitle: string | null; subjectName: string | null;
   }[];
   subjectShare: { name: string; sec: number }[];
+  progress: {
+    rows: { assetId: number | null; name: string; playSec: number; duration: number; percent: number; lastAt: string }[];
+    buckets: { range: string; count: number }[];
+  };
+  coverage: {
+    coveredSections: number; totalSections: number;
+    bySubject: { subjectName: string; total: number; covered: number; percent: number }[];
+  };
+  downloads: {
+    id: number; type: string; sectionId: number | null; assetId: number | null; durationSec: number; createdAt: string;
+    assetName: string | null; sectionTitle: string | null; chapterTitle: string | null; textbookName: string | null; subjectName: string | null;
+    meta: Record<string, unknown> | null;
+  }[];
   recent: {
     id: number; type: string; sectionId: number | null; assetId: number | null; durationSec: number; createdAt: string;
     assetName: string | null; sectionTitle: string | null; chapterTitle: string | null; textbookName: string | null; subjectName: string | null;

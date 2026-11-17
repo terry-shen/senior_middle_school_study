@@ -11,7 +11,8 @@ import './LearningAnalytics.css';
 const RANGES = [7, 30, 90];
 
 function fmtDuration(sec: number): string {
-  if (!sec) return '—';
+  if (sec == null || Number.isNaN(sec)) return '—';
+  if (sec <= 0) return '0 秒';
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   if (h > 0) return `${h} 小时 ${m} 分`;
@@ -26,10 +27,8 @@ function fmtDate(iso: string | null): string {
 }
 
 const EVENT_LABEL: Record<string, string> = {
-  heartbeat: '学习心跳',
   asset_open: '打开资源',
-  asset_dwell: '资源停留',
-  video_progress: '观看视频',
+  asset_session: '学习资源',
   download: '下载资料',
   login: '登录',
 };
@@ -89,7 +88,7 @@ export default function LearningAnalytics() {
           <button className="la-refresh" onClick={loadOverview}>刷新</button>
         </div>
       </div>
-      <p className="la-sub">基于心跳与视频播放上报统计有效学习时长；数据由客户端上报，仅供教学参考。</p>
+      <p className="la-sub">按「打开资源 → 关闭资源」的一次学习会话统计内容学习时长；视频以实际播放秒数计；只能下载的资料只记下载，不计时长。</p>
 
       {error && <div className="la-error">{error}</div>}
 
@@ -99,13 +98,14 @@ export default function LearningAnalytics() {
           <table className="la-table">
             <thead>
               <tr>
-                <th>学生</th><th>班级</th><th>有效时长</th><th>视频时长</th><th>活跃天数</th>
-                <th>连续天数</th><th>打开</th><th>下载</th><th>视频完成率</th><th>最后活跃</th>
+                <th>学生</th><th>班级</th><th>内容学习时长</th><th>视频观看</th><th>覆盖章节</th>
+                <th>回访资源</th><th>打开</th><th>下载</th><th>视频完成率</th><th>活跃天数</th>
+                <th>连续天数</th><th>最后活跃</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => {
-                const silent = r.studySec === 0 && r.videoSec === 0;
+                const silent = r.contentSec === 0 && r.videoSec === 0;
                 return (
                   <tr
                     key={r.studentId}
@@ -114,18 +114,20 @@ export default function LearningAnalytics() {
                   >
                     <td>{r.name} <span className="la-no">{r.studentNo}</span>{silent && <span className="la-silent-tag">沉默</span>}</td>
                     <td>{r.className ?? '—'}</td>
-                    <td>{fmtDuration(r.studySec)}</td>
+                    <td>{fmtDuration(r.contentSec)}</td>
                     <td>{fmtDuration(r.videoSec)}</td>
-                    <td>{r.activeDays}</td>
-                    <td>{r.streak}</td>
+                    <td>{r.coveredSections}</td>
+                    <td>{r.revisitAssets}</td>
                     <td>{r.opens}</td>
                     <td>{r.downloads}</td>
                     <td>{r.videoCompletion == null ? '—' : `${r.videoCompletion}%`}</td>
+                    <td>{r.activeDays}</td>
+                    <td>{r.streak}</td>
                     <td>{fmtDate(r.lastActiveAt)}</td>
                   </tr>
                 );
               })}
-              {rows.length === 0 && <tr><td colSpan={10} className="la-empty">暂无学生数据</td></tr>}
+              {rows.length === 0 && <tr><td colSpan={12} className="la-empty">暂无学生数据</td></tr>}
             </tbody>
           </table>
         )}
@@ -138,12 +140,13 @@ export default function LearningAnalytics() {
           {detail && (
             <>
               <div className="la-kpis">
-                <div className="la-kpi"><b>{fmtDuration(detail.totals.studySec)}</b><span>有效学习时长</span></div>
+                <div className="la-kpi"><b>{fmtDuration(detail.totals.contentSec)}</b><span>内容学习时长</span></div>
                 <div className="la-kpi"><b>{fmtDuration(detail.totals.videoSec)}</b><span>视频观看时长</span></div>
-                <div className="la-kpi"><b>{fmtDuration(detail.totals.dwellSec)}</b><span>资源停留时长</span></div>
+                <div className="la-kpi"><b>{detail.totals.videoCompletion == null ? '—' : `${detail.totals.videoCompletion}%`}</b><span>视频完成率</span></div>
+                <div className="la-kpi"><b>{detail.totals.coveredSections}</b><span>覆盖章节</span></div>
+                <div className="la-kpi"><b>{detail.totals.revisitAssets}</b><span>回访资源</span></div>
                 <div className="la-kpi"><b>{detail.totals.opens}</b><span>打开资源</span></div>
                 <div className="la-kpi"><b>{detail.totals.downloads}</b><span>下载资料</span></div>
-                <div className="la-kpi"><b>{detail.totals.events}</b><span>事件总数</span></div>
               </div>
 
               <div className="la-grid">
@@ -199,21 +202,21 @@ export default function LearningAnalytics() {
                 </div>
 
                 <div className="la-block">
-                  <h3>资源停留 Top</h3>
-                  {detail.topAssets.length === 0 ? <p className="la-hint">暂无资源停留数据</p> : (
+                  <h3>资源学习 Top</h3>
+                  {detail.topAssets.length === 0 ? <p className="la-hint">暂无资源学习数据</p> : (
                     <ul className="la-rank">
                       {detail.topAssets.map((a, i) => {
-                        const maxAsset = Math.max(1, ...detail.topAssets.map((x) => x.sec));
+                        const maxAsset = Math.max(1, ...detail.topAssets.map((x) => x.dwellSec));
                         return (
                           <li key={`${a.assetId ?? 'n'}-${i}`}>
                             <div className="la-rank-head">
                               <span className="la-rank-title" title={`${a.subjectName ?? ''} / ${a.chapterTitle ?? ''} / ${a.sectionTitle ?? ''} / ${a.name}`}>{a.name}</span>
-                              <span className="la-rank-val">{fmtDuration(a.sec)}</span>
+                              <span className="la-rank-val">{fmtDuration(a.dwellSec)}</span>
                             </div>
-                            <div className="la-rank-bar"><i style={{ width: `${Math.round((a.sec / maxAsset) * 100)}%` }} /></div>
+                            <div className="la-rank-bar"><i style={{ width: `${Math.round((a.dwellSec / maxAsset) * 100)}%` }} /></div>
                             <span className="la-rank-meta">
                               {[a.subjectName, a.chapterTitle, a.sectionTitle].filter(Boolean).join(' · ') || '未关联章节'}
-                              {a.videoSec > 0 ? ` · 观看 ${fmtDuration(a.videoSec)}` : ''}
+                              {a.playSec > 0 ? ` · 播放 ${fmtDuration(a.playSec)}` : ''}
                               {a.opens > 1 ? ` · 打开 ${a.opens} 次` : ''}
                             </span>
                           </li>
@@ -222,6 +225,79 @@ export default function LearningAnalytics() {
                     </ul>
                   )}
                 </div>
+
+                <div className="la-block">
+                  <h3>视频进度分布</h3>
+                  {detail.progress.rows.length === 0 ? <p className="la-hint">区间内没有视频观看记录</p> : (
+                    <>
+                      <div className="la-buckets">
+                        {detail.progress.buckets.map((b) => {
+                          const maxBucket = Math.max(1, ...detail.progress.buckets.map((x) => x.count));
+                          return (
+                            <div key={b.range} className="la-bucket" title={`${b.range}：${b.count} 个视频`}>
+                              <div className="la-bucket-bar" style={{ height: `${Math.max(3, Math.round((b.count / maxBucket) * 100))}%` }} />
+                              <span className="la-bucket-label">{b.range.replace('100%', '100%')}</span>
+                              <span className="la-bucket-count">{b.count}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <ul className="la-rank la-progress-list">
+                        {detail.progress.rows.slice(0, 8).map((p) => (
+                          <li key={`${p.assetId}-${p.lastAt}`}>
+                            <div className="la-rank-head">
+                              <span className="la-rank-title" title={p.name}>{p.name}</span>
+                              <span className="la-rank-val">{p.percent}%</span>
+                            </div>
+                            <div className="la-rank-bar"><i style={{ width: `${Math.min(100, p.percent)}%` }} /></div>
+                            <span className="la-rank-meta">播放 {fmtDuration(p.playSec)} / 总长 {fmtDuration(p.duration)}</span>
+                          </li>
+                        ))}
+                      </ul>
+            </>
+                  )}
+                </div>
+
+                <div className="la-block">
+                  <h3>章节覆盖（{detail.coverage.coveredSections} / {detail.coverage.totalSections}）</h3>
+                  {detail.coverage.bySubject.length === 0 ? <p className="la-hint">暂无覆盖数据</p> : (
+                    <ul className="la-share">
+                      {detail.coverage.bySubject.map((s) => (
+                        <li key={s.subjectName}>
+                          <span className="la-share-name">{s.subjectName}</span>
+                          <div className="la-share-bar"><i style={{ width: `${Math.min(100, s.percent)}%` }} /></div>
+                          <span className="la-share-val">{s.covered}/{s.total}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+              <div className="la-block la-recent">
+                <h3>资料下载明细</h3>
+                {detail.downloads.length === 0 ? <p className="la-hint">区间内没有下载记录</p> : (
+                  <ul className="la-events">
+                    {detail.downloads.map((d) => (
+                      <li key={d.id}>
+                        <span className="la-ev la-ev-download">下载</span>
+                        <span className="la-ev-what">
+                          {d.assetName
+                            ? d.assetName
+                            : typeof d.meta?.name === 'string'
+                              ? (d.meta.name as string)
+                              : d.sectionTitle ?? '—'}
+                        </span>
+                        {(d.subjectName || d.chapterTitle || d.sectionTitle) && (
+                          <span className="la-ev-sec">
+                            {[d.subjectName, d.chapterTitle, d.sectionTitle].filter(Boolean).join(' / ')}
+                          </span>
+                        )}
+                        <span className="la-ev-time">{fmtDate(d.createdAt)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
 
                 <div className="la-block">
                   <h3>学科投入占比</h3>

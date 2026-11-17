@@ -10,7 +10,6 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import './App.css';
 import Sidebar from './components/Sidebar';
-import { useStudyHeartbeat } from './hooks/useStudyHeartbeat';
 import Workbench from './pages/Workbench';
 
 // Lazy-loaded pages for code splitting
@@ -146,9 +145,8 @@ function AppRoutes() {
 }
 
 function AppContent() {
-  const { isAuthenticated, user, token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  useStudyHeartbeat(token, isAuthenticated && user?.role === 'student');
 
   return (
     <div className="app-layout">
