@@ -94,6 +94,9 @@ router.patch('/assets/:id', requireAuth, requireAdmin, async (req, res) => {
     if (b.status !== undefined) data.status = String(b.status);
     if (b.assetKind !== undefined) data.assetKind = String(b.assetKind);
     if (b.audience !== undefined) data.audience = String(b.audience);
+    if (b.librarySeries !== undefined) data.librarySeries = b.librarySeries === null ? null : String(b.librarySeries);
+    if (b.libraryBook !== undefined) data.libraryBook = b.libraryBook === null ? null : String(b.libraryBook);
+    if (b.librarySubject !== undefined) data.librarySubject = b.librarySubject === null ? null : String(b.librarySubject);
     const row = await svc.updateAsset(id, data);
     res.json({ success: true, data: serialize(row as unknown as Record<string, unknown>) });
   } catch (e) { fail(res, e); }
@@ -102,9 +105,13 @@ router.patch('/assets/:id', requireAuth, requireAdmin, async (req, res) => {
 // ===== 批量操作 =====
 router.post('/assets/batch', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { ids, action, sectionId } = req.body ?? {};
+    const { ids, action, sectionId, librarySeries, libraryBook, librarySubject } = req.body ?? {};
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids 不能为空' });
-    const result = await svc.batchAction(ids.map(Number), action, sectionId == null ? null : toInt(sectionId));
+    const result = await svc.batchAction(ids.map(Number), action, sectionId == null ? null : toInt(sectionId), {
+      subject: librarySubject == null ? undefined : String(librarySubject),
+      series: librarySeries == null ? undefined : String(librarySeries),
+      book: libraryBook == null ? undefined : String(libraryBook),
+    });
     res.json(result);
   } catch (e) { fail(res, e); }
 });

@@ -27,6 +27,7 @@ export interface LearningSubject {
   color: string | null;
   sectionCount: number;
   videoCount: number;
+  resourceCount: number;
 }
 
 export interface AssetLite {
@@ -127,6 +128,30 @@ export interface VideoSeries {
   total: number;
 }
 
+export interface ResourceLibraryKind { key: string; label: string; count: number }
+export interface ResourceLibraryBook { book: string; count: number }
+export interface ResourceLibraryGroup { series: string; count: number; books: ResourceLibraryBook[] }
+export interface ResourceLibrarySummary {
+  subjectId: number;
+  subjectCode: string | null;
+  total: number;
+  byKind: ResourceLibraryKind[];
+  byYear: { year: number | null; count: number }[];
+  groups: ResourceLibraryGroup[];
+}
+export interface ResourceLibraryAsset extends AssetLite { dir: string }
+export interface ResourceLibraryFilters {
+  subjectId: number;
+  kind?: string;
+  year?: number;
+  q?: string;
+  series?: string;
+  book?: string;
+  page?: number;
+  limit?: number;
+}
+
+
 export async function getLearningSubjects(token: string) {
   return req<{ success: boolean; data: LearningSubject[] }>(token, '/learning/subjects');
 }
@@ -174,6 +199,30 @@ export async function getVideoSeries(token: string) {
     withSubjectParam('/learning/video-series'),
   );
 }
+
+function libraryQuery(f: ResourceLibraryFilters): string {
+  const p = new URLSearchParams({ subjectId: String(f.subjectId) });
+  if (f.kind) p.set('kind', f.kind);
+  if (f.year != null) p.set('year', String(f.year));
+  if (f.q) p.set('q', f.q);
+  if (f.series) p.set('series', f.series);
+  if (f.book) p.set('book', f.book);
+  if (f.page != null) p.set('page', String(f.page));
+  if (f.limit != null) p.set('limit', String(f.limit));
+  return p.toString();
+}
+
+export async function getResourceLibrarySummary(token: string, f: ResourceLibraryFilters) {
+  return req<{ success: boolean } & ResourceLibrarySummary>(token, `/learning/resource-library/summary?${libraryQuery(f)}`);
+}
+
+export async function getResourceLibraryAssets(token: string, f: ResourceLibraryFilters) {
+  return req<{ success: boolean; data: ResourceLibraryAsset[]; pagination: Pagination }>(
+    token,
+    `/learning/resource-library/assets?${libraryQuery(f)}`,
+  );
+}
+
 
 // ---------------- 学习行为统计 ----------------
 

@@ -205,6 +205,9 @@ model NetdiskAsset {
   year              Int?
   region            String?
   series            String?
+  librarySeries     String?   @map("library_series")
+  libraryBook       String?   @map("library_book")
+  librarySubject    String?   @map("library_subject")
   sectionId         Int?      @map("section_id")
   mapSource         String    @default("none") @map("map_source") // auto|manual|none
   mapConfirmed      Boolean   @default(false) @map("map_confirmed")

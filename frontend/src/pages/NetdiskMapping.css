@@ -428,3 +428,14 @@
 .nm-form-row select,
 .nm-form-row input { flex: 1; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }
 .nm-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.nm-inline-input { width: 120px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12.5px; }
+.nm-subline { margin-top: 2px; font-size: 11.5px; color: #7c3aed; }
+.nm-libmap { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 12px; margin-top: 12px; }
+.nm-libtree { border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; max-height: 70vh; overflow: auto; padding-bottom: 8px; }
+.nm-libmain { min-width: 0; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; padding: 10px 12px; }
+.nm-libmain .nm-filters { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.nm-libmain .nm-filters input { flex: 1; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }
+.nm-libtree .nm-subject-head.active, .nm-libtree .nm-book-head.active, .nm-libtree .nm-chapter-head.active { background: #eef2ff; color: #3730a3; }
+.nm-libtree .nm-chapter-head { padding-left: 30px; }
+@media (max-width: 900px) { .nm-libmap { grid-template-columns: 1fr; } .nm-libtree { max-height: 40vh; } }
+

@@ -44,7 +44,7 @@ export type ResourceMode = 'featured' | 'more' | 'manage';
 // ============ 学科目录 ============
 
 export interface LearningSubject {
-  id: number; code: string; name: string; icon: string | null; color: string | null; sectionCount: number; videoCount: number;
+  id: number; code: string; name: string; icon: string | null; color: string | null; sectionCount: number; videoCount: number; resourceCount: number;
 }
 
 export async function listLearningSubjects(): Promise<LearningSubject[]> {
@@ -88,10 +88,12 @@ export async function listLearningSubjects(): Promise<LearningSubject[]> {
     videosByCode.set(code, (videosByCode.get(code) || 0) + 1);
   }
 
+  const resourceCounts = await getUnmappedResourceCountsByCode();
   return subjects.map(s => ({
     ...s,
     sectionCount: bySubject.get(s.id) || 0,
     videoCount: videosByCode.get(s.code) || 0,
+    resourceCount: resourceCounts.get(s.code) || 0,
   }));
 }
 
@@ -595,3 +597,338 @@ export async function getVideoSeries(
   seriesList.sort((a, b) => a.series.localeCompare(b.series, 'zh-CN'));
   return { series: seriesList, total };
 }
+
+// ============ 教辅资源库（未映射） ============
+
+export interface ResourceLibraryKindCount { key: string; label: string; count: number }
+export interface ResourceLibraryBook { book: string; count: number }
+export interface ResourceLibraryGroup { series: string; count: number; books: ResourceLibraryBook[] }
+export interface ResourceLibrarySummary {
+  subjectId: number; subjectCode: string | null; total: number;
+  byKind: ResourceLibraryKindCount[];
+  byYear: { year: number | null; count: number }[];
+  groups: ResourceLibraryGroup[];
+}
+export interface ResourceLibraryAsset extends AssetLite { dir: string }
+
+export const LIBRARY_KIND_GROUPS = [
+  { key: 'plan', label: '讲义', kinds: ['plan', 'lecture'] },
+  { key: 'practice', label: '练习', kinds: ['practice'] },
+  { key: 'exam', label: '试卷', kinds: ['exam'] },
+  { key: 'answer', label: '答案', kinds: ['answer'] },
+  { key: 'ppt', label: '课件', kinds: ['ppt'] },
+  { key: 'media', label: '音视频', kinds: ['video', 'audio'] },
+  { key: 'image', label: '图片', kinds: ['image'] },
+  { key: 'other', label: '其他', kinds: ['other'] },
+] as const;
+
+const LIBRARY_SERIES_RULES: Array<[RegExp, string]> = [
+  [/步步高/, '步步高'],
+  [/五年高考三年模拟|5\s*[.·]?\s*3/, '五年高考三年模拟'],
+  [/优化设计/, '优化设计'],
+  [/高考帮/, '高考帮'],
+  [/必刷题/, '必刷题'],
+  [/一遍过/, '一遍过'],
+  [/金考卷/, '金考卷'],
+  [/全品/, '全品'],
+  [/赢在微点/, '赢在微点'],
+  [/天星/, '天星'],
+  [/衡中学案/, '衡中学案'],
+  [/MST/i, 'MST'],
+  [/一数/, '一数'],
+  [/高考解密/, '高考解密'],
+  [/试题调研/, '试题调研'],
+  [/小题狂做/, '小题狂做'],
+  [/高考必刷卷/, '高考必刷卷'],
+  [/解题觉醒/, '解题觉醒'],
+  [/金太阳/, '金太阳'],
+  [/天利\s*38/, '天利38套'],
+  [/高考快递/, '高考快递'],
+  [/腾远/, '腾远'],
+  [/实验班/, '实验班'],
+  [/初高衔接/, '初高衔接'],
+  [/真题/, '真题'],
+];
+
+const LIBRARY_ROOT_SEGMENTS = new Set([
+  '教辅材料', '8. 教辅资料', '教辅资料合集', '2026教辅资料', '2026高中电子资料合集', '9. 真题资源',
+]);
+
+const LIBRARY_GENERIC_SEGMENT = /^(word版|pdf版|学生用书|教师用书|配套课件|mp3|资源拓展|【pdf版】|【word版】|pdf版本|word版|.*全书)$/i;
+const LIBRARY_BOOK_HINT = /复习|讲义|必刷|真题|模拟|试卷|一轮|二轮|同步|教材|知识点|专题|合集|讲练|题|卷/;
+const LIBRARY_BOOK_STRONG = /复习|讲义|必刷|真题|模拟|试卷|一轮|二轮|同步|教材|知识点|专题|讲练|合集|5\s*[.·]?\s*3|五年高考/;
+
+function librarySeriesOf(a: { librarySeries?: string | null; series: string | null; path: string; name: string }): string {
+  if (a.librarySeries) return a.librarySeries;
+  if (a.series) return a.series;
+  const text = `${a.path} ${a.name}`;
+  for (const [re, label] of LIBRARY_SERIES_RULES) if (re.test(text)) return label;
+  return '其他资料';
+}
+
+function libraryBookOf(a: { path: string; libraryBook?: string | null }): string {
+  if (a.libraryBook) return a.libraryBook;
+  const path = a.path;
+  const parts = path.split('/').filter(Boolean);
+  const i = parts.findIndex((x) => x.includes('高中学习系统'));
+  const rel = (i >= 0 ? parts.slice(i + 1) : parts).slice(0, -1);
+  const dirs = rel.filter((d) => !LIBRARY_ROOT_SEGMENTS.has(d) && !LIBRARY_GENERIC_SEGMENT.test(d.trim()));
+  const seriesIdx = dirs.findIndex((d) => LIBRARY_SERIES_RULES.some(([re]) => re.test(d)));
+  const after = seriesIdx >= 0 ? dirs.slice(seriesIdx + 1) : dirs;
+  const strong = after.filter((d) => LIBRARY_BOOK_STRONG.test(d));
+  const hinted = after.filter((d) => LIBRARY_BOOK_HINT.test(d));
+  const pick = strong[0] || hinted[hinted.length - 1] || after[after.length - 1] || '未分类';
+  return pick.replace(/^\s*\d+\s*[.、]\s*/, '').trim().slice(0, 80) || '未分类';
+}
+
+function librarySubjectOf(a: { librarySubject?: string | null; path: string; name: string }): string | null {
+  return a.librarySubject || detectSubjectFromText(a.path) || detectSubjectFromText(a.name);
+}
+
+function libraryKindKey(kind: string): string {
+  for (const g of LIBRARY_KIND_GROUPS) if ((g.kinds as readonly string[]).includes(kind)) return g.key;
+  return 'other';
+}
+
+interface LibraryRow {
+  id: number; fsId: bigint | null; name: string; path: string; ext: string | null; size: bigint | null;
+  assetKind: string; audience: string; year: number | null; region: string | null; series: string | null;
+  librarySeries: string | null; libraryBook: string | null; librarySubject: string | null;
+  isPinned: boolean; status: string; mapConfirmed: boolean;
+}
+
+const LIBRARY_CACHE_TTL = 2 * 60 * 1000;
+let libraryRowsCache: { at: number; rows: LibraryRow[] } | null = null;
+
+async function getLibraryRows(): Promise<LibraryRow[]> {
+  if (libraryRowsCache && Date.now() - libraryRowsCache.at < LIBRARY_CACHE_TTL) return libraryRowsCache.rows;
+  const rows = (await prisma.netdiskAsset.findMany({
+    where: { status: 'active', sectionId: null, audience: { in: ['student', 'both'] }, assetKind: { notIn: ['junk', 'video'] } },
+    select: {
+      id: true, fsId: true, name: true, path: true, ext: true, size: true, assetKind: true,
+      audience: true, year: true, region: true, series: true, isPinned: true, status: true, mapConfirmed: true,
+      librarySeries: true, libraryBook: true, librarySubject: true,
+    },
+  })).filter((r) => !/中考|初中|小学/.test(r.path) || /初高衔接/.test(r.path));
+  libraryRowsCache = { at: Date.now(), rows };
+  return rows;
+}
+
+export async function getUnmappedResourceCountsByCode(): Promise<Map<string, number>> {
+  const rows = await getLibraryRows();
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    const code = librarySubjectOf(r);
+    if (code) counts.set(code, (counts.get(code) || 0) + 1);
+  }
+  return counts;
+}
+
+export interface ResourceLibraryFilters {
+  subjectId: number;
+  kind?: string;
+  year?: number;
+  q?: string;
+  series?: string;
+  book?: string;
+  page?: number;
+  limit?: number;
+}
+
+async function filterLibraryRows(f: ResourceLibraryFilters) {
+  const subject = await prisma.subject.findUnique({ where: { id: f.subjectId }, select: { code: true } });
+  const code = subject?.code ?? null;
+  const q = (f.q ?? '').trim().toLowerCase();
+  const year = f.year;
+  const rows = (await getLibraryRows()).filter((r) => {
+    if (code && librarySubjectOf(r) !== code) return false;
+    if (f.kind && libraryKindKey(r.assetKind) !== f.kind) return false;
+    if (year != null && r.year !== year) return false;
+    if (q && !`${r.name} ${r.path}`.toLowerCase().includes(q)) return false;
+    if (f.series && librarySeriesOf(r) !== f.series) return false;
+    if (f.book && libraryBookOf(r) !== f.book) return false;
+    return true;
+  });
+  return { code, rows };
+}
+
+export async function getResourceLibrarySummary(f: ResourceLibraryFilters): Promise<ResourceLibrarySummary> {
+  const { code, rows } = await filterLibraryRows(f);
+  const byKind = LIBRARY_KIND_GROUPS.map((g) => ({ key: g.key, label: g.label, count: 0 }));
+  const yearMap = new Map<number | null, number>();
+  const seriesMap = new Map<string, Map<string, number>>();
+  for (const r of rows) {
+    const kind = libraryKindKey(r.assetKind);
+    const kindRow = byKind.find((x) => x.key === kind);
+    if (kindRow) kindRow.count += 1;
+    yearMap.set(r.year, (yearMap.get(r.year) || 0) + 1);
+    const series = librarySeriesOf(r);
+    const book = libraryBookOf(r);
+    if (!seriesMap.has(series)) seriesMap.set(series, new Map());
+    const books = seriesMap.get(series)!;
+    books.set(book, (books.get(book) || 0) + 1);
+  }
+  const groups: ResourceLibraryGroup[] = [...seriesMap.entries()]
+    .map(([series, books]) => ({
+      series,
+      count: [...books.values()].reduce((n, x) => n + x, 0),
+      books: [...books.entries()].map(([book, count]) => ({ book, count })).sort((a, b) => b.count - a.count),
+    }))
+    .sort((a, b) => b.count - a.count);
+  const byYear = [...yearMap.entries()]
+    .map(([year, count]) => ({ year, count }))
+    .sort((a, b) => (b.year ?? 9999) - (a.year ?? 9999));
+  return { subjectId: f.subjectId, subjectCode: code, total: rows.length, byKind, byYear, groups };
+}
+
+export async function getResourceLibraryAssets(f: ResourceLibraryFilters) {
+  const { rows } = await filterLibraryRows(f);
+  const page = Math.max(1, f.page ?? 1);
+  const limit = Math.min(100, Math.max(1, f.limit ?? 30));
+  const sorted = [...rows].sort((a, b) => a.assetKind.localeCompare(b.assetKind) || a.name.localeCompare(b.name, 'zh-CN'));
+  const data = sorted.slice((page - 1) * limit, page * limit).map((r) => ({
+    ...toLite(r),
+    dir: r.path.replace(/\/[^/]+$/, ''),
+  }));
+  return { data, pagination: { page, limit, total: rows.length, totalPages: Math.ceil(rows.length / limit) } };
+}
+
+// ===== 管理端：教辅资源线目录与移动 =====
+
+export interface AdminLibraryBook { book: string; count: number }
+export interface AdminLibrarySeries { series: string; count: number; books: AdminLibraryBook[] }
+export interface AdminLibrarySubject { code: string; name: string; count: number; series: AdminLibrarySeries[] }
+export interface AdminLibraryTree { subjects: AdminLibrarySubject[] }
+
+let adminLibraryCache: { at: number; rows: LibraryRow[] } | null = null;
+
+async function getAdminLibraryRows(): Promise<LibraryRow[]> {
+  if (adminLibraryCache && Date.now() - adminLibraryCache.at < 30_000) return adminLibraryCache.rows;
+  const rows = (await prisma.netdiskAsset.findMany({
+    where: { status: 'active', sectionId: null, assetKind: { notIn: ['junk', 'video'] } },
+    select: {
+      id: true, fsId: true, name: true, path: true, ext: true, size: true, assetKind: true,
+      audience: true, year: true, region: true, series: true, isPinned: true, status: true, mapConfirmed: true,
+      librarySeries: true, libraryBook: true, librarySubject: true,
+    },
+  })).filter((r) => !/中考|初中|小学/.test(r.path) || /初高衔接/.test(r.path));
+  adminLibraryCache = { at: Date.now(), rows };
+  return rows;
+}
+
+export async function getAdminLibraryTree(): Promise<AdminLibraryTree> {
+  const [rows, subjects] = await Promise.all([
+    getAdminLibraryRows(),
+    prisma.subject.findMany({ select: { code: true, name: true }, orderBy: { order: 'asc' } }),
+  ]);
+  const nameByCode = new Map(subjects.map((s) => [s.code, s.name]));
+  const bySubject = new Map<string, Map<string, Map<string, number>>>();
+  for (const r of rows) {
+    const code = librarySubjectOf(r) || 'unknown';
+    const series = librarySeriesOf(r);
+    const book = libraryBookOf(r);
+    if (!bySubject.has(code)) bySubject.set(code, new Map());
+    const bySeries = bySubject.get(code)!;
+    if (!bySeries.has(series)) bySeries.set(series, new Map());
+    const byBook = bySeries.get(series)!;
+    byBook.set(book, (byBook.get(book) || 0) + 1);
+  }
+  const result: AdminLibrarySubject[] = [...bySubject.entries()].map(([code, bySeries]) => {
+    const series = [...bySeries.entries()].map(([name, byBook]) => ({
+      series: name,
+      count: [...byBook.values()].reduce((n, x) => n + x, 0),
+      books: [...byBook.entries()].map(([book, count]) => ({ book, count })).sort((a, b) => b.count - a.count),
+    })).sort((a, b) => b.count - a.count);
+    return {
+      code,
+      name: nameByCode.get(code) ?? (code === 'unknown' ? '未识别' : code),
+      count: series.reduce((n, s) => n + s.count, 0),
+      series,
+    };
+  }).sort((a, b) => b.count - a.count);
+  return { subjects: result };
+}
+
+export interface AdminLibraryFilters {
+  subjectCode?: string;
+  series?: string;
+  book?: string;
+  q?: string;
+  page?: number;
+  limit?: number;
+}
+
+export async function getAdminLibraryAssets(f: AdminLibraryFilters) {
+  const rows = await getAdminLibraryRows();
+  const q = (f.q ?? '').trim().toLowerCase();
+  const filtered = rows.filter((r) => {
+    if (f.subjectCode && (librarySubjectOf(r) || 'unknown') !== f.subjectCode) return false;
+    if (f.series && librarySeriesOf(r) !== f.series) return false;
+    if (f.book && libraryBookOf(r) !== f.book) return false;
+    if (q && !`${r.name} ${r.path}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const page = Math.max(1, f.page ?? 1);
+  const limit = Math.min(200, Math.max(1, f.limit ?? 50));
+  const sorted = [...filtered].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+  const data = sorted.slice((page - 1) * limit, page * limit).map((r) => ({
+    ...toLite(r),
+    dir: r.path.replace(/\/[^/]+$/, ''),
+    subjectCode: librarySubjectOf(r),
+    librarySeries: librarySeriesOf(r),
+    libraryBook: libraryBookOf(r),
+    manualSeries: r.librarySeries,
+    manualBook: r.libraryBook,
+  }));
+  return { data, pagination: { page, limit, total: filtered.length, totalPages: Math.ceil(filtered.length / limit) } };
+}
+
+export function invalidateLibraryCaches() {
+  libraryRowsCache = null;
+  adminLibraryCache = null;
+}
+
+export interface MoveLibraryCategoryInput {
+  fromSubject?: string;
+  fromSeries?: string;
+  fromBook?: string;
+  toSubject: string;
+  toSeries?: string;
+  toBook?: string;
+}
+
+export async function moveAdminLibraryCategory(f: MoveLibraryCategoryInput) {
+  const rows = await getAdminLibraryRows();
+  const ids = rows.filter((r) => {
+    if (f.fromSubject && (librarySubjectOf(r) || 'unknown') !== f.fromSubject) return false;
+    if (f.fromSeries && librarySeriesOf(r) !== f.fromSeries) return false;
+    if (f.fromBook && libraryBookOf(r) !== f.fromBook) return false;
+    return true;
+  }).map((r) => r.id);
+  if (!ids.length) return { success: true, affected: 0 };
+  await prisma.netdiskAsset.updateMany({
+    where: { id: { in: ids } },
+    data: {
+      librarySubject: f.toSubject,
+      librarySeries: (f.toSeries ?? '').trim() || null,
+      libraryBook: (f.toBook ?? '').trim() || null,
+      sectionId: null,
+      mapSource: 'manual',
+      mapConfirmed: false,
+      isPinned: false,
+      status: 'active',
+    },
+  });
+  invalidateLibraryCaches();
+  return { success: true, affected: ids.length };
+}
+
+
+
+
+
+
+
+
+
+

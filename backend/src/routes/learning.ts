@@ -71,6 +71,77 @@ router.get('/video-series', requireAuth, async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
+// 教辅资源库（未映射）：汇总分组 / 文件列表
+function libraryFilters(req: any) {
+  const subjectId = toInt(req.query.subjectId);
+  if (subjectId == null) return { error: 'subjectId 必填' as const };
+  return {
+    subjectId,
+    kind: req.query.kind ? String(req.query.kind) : undefined,
+    year: toInt(req.query.year) ?? undefined,
+    q: req.query.q ? String(req.query.q) : undefined,
+    series: req.query.series ? String(req.query.series) : undefined,
+    book: req.query.book ? String(req.query.book) : undefined,
+    page: toInt(req.query.page) ?? 1,
+    limit: toInt(req.query.limit) ?? 30,
+  };
+}
+
+router.get('/resource-library/summary', requireAuth, async (req, res) => {
+  try {
+    const f = libraryFilters(req);
+    if ('error' in f) return res.status(400).json({ error: f.error });
+    res.json({ success: true, ...(await learning.getResourceLibrarySummary(f)) });
+  } catch (e) { fail(res, e); }
+});
+
+router.get('/resource-library/assets', requireAuth, async (req, res) => {
+  try {
+    const f = libraryFilters(req);
+    if ('error' in f) return res.status(400).json({ error: f.error });
+    res.json({ success: true, ...(await learning.getResourceLibraryAssets(f)) });
+  } catch (e) { fail(res, e); }
+});
+
+router.get('/resource-library/admin/tree', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    res.json({ success: true, ...(await learning.getAdminLibraryTree()) });
+  } catch (e) { fail(res, e); }
+});
+
+router.get('/resource-library/admin/assets', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const q = req.query as Record<string, string | undefined>;
+    res.json({
+      success: true,
+      ...(await learning.getAdminLibraryAssets({
+        subjectCode: q.subjectCode || undefined,
+        series: q.series || undefined,
+        book: q.book || undefined,
+        q: q.q || undefined,
+        page: toInt(q.page) ?? 1,
+        limit: toInt(q.limit) ?? 50,
+      })),
+    });
+  } catch (e) { fail(res, e); }
+});
+
+router.post('/resource-library/admin/move', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const b = req.body ?? {};
+    if (!b.toSubject) return res.status(400).json({ error: 'toSubject 必填' });
+    res.json(await learning.moveAdminLibraryCategory({
+      fromSubject: b.fromSubject ? String(b.fromSubject) : undefined,
+      fromSeries: b.fromSeries ? String(b.fromSeries) : undefined,
+      fromBook: b.fromBook ? String(b.fromBook) : undefined,
+      toSubject: String(b.toSubject),
+      toSeries: b.toSeries == null ? undefined : String(b.toSeries),
+      toBook: b.toBook == null ? undefined : String(b.toBook),
+    }));
+  } catch (e) { fail(res, e); }
+});
+
+
 // 学习行为事件上报（心跳 / 打开 / 视频进度 / 下载 / 登录）
 router.post('/event', requireAuth, async (req, res) => {
   try {

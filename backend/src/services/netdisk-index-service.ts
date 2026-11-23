@@ -808,15 +808,32 @@ export async function listAssets(f: AssetFilters) {
   };
 }
 
+export type LearningLine = 'section' | 'video' | 'library' | 'unassigned';
+
+export function computeLearningLine(a: {
+  status?: string | null;
+  assetKind?: string | null;
+  sectionId?: number | null;
+}): LearningLine {
+  if (a.sectionId != null) return 'section';
+  if (a.assetKind === 'video') return 'video';
+  if (a.status === 'active' && a.assetKind !== 'junk') return 'library';
+  return 'unassigned';
+}
+
 export async function getStats() {
-  const [total, mapped, pinned, byKind, byAudience, bySection] = await Promise.all([
+  const [total, sectionMapped, pinned, byKind, byAudience, bySection, lineRows] = await Promise.all([
     prisma.netdiskAsset.count(),
     prisma.netdiskAsset.count({ where: { sectionId: { not: null } } }),
     prisma.netdiskAsset.count({ where: { isPinned: true } }),
     prisma.netdiskAsset.groupBy({ by: ['assetKind'], _count: { _all: true } }),
     prisma.netdiskAsset.groupBy({ by: ['audience'], _count: { _all: true } }),
     prisma.netdiskAsset.groupBy({ by: ['sectionId'], where: { sectionId: { not: null } }, _count: { _all: true } }),
+    prisma.netdiskAsset.findMany({ select: { status: true, assetKind: true, sectionId: true } }),
   ]);
+  const byLine = { section: 0, video: 0, library: 0, unassigned: 0 };
+  for (const row of lineRows) byLine[computeLearningLine(row)] += 1;
+  const mapped = byLine.section + byLine.video + byLine.library;
   const sectionIds = bySection.map(s => s.sectionId as number);
   const sections = sectionIds.length
     ? await prisma.section.findMany({ where: { id: { in: sectionIds } }, select: { id: true, title: true } })
@@ -825,7 +842,9 @@ export async function getStats() {
   return {
     total,
     mapped,
-    unmapped: total - mapped,
+    unmapped: byLine.unassigned,
+    sectionMapped,
+    byLine,
     pinned,
     byKind: byKind.map(k => ({ key: k.assetKind, count: k._count._all })),
     byAudience: byAudience.map(a => ({ key: a.audience, count: a._count._all })),
@@ -846,6 +865,7 @@ export class IndexError extends Error {
 export async function updateAsset(id: number, data: {
   sectionId?: number | null; mapConfirmed?: boolean; isPinned?: boolean;
   status?: string; assetKind?: string; audience?: string;
+  librarySeries?: string | null; libraryBook?: string | null; librarySubject?: string | null;
 }) {
   const asset = await prisma.netdiskAsset.findUnique({ where: { id } });
   if (!asset) throw new IndexError('资源不存在', 404);
@@ -857,11 +877,38 @@ export async function updateAsset(id: number, data: {
       payload.sectionId = data.sectionId;
       payload.mapSource = 'manual';
       payload.mapConfirmed = true;
+      payload.librarySeries = null;
+      payload.libraryBook = null;
     } else {
       payload.sectionId = null;
       payload.mapSource = 'none';
       payload.mapConfirmed = false;
       payload.isPinned = false;
+    }
+  }
+  if (data.librarySeries !== undefined || data.libraryBook !== undefined || data.librarySubject !== undefined) {
+    const subject = data.librarySubject === undefined
+      ? asset.librarySubject
+      : (String(data.librarySubject ?? '').trim() || null);
+    const series = data.librarySeries === undefined
+      ? asset.librarySeries
+      : (String(data.librarySeries ?? '').trim() || null);
+    const book = data.libraryBook === undefined
+      ? asset.libraryBook
+      : (String(data.libraryBook ?? '').trim() || null);
+    if (series || book || subject) {
+      payload.librarySubject = subject;
+      payload.librarySeries = series;
+      payload.libraryBook = book;
+      payload.sectionId = null;
+      payload.mapSource = 'manual';
+      payload.mapConfirmed = false;
+      payload.isPinned = false;
+      payload.status = 'active';
+    } else {
+      payload.librarySubject = null;
+      payload.librarySeries = null;
+      payload.libraryBook = null;
     }
   }
   if (data.mapConfirmed !== undefined) {
@@ -892,9 +939,14 @@ async function assertPinCapacity(sectionId: number | null | undefined, incomingI
   }
 }
 
-export type BatchAction = 'confirm' | 'move' | 'pin' | 'unpin' | 'archive' | 'restore' | 'ignore' | 'unmap';
+export type BatchAction = 'confirm' | 'move' | 'library' | 'pin' | 'unpin' | 'archive' | 'restore' | 'ignore' | 'unmap';
 
-export async function batchAction(ids: number[], action: BatchAction, sectionId?: number | null) {
+export async function batchAction(
+  ids: number[],
+  action: BatchAction,
+  sectionId?: number | null,
+  library?: { subject?: string; series?: string; book?: string },
+) {
   if (!ids.length) throw new IndexError('ids 不能为空');
   const assets = await prisma.netdiskAsset.findMany({ where: { id: { in: ids } } });
   if (assets.length === 0) throw new IndexError('资源不存在', 404);
@@ -903,7 +955,25 @@ export async function batchAction(ids: number[], action: BatchAction, sectionId?
     if (sectionId == null) throw new IndexError('请指定目标小节');
     const sec = await prisma.section.findUnique({ where: { id: sectionId } });
     if (!sec) throw new IndexError('小节不存在', 404);
-    await prisma.netdiskAsset.updateMany({ where: { id: { in: ids } }, data: { sectionId, mapSource: 'manual', mapConfirmed: true } });
+    await prisma.netdiskAsset.updateMany({ where: { id: { in: ids } }, data: { sectionId, mapSource: 'manual', mapConfirmed: true, librarySeries: null, libraryBook: null, librarySubject: null } });
+  } else if (action === 'library') {
+    const subject = (library?.subject ?? '').trim();
+    const series = (library?.series ?? '').trim();
+    const book = (library?.book ?? '').trim();
+    if (!subject && !series && !book) throw new IndexError('请选择教辅学科或填写系列/书目');
+    await prisma.netdiskAsset.updateMany({
+      where: { id: { in: ids } },
+      data: {
+        librarySubject: subject || null,
+        librarySeries: series || null,
+        libraryBook: book || null,
+        sectionId: null,
+        mapSource: 'manual',
+        mapConfirmed: false,
+        isPinned: false,
+        status: 'active',
+      },
+    });
   } else if (action === 'confirm') {
     const missing = assets.filter(a => a.sectionId == null).map(a => a.id);
     if (missing.length) throw new IndexError(`有 ${missing.length} 条资源未挂载小节，无法确认`);
@@ -925,7 +995,7 @@ export async function batchAction(ids: number[], action: BatchAction, sectionId?
   } else if (action === 'ignore') {
     await prisma.netdiskAsset.updateMany({ where: { id: { in: ids } }, data: { status: 'ignored' } });
   } else if (action === 'unmap') {
-    await prisma.netdiskAsset.updateMany({ where: { id: { in: ids } }, data: { sectionId: null, mapSource: 'none', mapConfirmed: false, isPinned: false } });
+    await prisma.netdiskAsset.updateMany({ where: { id: { in: ids } }, data: { sectionId: null, mapSource: 'none', mapConfirmed: false, isPinned: false, librarySeries: null, libraryBook: null, librarySubject: null } });
   } else {
     throw new IndexError('未知操作');
   }
@@ -940,6 +1010,9 @@ export async function batchAction(ids: number[], action: BatchAction, sectionId?
             mapConfirmed: a.mapConfirmed,
             isPinned: a.isPinned,
             status: a.status,
+            librarySeries: a.librarySeries,
+            libraryBook: a.libraryBook,
+            librarySubject: a.librarySubject,
           })),
         )
       : null;
@@ -1023,7 +1096,7 @@ export async function batchDirectoryAction(dir: string, action: DirectoryAction)
   const where = { path: { startsWith: `${normalized}/` } };
   const before = await prisma.netdiskAsset.findMany({
     where,
-    select: { id: true, sectionId: true, mapSource: true, mapConfirmed: true, isPinned: true, status: true },
+    select: { id: true, sectionId: true, mapSource: true, mapConfirmed: true, isPinned: true, status: true, librarySeries: true, libraryBook: true, librarySubject: true },
     take: 5000,
   });
   let affected = 0;
@@ -1053,6 +1126,9 @@ interface UndoRow {
   mapConfirmed: boolean;
   isPinned: boolean;
   status: string;
+  librarySeries: string | null;
+  libraryBook: string | null;
+  librarySubject: string | null;
 }
 
 const UNDO_TTL = 60_000;
@@ -1086,6 +1162,9 @@ export async function undoBatch(token: string) {
         mapConfirmed: row.mapConfirmed,
         isPinned: row.isPinned,
         status: row.status,
+        librarySeries: row.librarySeries,
+        libraryBook: row.libraryBook,
+        librarySubject: row.librarySubject,
       },
     });
   }

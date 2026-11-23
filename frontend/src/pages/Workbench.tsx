@@ -122,12 +122,16 @@ export default function Workbench() {
                 <div className="wb-card-label">已索引文件</div>
               </Link>
               <Link to="/netdisk-index" className="wb-card">
-                <div className="wb-card-num">{indexStats.mapped}</div>
-                <div className="wb-card-label">已挂章节</div>
+                <div className="wb-card-num">{indexStats.byLine.section}</div>
+                <div className="wb-card-label">教材小节</div>
+              </Link>
+              <Link to="/netdisk-index" className="wb-card">
+                <div className="wb-card-num">{indexStats.byLine.library}</div>
+                <div className="wb-card-label">教辅资源线</div>
               </Link>
               <Link to="/netdisk-index" className="wb-card">
                 <div className="wb-card-num">{indexStats.unmapped}</div>
-                <div className="wb-card-label">未映射</div>
+                <div className="wb-card-label">未归主线</div>
               </Link>
             </div>
           ) : (

@@ -3,9 +3,11 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   getDirectories, directoryAction, getSectionConvergence, undoBatch,
   batchAction, getIndexStats, getScanStatus, listAssets, pauseScan, remapAssets, startScan,
+  getLibraryTree, listLibraryAssets, moveLibraryCategory,
 } from '../services/netdisk-index-api';
 import type {
   AssetRow, AssetVisibility, BatchAction, DirectoryStat, SectionConvergence,
+  LibraryTreeSubject, LibraryAssetRow,
 } from '../services/netdisk-index-api';
 import { getTaxonomyTree, createSection, createChapter } from '../services/chapters-api';
 import type { TextbookNode } from '../services/chapters-api';
@@ -23,7 +25,7 @@ const VIS_LABEL: Record<AssetVisibility, string> = {
   teacher: '🚫 教师资源', archived: '🚫 已归档', ignored: '🚫 已屏蔽',
 };
 
-type Tab = 'convergence' | 'inbox' | 'directories' | 'advanced';
+type Tab = 'convergence' | 'inbox' | 'library' | 'directories' | 'advanced';
 
 interface TreeGroup { id: number; icon: string; name: string; books: TextbookNode[] }
 
@@ -49,7 +51,7 @@ function visibilityOf(a: AssetRow): AssetVisibility {
 export default function NetdiskMapping() {
   const { token } = useAuth();
   const [tab, setTab] = useState<Tab>('convergence');
-  const [stats, setStats] = useState<{ total: number; mapped: number; unmapped: number; pinned: number } | null>(null);
+  const [stats, setStats] = useState<{ total: number; mapped: number; unmapped: number; pinned: number; byLine: { section: number; video: number; library: number; unassigned: number } } | null>(null);
   const [scan, setScan] = useState<{ status: string; scannedDirs: number; totalFiles: number } | null>(null);
   const [remapping, setRemapping] = useState(false);
   const [message, setMessage] = useState('');
@@ -76,7 +78,7 @@ export default function NetdiskMapping() {
     if (!token) return;
     try {
       const [s, sc] = await Promise.all([getIndexStats(token), getScanStatus(token)]);
-      setStats({ total: s.total, mapped: s.mapped, unmapped: s.unmapped, pinned: s.pinned });
+      setStats({ total: s.total, mapped: s.mapped, unmapped: s.unmapped, pinned: s.pinned, byLine: s.byLine });
       setScan(sc.status);
     } catch { /* 头信息失败不阻塞 */ }
   }, [token]);
@@ -149,8 +151,10 @@ export default function NetdiskMapping() {
       {stats && (
         <div className="nm-stats">
           <div className="nm-stat"><b>{stats.total}</b><span>索引总数</span></div>
-          <div className="nm-stat"><b>{stats.mapped}</b><span>已挂章节</span></div>
-          <div className="nm-stat"><b>{stats.unmapped}</b><span>未映射</span></div>
+          <div className="nm-stat"><b>{stats.byLine.section}</b><span>教材小节</span></div>
+          <div className="nm-stat"><b>{stats.byLine.library}</b><span>教辅资源线</span></div>
+          <div className="nm-stat"><b>{stats.byLine.video}</b><span>视频主线</span></div>
+          <div className="nm-stat"><b>{stats.unmapped}</b><span>未归主线</span></div>
           <div className="nm-stat"><b>{stats.pinned}</b><span>已精选</span></div>
         </div>
       )}
@@ -158,9 +162,10 @@ export default function NetdiskMapping() {
       <div className="nm-tabs">
         {([
           ['convergence', '① 单节收敛'],
-          ['inbox', '② 未映射收件箱'],
-          ['directories', '③ 目录清理'],
-          ['advanced', '④ 高级表格'],
+          ['inbox', '② 未挂小节收件箱'],
+          ['library', '③ 教辅资源映射'],
+          ['directories', '④ 目录清理'],
+          ['advanced', '⑤ 高级表格'],
         ] as [Tab, string][]).map(([key, label]) => (
           <button key={key} className={`nm-tab ${tab === key ? 'active' : ''}`} onClick={() => setTab(key)}>{label}</button>
         ))}
@@ -173,6 +178,7 @@ export default function NetdiskMapping() {
           toggleBook={toggleBook} toggleChapter={toggleChapter} flash={flash} onChanged={loadHeader} />
       )}
       {tab === 'inbox' && <InboxView token={token} books={books} subjects={subjects} reloadTaxonomy={loadTaxonomy} flash={flash} onChanged={loadHeader} />}
+      {tab === 'library' && <LibraryMappingView token={token} flash={flash} onChanged={loadHeader} />}
       {tab === 'directories' && <DirectoriesView token={token} flash={flash} onChanged={loadHeader} />}
       {tab === 'advanced' && (
         <AdvancedView token={token} treeGroups={treeGroups} openBooks={openBooks} openChapters={openChapters}
@@ -346,6 +352,8 @@ function InboxView(props: {
   const [includeTeacher, setIncludeTeacher] = useState(false);
   const [picked, setPicked] = useState<number[]>([]);
   const [target, setTarget] = useState('');
+  const [libSeries, setLibSeries] = useState('');
+  const [libBook, setLibBook] = useState('');
   const [loading, setLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -372,8 +380,9 @@ function InboxView(props: {
     if (action === 'ignore' && !confirm(`屏蔽 ${picked.length} 条资源？学生端与后续自动映射都会忽略。`)) return;
     const sectionId = action === 'move' ? Number(target) : null;
     if (action === 'move' && !sectionId) { flash('请先选择目标小节'); return; }
+    if (action === 'library' && !libSeries.trim() && !libBook.trim()) { flash('请填写教辅系列或书目'); return; }
     try {
-      const r = await batchAction(token, picked, action, sectionId);
+      const r = await batchAction(token, picked, action, sectionId, action === 'library' ? { series: libSeries, book: libBook } : undefined);
       flash(`${actionLabel(action)}：${r.affected} 条`, r.undoToken);
       setPicked([]);
       await load();
@@ -431,6 +440,9 @@ function InboxView(props: {
           </select>
           <button className="nm-btn" onClick={() => setCreateOpen(true)}>＋ 新建小节</button>
           <button className="nm-btn nm-btn-primary" onClick={() => act('move')}>挂到该节</button>
+          <input className="nm-inline-input" placeholder="教辅系列" value={libSeries} onChange={e => setLibSeries(e.target.value)} />
+          <input className="nm-inline-input" placeholder="书目" value={libBook} onChange={e => setLibBook(e.target.value)} />
+          <button className="nm-btn" onClick={() => act('library')}>归入教辅</button>
           <button className="nm-btn nm-btn-danger" onClick={() => act('ignore')}>屏蔽</button>
           <button className="nm-btn" onClick={() => setPicked([])}>清空</button>
         </div>
@@ -447,7 +459,12 @@ function InboxView(props: {
           {rows.map(r => (
             <tr key={r.id} className={picked.includes(r.id) ? 'selected' : ''}>
               <td><input type="checkbox" checked={picked.includes(r.id)} onChange={() => setPicked(p => p.includes(r.id) ? p.filter(x => x !== r.id) : [...p, r.id])} /></td>
-              <td className="nm-name" title={r.path}>{r.name}</td>
+              <td className="nm-name" title={r.path}>
+                <div>{r.name}</div>
+                {(r.librarySeries || r.libraryBook) && (
+                  <div className="nm-subline">教辅：{[r.librarySeries, r.libraryBook].filter(Boolean).join(' / ')}</div>
+                )}
+              </td>
               <td className={r.subjectCode ? '' : 'nm-cap'}>{subjectName(r.subjectCode)}</td>
               <td>{KIND_LABEL[r.assetKind] ?? r.assetKind}</td>
               <td><span className={`nm-vis nm-vis-${visibilityOf(r)}`}>{VIS_LABEL[visibilityOf(r)]}</span></td>
@@ -689,7 +706,7 @@ function AdvancedView(props: {
     <div className="nm-layout">
       <aside className="nm-tree">
         <div className="nm-pane-head">章节树</div>
-        <button className={`nm-tree-item ${unmapped ? 'active' : ''}`} onClick={() => { setUnmapped(true); setSectionId(null); setPage(1); }}>仅未映射</button>
+        <button className={`nm-tree-item ${unmapped ? 'active' : ''}`} onClick={() => { setUnmapped(true); setSectionId(null); setPage(1); }}>仅未挂小节</button>
         {treeGroups.map(g => (
           <div key={g.id} className="nm-subject">
             <div className="nm-subject-head">{g.icon} {g.name}<span className="nm-subject-count">{g.books.length} 册</span></div>
@@ -801,9 +818,211 @@ function AdvancedView(props: {
   );
 }
 
+/* ---------------- ③ 教辅资源映射 ---------------- */
+
+function LibraryMappingView(props: {
+  token: string | null;
+  flash: (t: string, u?: string | null) => void;
+  onChanged: () => void;
+}) {
+  const { token, flash, onChanged } = props;
+  const [tree, setTree] = useState<LibraryTreeSubject[]>([]);
+  const [rows, setRows] = useState<LibraryAssetRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [q, setQ] = useState('');
+  const [subjectCode, setSubjectCode] = useState('');
+  const [series, setSeries] = useState('');
+  const [book, setBook] = useState('');
+  const [openSeries, setOpenSeries] = useState<Record<string, boolean>>({});
+  const [picked, setPicked] = useState<number[]>([]);
+  const [targetSeries, setTargetSeries] = useState('');
+  const [targetBook, setTargetBook] = useState('');
+  const [targetSubject, setTargetSubject] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const loadTree = useCallback(async () => {
+    if (!token) return;
+    try {
+      const r = await getLibraryTree(token);
+      setTree(r.subjects || []);
+    } catch (e) { flash(e instanceof Error ? e.message : '加载教辅分类失败'); }
+  }, [token, flash]);
+
+  const loadRows = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const r = await listLibraryAssets(token, {
+        subjectCode: subjectCode || undefined,
+        series: series || undefined,
+        book: book || undefined,
+        q: q || undefined,
+        page, limit: 50,
+      });
+      setRows(r.data);
+      setTotal(r.pagination.total);
+    } catch (e) { flash(e instanceof Error ? e.message : '加载教辅资源失败'); }
+    finally { setLoading(false); }
+  }, [token, subjectCode, series, book, q, page, flash]);
+
+  useEffect(() => { loadTree(); }, [loadTree]);
+  useEffect(() => { setPicked([]); loadRows(); }, [loadRows]);
+
+  const choose = (code: string, s = '', b = '') => {
+    setSubjectCode(code); setSeries(s); setBook(b); setPage(1);
+    setTargetSubject(code); setTargetSeries(s); setTargetBook(b);
+  };
+
+  const move = async () => {
+    if (!token || !picked.length) return;
+    if (!targetSeries.trim() && !targetBook.trim()) { flash('请填写目标系列或书目'); return; }
+    try {
+      const r = await batchAction(token, picked, 'library', null, { subject: targetSubject || subjectCode, series: targetSeries, book: targetBook });
+      flash(`移动 ${r.affected} 条到 ${targetSeries || '未命名系列'} / ${targetBook || '未命名书目'}`, r.undoToken);
+      setPicked([]);
+      await Promise.all([loadTree(), loadRows()]);
+      onChanged();
+    } catch (e) { flash(e instanceof Error ? e.message : '移动失败'); }
+  };
+
+  const moveCategory = async () => {
+    if (!token || !subjectCode || !series) { flash('请先在左侧选中一个系列或书目'); return; }
+    if (!targetSubject) { flash('请选择目标学科'); return; }
+    if (!confirm(`把 ${subjectCode} / ${series}${book ? ' / ' + book : ''} 整体移动到目标分类？`)) return;
+    try {
+      const r = await moveLibraryCategory(token, {
+        fromSubject: subjectCode,
+        fromSeries: series,
+        fromBook: book || undefined,
+        toSubject: targetSubject,
+        toSeries: targetSeries,
+        toBook: targetBook,
+      });
+      flash(`整体移动 ${r.affected} 条`, null);
+      setPicked([]);
+      await Promise.all([loadTree(), loadRows()]);
+      onChanged();
+    } catch (e) { flash(e instanceof Error ? e.message : '整体移动失败'); }
+  };
+
+
+  const totalPages = Math.max(1, Math.ceil(total / 50));
+
+  return (
+    <div className="nm-libmap">
+      <aside className="nm-libtree">
+        <div className="nm-pane-head">教辅资源分类</div>
+        <button className={`nm-tree-item ${!subjectCode ? 'active' : ''}`} onClick={() => choose('')}>全部学科</button>
+        {tree.map((sub) => (
+          <div key={sub.code} className="nm-subject">
+            <button className={`nm-subject-head ${subjectCode === sub.code ? 'active' : ''}`} onClick={() => choose(sub.code)}>
+              {sub.name}<span className="nm-subject-count">{sub.count}</span>
+            </button>
+            {sub.series.map((sr) => {
+              const key = `${sub.code}|${sr.series}`;
+              return (
+                <div key={key} className="nm-book">
+                  <button
+                    className={`nm-book-head ${series === sr.series && !book ? 'active' : ''}`}
+                    onClick={() => { setOpenSeries((p) => ({ ...p, [key]: !p[key] })); choose(sub.code, sr.series); }}
+                  >
+                    {openSeries[key] ? '▾' : '▸'} {sr.series}<span className="nm-subject-count">{sr.count}</span>
+                  </button>
+                  {openSeries[key] && sr.books.map((b) => (
+                    <button
+                      key={b.book}
+                      className={`nm-chapter-head ${book === b.book ? 'active' : ''}`}
+                      onClick={() => choose(sub.code, sr.series, b.book)}
+                    >
+                      {b.book}<span className="nm-subject-count">{b.count}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </aside>
+      <section className="nm-libmain">
+        <div className="nm-filters">
+          <input
+            placeholder="搜索资源名称或路径"
+            value={q}
+            onChange={(e) => { setQ(e.target.value); setPage(1); }}
+          />
+          <button className="nm-btn" onClick={loadRows} disabled={loading}>刷新</button>
+          <span className="nm-total">
+            {subjectCode ? `学科 ${subjectCode}` : '全部学科'}
+            {series ? ` / ${series}` : ''}
+            {book ? ` / ${book}` : ''} · 共 {total} 条
+          </span>
+        </div>
+
+        {series && (
+          <div className="nm-batchbar">
+            <span>整体移动：{subjectCode} / {series}{book ? ` / ${book}` : ''}</span>
+            <select value={targetSubject} onChange={(e) => setTargetSubject(e.target.value)}>
+              <option value="">目标学科…</option>
+              {tree.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
+            </select>
+            <input className="nm-inline-input" placeholder="目标系列" value={targetSeries} onChange={(e) => setTargetSeries(e.target.value)} />
+            <input className="nm-inline-input" placeholder="目标书目" value={targetBook} onChange={(e) => setTargetBook(e.target.value)} />
+            <button className="nm-btn nm-btn-primary" onClick={moveCategory}>移动整个分类</button>
+          </div>
+        )}
+
+        {picked.length > 0 && (
+          <div className="nm-batchbar">
+            <span>已选 {picked.length} 条</span>
+            <select value={targetSubject} onChange={(e) => setTargetSubject(e.target.value)}>
+              <option value="">目标学科…</option>
+              {tree.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
+            </select>
+            <input className="nm-inline-input" placeholder="目标系列" value={targetSeries} onChange={(e) => setTargetSeries(e.target.value)} />
+            <input className="nm-inline-input" placeholder="目标书目" value={targetBook} onChange={(e) => setTargetBook(e.target.value)} />
+            <button className="nm-btn nm-btn-primary" onClick={move}>移动到该分类</button>
+            <button className="nm-btn" onClick={() => setPicked([])}>清空</button>
+          </div>
+        )}
+
+        <table className="nm-table">
+          <thead>
+            <tr>
+              <th><input type="checkbox" checked={rows.length > 0 && rows.every((r) => picked.includes(r.id))} onChange={(e) => setPicked(e.target.checked ? rows.map((r) => r.id) : [])} /></th>
+              <th>资源</th><th>当前系列</th><th>当前书目</th><th>类型</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className={picked.includes(r.id) ? 'selected' : ''}>
+                <td><input type="checkbox" checked={picked.includes(r.id)} onChange={() => setPicked((p) => p.includes(r.id) ? p.filter((x) => x !== r.id) : [...p, r.id])} /></td>
+                <td className="nm-name" title={r.path}>
+                  <div>{r.name}</div>
+                  {r.manualSeries || r.manualBook ? <div className="nm-subline">手动：{[r.manualSeries, r.manualBook].filter(Boolean).join(' / ')}</div> : null}
+                </td>
+                <td>{r.librarySeries || '未分类'}</td>
+                <td>{r.libraryBook || '未分类'}</td>
+                <td>{KIND_LABEL[r.assetKind] ?? r.assetKind}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && !loading && <tr><td colSpan={5} className="nm-empty">当前分类下没有资源</td></tr>}
+          </tbody>
+        </table>
+
+        <div className="nm-pager">
+          <button className="nm-btn" disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</button>
+          <span>{page} / {totalPages}</span>
+          <button className="nm-btn" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>下一页</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function actionLabel(a: BatchAction): string {
   const map: Record<BatchAction, string> = {
-    confirm: '确认映射', move: '挂到小节', pin: '设为精选', unpin: '取消精选',
+    confirm: '确认映射', move: '挂到小节', library: '归入教辅', pin: '设为精选', unpin: '取消精选',
     archive: '归档', restore: '恢复', ignore: '屏蔽', unmap: '解除映射',
   };
   return map[a];

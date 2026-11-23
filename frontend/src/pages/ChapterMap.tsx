@@ -5,9 +5,13 @@ import {
   getLearningSubjects,
   getProgress,
   getVideoSeries,
+  getResourceLibrarySummary,
+  getResourceLibraryAssets,
   type AssetLite,
   type LearningProgress,
   type LearningSubject,
+  type ResourceLibraryAsset,
+  type ResourceLibrarySummary,
   type VideoSeries,
   type VideoSeriesItem,
 } from '../services/learning-api';
@@ -42,6 +46,7 @@ export default function ChapterMap() {
   const [openSeries, setOpenSeries] = useState<Record<string, boolean>>({});
   const [openTags, setOpenTags] = useState<Record<string, boolean>>({});
   const [viewing, setViewing] = useState<AssetLite | null>(null);
+  const [category, setCategory] = useState<'video' | 'library'>('video');
 
   // 1) 学科列表 + 当前学科（由路由 /learning/:code 决定）
   useEffect(() => {
@@ -73,7 +78,7 @@ export default function ChapterMap() {
   // 2) 该学科的视频主线 + 学习进度
   const loadContent = useCallback(async () => {
     if (!token || !subject) return;
-    if (subject.sectionCount === 0 && (subject.videoCount ?? 0) === 0) {
+    if (subject.sectionCount === 0 && (subject.videoCount ?? 0) === 0 && (subject.resourceCount ?? 0) === 0) {
       setVideoSeries([]);
       setVideoTotal(0);
       setProgress(null);
@@ -99,6 +104,11 @@ export default function ChapterMap() {
   useEffect(() => {
     loadContent();
   }, [loadContent]);
+
+  useEffect(() => {
+    if (loading || !subject) return;
+    setCategory(videoTotal === 0 && (subject.resourceCount ?? 0) > 0 ? 'library' : 'video');
+  }, [subject?.id, loading]);
 
   useEffect(() => {
     if (!videoSeries.length) return;
@@ -147,7 +157,7 @@ export default function ChapterMap() {
     );
   }
 
-  if (subject && subject.sectionCount === 0 && (subject.videoCount ?? 0) === 0) {
+  if (subject && subject.sectionCount === 0 && (subject.videoCount ?? 0) === 0 && (subject.resourceCount ?? 0) === 0) {
     return (
       <div className="chapter-map">
         <div className="cmap-head">
@@ -177,7 +187,7 @@ export default function ChapterMap() {
           <h1>
             {subject?.icon || '📖'} {subject?.name || '章节学习'}
           </h1>
-          <p className="cmap-sub">按视频课程主线学习，教材小节内含精选视频、讲义与练习。</p>
+          <p className="cmap-sub">视频主线与教辅资源并行，教材小节内含精选视频、讲义与练习。</p>
         </div>
         <button className="cmap-refresh" onClick={loadContent} disabled={loading}>刷新</button>
       </div>
@@ -197,13 +207,24 @@ export default function ChapterMap() {
         </div>
       )}
 
+      <div className="cmap-cat-tabs">
+        <button className={`cmap-cat-tab ${category === 'video' ? 'active' : ''}`} onClick={() => setCategory('video')}>
+          🎬 视频主线课程 <span className="cmap-cat-count">{videoTotal}</span>
+        </button>
+        {(subject?.resourceCount ?? 0) > 0 && (
+          <button className={`cmap-cat-tab ${category === 'library' ? 'active' : ''}`} onClick={() => setCategory('library')}>
+            📚 教辅资源 <span className="cmap-cat-count">{subject?.resourceCount}</span>
+          </button>
+        )}
+      </div>
+
       {loading && <p className="cmap-loading">加载中...</p>}
       {!loading && error && <p className="cmap-error">{error}</p>}
-      {!loading && !error && videoSeries.length === 0 && (
+      {!loading && !error && category === 'video' && videoSeries.length === 0 && (
         <p className="cmap-empty">该学科暂无视频课程，请先到「资源映射」完成资源整理。</p>
       )}
 
-      {!loading && !error && videoSeries.length > 0 && (
+      {!loading && !error && category === 'video' && videoSeries.length > 0 && (
         <section className="cmap-videos">
           <div className="cmap-videos-head">
             <h2>🎬 视频主线课程</h2>
@@ -275,7 +296,208 @@ export default function ChapterMap() {
         </section>
       )}
 
+      {!loading && !error && category === 'library' && subject && (
+        <ResourceLibrary subject={subject} token={token || ''} onOpen={(asset) => setViewing(asset)} />
+      )}
+
       <ResourceViewer asset={viewing} token={token || ''} onClose={() => setViewing(null)} />
     </div>
   );
 }
+
+function ResourceLibrary({
+  subject,
+  token,
+  onOpen,
+}: {
+  subject: LearningSubject;
+  token: string;
+  onOpen: (asset: AssetLite) => void;
+}) {
+  const [summary, setSummary] = useState<ResourceLibrarySummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [kind, setKind] = useState('');
+  const [year, setYear] = useState('');
+  const [qInput, setQInput] = useState('');
+  const [q, setQ] = useState('');
+  const [openSeries, setOpenSeries] = useState<Record<string, boolean>>({});
+  const [openBook, setOpenBook] = useState<Record<string, boolean>>({});
+  const [files, setFiles] = useState<
+    Record<string, { items: ResourceLibraryAsset[]; page: number; total: number; loading: boolean }>
+  >({});
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError('');
+    getResourceLibrarySummary(token, {
+      subjectId: subject.id,
+      kind: kind || undefined,
+      year: year ? Number(year) : undefined,
+      q: q || undefined,
+    })
+      .then((r) => {
+        if (!alive) return;
+        setSummary(r);
+        setOpenSeries({});
+        setOpenBook({});
+        setFiles({});
+      })
+      .catch((e) => {
+        if (alive) setError(e instanceof Error ? e.message : '加载教辅资源失败');
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [token, subject.id, kind, year, q]);
+
+  const loadFiles = async (series: string, book: string, page = 1, append = false) => {
+    const key = `${series}|${book}`;
+    setFiles((prev) => ({
+      ...prev,
+      [key]: { items: append ? prev[key]?.items ?? [] : [], page, total: prev[key]?.total ?? 0, loading: true },
+    }));
+    try {
+      const r = await getResourceLibraryAssets(token, {
+        subjectId: subject.id,
+        kind: kind || undefined,
+        year: year ? Number(year) : undefined,
+        q: q || undefined,
+        series,
+        book,
+        page,
+        limit: 30,
+      });
+      setFiles((prev) => ({
+        ...prev,
+        [key]: {
+          items: append ? [...(prev[key]?.items ?? []), ...r.data] : r.data,
+          page,
+          total: r.pagination.total,
+          loading: false,
+        },
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '加载文件失败');
+      setFiles((prev) => ({
+        ...prev,
+        [key]: { items: prev[key]?.items ?? [], page, total: prev[key]?.total ?? 0, loading: false },
+      }));
+    }
+  };
+
+  const toggleSeries = (series: string) => setOpenSeries((p) => ({ ...p, [series]: !p[series] }));
+  const toggleBook = (series: string, book: string) => {
+    const key = `${series}|${book}`;
+    const next = !openBook[key];
+    setOpenBook((p) => ({ ...p, [key]: next }));
+    if (next && !files[key]) loadFiles(series, book, 1, false);
+  };
+
+  const iconOf = (a: ResourceLibraryAsset) => {
+    const ext = (a.ext || a.name.split('.').pop() || '').toLowerCase();
+    if (['mp4', 'mkv', 'mov', 'avi', 'flv', 'ts', 'webm', 'm4v'].includes(ext)) return '🎬';
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext)) return '🖼️';
+    if (['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'].includes(ext)) return '📄';
+    if (['mp3', 'wav', 'm4a', 'aac'].includes(ext)) return '🎧';
+    return '📎';
+  };
+
+  return (
+    <section className="cmap-lib">
+      <div className="cmap-lib-head">
+        <h2>📚 教辅资源</h2>
+        <span className="cmap-lib-meta">
+          教辅资源线 · 学生可见 · {summary?.total ?? 0} 条
+        </span>
+      </div>
+      <div className="cmap-lib-filters">
+        <select value={kind} onChange={(e) => setKind(e.target.value)}>
+          <option value="">全部类型</option>
+          {summary?.byKind.filter((k) => k.count > 0).map((k) => (
+            <option key={k.key} value={k.key}>{k.label}（{k.count}）</option>
+          ))}
+        </select>
+        <select value={year} onChange={(e) => setYear(e.target.value)}>
+          <option value="">全部年份</option>
+          {summary?.byYear.filter((y) => y.year != null).map((y) => (
+            <option key={String(y.year)} value={String(y.year)}>{y.year}（{y.count}）</option>
+          ))}
+        </select>
+        <input
+          value={qInput}
+          placeholder="搜索书名 / 系列 / 文件名"
+          onChange={(e) => setQInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') setQ(qInput.trim()); }}
+        />
+        <button className="cmap-lib-search" onClick={() => setQ(qInput.trim())}>搜索</button>
+        {q && <button className="cmap-lib-clear" onClick={() => { setQ(''); setQInput(''); }}>清除</button>}
+      </div>
+      {loading && <p className="cmap-loading">加载教辅资源...</p>}
+      {!loading && error && <p className="cmap-error">{error}</p>}
+      {!loading && !error && summary && summary.total === 0 && (
+        <p className="cmap-empty">当前筛选条件下没有教辅资源。</p>
+      )}
+      {!loading && !error && summary && summary.total > 0 && (
+        <div className="cmap-lib-groups">
+          {summary.groups.map((g) => (
+            <div key={g.series} className="cmap-lib-series">
+              <button className="cmap-lib-series-head" onClick={() => toggleSeries(g.series)}>
+                <span className="cmap-caret">{openSeries[g.series] ? '▾' : '▸'}</span>
+                <span className="cmap-lib-series-name">{g.series}</span>
+                <span className="cmap-lib-series-count">{g.count}</span>
+              </button>
+              {openSeries[g.series] && (
+                <div className="cmap-lib-books">
+                  {g.books.map((b) => {
+                    const key = `${g.series}|${b.book}`;
+                    const open = !!openBook[key];
+                    const f = files[key];
+                    return (
+                      <div key={key} className="cmap-lib-book">
+                        <button className="cmap-lib-book-head" onClick={() => toggleBook(g.series, b.book)}>
+                          <span className="cmap-caret">{open ? '▾' : '▸'}</span>
+                          <span className="cmap-lib-book-name" title={b.book}>{b.book}</span>
+                          <span className="cmap-lib-book-count">{b.count}</span>
+                        </button>
+                        {open && (
+                          <div className="cmap-lib-files">
+                            {f?.loading && f.items.length === 0 && <p className="cmap-lib-hint">加载中...</p>}
+                            {f?.items.map((a) => (
+                              <button key={a.id} className="cmap-lib-file" onClick={() => onOpen(a)} title={a.dir}>
+                                <span className="cmap-lib-file-icon">{iconOf(a)}</span>
+                                <span className="cmap-lib-file-name">{a.name}</span>
+                                <span className="cmap-lib-file-meta">{a.ext?.toUpperCase()} {a.size ? formatSize(a.size) : ''}</span>
+                              </button>
+                            ))}
+                            {f && f.items.length < f.total && (
+                              <button
+                                className="cmap-lib-more"
+                                disabled={f.loading}
+                                onClick={() => loadFiles(g.series, b.book, f.page + 1, true)}
+                              >
+                                {f.loading ? '加载中...' : `加载更多（${f.items.length}/${f.total}）`}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+
+
+

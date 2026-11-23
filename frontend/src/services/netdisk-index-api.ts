@@ -22,6 +22,8 @@ export interface IndexStats {
   total: number;
   mapped: number;
   unmapped: number;
+  sectionMapped: number;
+  byLine: { section: number; video: number; library: number; unassigned: number };
   pinned: number;
   byKind: { key: string; count: number }[];
   byAudience: { key: string; count: number }[];
@@ -42,6 +44,9 @@ export interface AssetRow {
   year: number | null;
   region: string | null;
   series: string | null;
+  librarySeries?: string | null;
+  libraryBook?: string | null;
+  librarySubject?: string | null;
   sectionId: number | null;
   mapSource: string;
   mapConfirmed: boolean;
@@ -131,13 +136,19 @@ export async function updateAsset(token: string, id: number, payload: Record<str
   return d;
 }
 
-export type BatchAction = 'confirm' | 'move' | 'pin' | 'unpin' | 'archive' | 'restore' | 'ignore' | 'unmap';
+export type BatchAction = 'confirm' | 'move' | 'library' | 'pin' | 'unpin' | 'archive' | 'restore' | 'ignore' | 'unmap';
 
-export async function batchAction(token: string, ids: number[], action: BatchAction, sectionId?: number | null): Promise<{ success: boolean; affected: number; undoToken?: string | null }> {
+export async function batchAction(
+  token: string,
+  ids: number[],
+  action: BatchAction,
+  sectionId?: number | null,
+  library?: { subject?: string; series?: string; book?: string },
+): Promise<{ success: boolean; affected: number; undoToken?: string | null }> {
   const r = await fetch(`${API_BASE}/netdisk-index/assets/batch`, {
     method: 'POST',
     headers: H(token),
-    body: JSON.stringify({ ids, action, sectionId: sectionId ?? null }),
+    body: JSON.stringify({ ids, action, sectionId: sectionId ?? null, librarySubject: library?.subject, librarySeries: library?.series, libraryBook: library?.book }),
   });
   const d = await r.json();
   if (!r.ok) throw new Error(d.error || '批量操作失败');
@@ -208,4 +219,65 @@ export async function undoBatch(token: string, undoToken: string): Promise<{ suc
 export async function getConvergence(token: string, sectionIds: number[]): Promise<{ success: boolean; sections: { sectionId: number; pinned: number; more: number; total: number; ok: boolean }[] }> {
   const r = await fetch(`${API_BASE}/netdisk-index/convergence?sectionIds=${sectionIds.join(',')}`, { headers: H(token) });
   return r.json();
+}
+
+// ===== 管理端教辅资源线 =====
+
+export interface LibraryTreeBook { book: string; count: number }
+export interface LibraryTreeSeries { series: string; count: number; books: LibraryTreeBook[] }
+export interface LibraryTreeSubject { code: string; name: string; count: number; series: LibraryTreeSeries[] }
+
+export async function getLibraryTree(token: string): Promise<{ success: boolean; subjects: LibraryTreeSubject[] }> {
+  const r = await fetch(`${API_BASE}/learning/resource-library/admin/tree`, { headers: H(token) });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || '加载教辅分类失败');
+  return d;
+}
+
+export interface LibraryAssetRow extends AssetRow {
+  dir?: string;
+  subjectCode?: string | null;
+  librarySeries?: string | null;
+  libraryBook?: string | null;
+  librarySubject?: string | null;
+  manualSeries?: string | null;
+  manualBook?: string | null;
+}
+
+export async function listLibraryAssets(
+  token: string,
+  f: { subjectCode?: string; series?: string; book?: string; q?: string; page?: number; limit?: number },
+): Promise<{ success: boolean; data: LibraryAssetRow[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
+  const qs = new URLSearchParams();
+  if (f.subjectCode) qs.set('subjectCode', f.subjectCode);
+  if (f.series) qs.set('series', f.series);
+  if (f.book) qs.set('book', f.book);
+  if (f.q) qs.set('q', f.q);
+  if (f.page) qs.set('page', String(f.page));
+  if (f.limit) qs.set('limit', String(f.limit));
+  const r = await fetch(`${API_BASE}/learning/resource-library/admin/assets?${qs}`, { headers: H(token) });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || '加载教辅资源失败');
+  return d;
+}
+
+export async function moveLibraryCategory(
+  token: string,
+  input: {
+    fromSubject?: string;
+    fromSeries?: string;
+    fromBook?: string;
+    toSubject: string;
+    toSeries?: string;
+    toBook?: string;
+  },
+): Promise<{ success: boolean; affected: number }> {
+  const r = await fetch(`${API_BASE}/learning/resource-library/admin/move`, {
+    method: 'POST',
+    headers: H(token),
+    body: JSON.stringify(input),
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || '移动失败');
+  return d;
 }
