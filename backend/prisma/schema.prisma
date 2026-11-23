@@ -27,6 +27,7 @@ model Student {
   passwordHash          String                   @map("password_hash") // 密码哈希
   classId               Int?                     @map("class_id") // 班级ID
   role                  String                   @default("student") // student, admin
+  aiAssistantEnabled    Boolean                  @default(false) @map("ai_assistant_enabled")
   loginAttempts         Int                      @default(0) @map("login_attempts") // 登录尝试次数
   lockedUntil           DateTime?                @map("locked_until") // 锁定到期时间
   createdAt             DateTime                 @default(now()) @map("created_at")

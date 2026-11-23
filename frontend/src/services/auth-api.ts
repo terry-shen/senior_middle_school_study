@@ -11,6 +11,7 @@ export interface User {
   name: string;
   role: 'student' | 'admin';
   classId?: number;
+  aiAssistantEnabled?: boolean;
   class?: {
     id: number;
     name: string;

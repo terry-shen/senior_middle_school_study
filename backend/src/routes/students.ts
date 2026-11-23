@@ -23,6 +23,7 @@ function sanitize(s: any) {
     name: s.name,
     role: s.role,
     classId: s.classId,
+    aiAssistantEnabled: s.aiAssistantEnabled,
     class: s.class ?? null,
     createdAt: s.createdAt,
     updatedAt: s.updatedAt,
@@ -178,6 +179,33 @@ router.get(
     }
   }
 );
+
+/**
+ * PATCH /api/students/:id/ai-access
+ * Admin only; open or close a student's AI assistant entry.
+ */
+router.patch('/:id/ai-access', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string);
+    if (Number.isNaN(id)) return res.status(400).json({ error: 'Invalid student id' });
+    if (typeof req.body?.enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled 必须是布尔值' });
+    }
+
+    const target = await prisma.student.findUnique({ where: { id } });
+    if (!target) return res.status(404).json({ error: 'Student not found' });
+
+    const updated = await prisma.student.update({
+      where: { id },
+      data: { aiAssistantEnabled: req.body.enabled },
+      include: { class: true },
+    });
+
+    res.json({ success: true, student: sanitize(updated) });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
 
 /**
  * PUT /api/students/:id

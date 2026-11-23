@@ -38,7 +38,10 @@ const adminGroups: NavGroup[] = [
   },
   {
     title: '系统设置',
-    items: [{ to: '/settings/netdisk', label: '网盘绑定', icon: '☁️' }],
+    items: [
+      { to: '/settings/netdisk', label: '网盘绑定', icon: '☁️' },
+      { to: '/ai-assistants', label: 'AI 助理', icon: '🤖' },
+    ],
   },
 ];
 
@@ -159,9 +162,9 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
                 {group.items.map(renderItem)}
               </div>
             ))
-          ) : (
+          ) : user?.aiAssistantEnabled ? (
             studentItems.map(renderItem)
-          )}
+          ) : null}
         </nav>
 
         <div className="sidebar-footer">

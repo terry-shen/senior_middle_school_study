@@ -19,7 +19,7 @@ const router = Router();
  */
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { studentId, name, password, classId, role } = req.body;
+    const { studentId, name, password, classId } = req.body;
     
     // Validate required fields
     if (!studentId || !name || !password) {
@@ -41,8 +41,7 @@ router.post('/register', async (req: Request, res: Response) => {
       studentId,
       name,
       password,
-      classId,
-      role
+      classId
     });
     
     if (result.success) {
@@ -148,7 +147,8 @@ router.get('/me', async (req: Request, res: Response) => {
         studentId: student.studentId,
         name: student.name,
         role: student.role,
-        classId: student.classId
+        classId: student.classId,
+        aiAssistantEnabled: student.aiAssistantEnabled
       }
     });
   } catch (error: any) {

@@ -32,6 +32,7 @@ export interface AuthResult {
     studentId: string;
     name: string;
     role: string;
+    aiAssistantEnabled: boolean;
   };
   token?: string;
   error?: string;
@@ -126,7 +127,7 @@ export async function registerStudent(data: RegisterData): Promise<AuthResult> {
         name: data.name,
         passwordHash: hashPassword(data.password),
         classId: data.classId || null,
-        role: data.role || 'student'
+        role: 'student'
       }
     });
     
@@ -148,7 +149,8 @@ export async function registerStudent(data: RegisterData): Promise<AuthResult> {
         id: student.id,
         studentId: student.studentId,
         name: student.name,
-        role: student.role
+        role: student.role,
+        aiAssistantEnabled: student.aiAssistantEnabled
       },
       token
     };
@@ -237,7 +239,8 @@ export async function loginStudent(data: LoginData): Promise<AuthResult> {
         id: student.id,
         studentId: student.studentId,
         name: student.name,
-        role: student.role
+        role: student.role,
+        aiAssistantEnabled: student.aiAssistantEnabled
       },
       token
     };

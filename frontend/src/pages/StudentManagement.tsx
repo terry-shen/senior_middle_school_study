@@ -8,6 +8,7 @@ interface Student {
   name: string;
   role: 'student' | 'admin';
   classId?: number | null;
+  aiAssistantEnabled?: boolean;
   class?: {
     id: number;
     name: string;
@@ -48,6 +49,7 @@ export default function StudentManagement() {
   const [createForm, setCreateForm] = useState({ ...emptyCreateForm });
   const [createError, setCreateError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [savingAiId, setSavingAiId] = useState(0);
 
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [editMode, setEditMode] = useState(false);
@@ -196,6 +198,29 @@ export default function StudentManagement() {
     }
   };
 
+  const handleToggleAi = async (student: Student) => {
+    if (!token) return;
+    const next = !student.aiAssistantEnabled;
+    setSavingAiId(student.id);
+    try {
+      const response = await fetch(`/api/students/${student.id}/ai-access`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ enabled: next }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || '保存失败');
+      const updated = data.student as Student;
+      setStudents((prev) =>
+        prev.map((s) => (s.id === student.id ? { ...s, aiAssistantEnabled: updated.aiAssistantEnabled } : s))
+      );
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '保存失败');
+    } finally {
+      setSavingAiId(0);
+    }
+  };
+
   const handleImport = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
@@ -293,6 +318,7 @@ export default function StudentManagement() {
                   <th>姓名</th>
                   <th className="col-secondary">角色</th>
                   <th>班级</th>
+                  <th>AI 助理</th>
                   <th className="col-actions">操作</th>
                 </tr>
               </thead>
@@ -307,6 +333,20 @@ export default function StudentManagement() {
                       </span>
                     </td>
                     <td>{student.class ? `${student.class.grade} - ${student.class.name}` : '-'}</td>
+                    <td>
+                      {student.role === 'admin' ? (
+                        <span className="field-hint">管理员默认可用</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className={`btn-small ${student.aiAssistantEnabled ? 'btn-primary' : ''}`}
+                          onClick={() => handleToggleAi(student)}
+                          disabled={savingAiId === student.id}
+                        >
+                          {savingAiId === student.id ? '保存中...' : student.aiAssistantEnabled ? '已开放' : '未开放'}
+                        </button>
+                      )}
+                    </td>
                     <td className="col-actions">
                       <div className="row-actions">
                         <button onClick={() => openEdit(student)} className="btn-small">编辑 / 改密</button>

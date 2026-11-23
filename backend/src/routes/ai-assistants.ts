@@ -17,8 +17,11 @@ function clip(v: unknown, max: number): string | null {
 }
 
 // AI 助理列表（介绍 + 跳转地址）
-router.get('/', requireAuth, async (_req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   try {
+    if (req.user?.role !== 'admin' && !req.user?.aiAssistantEnabled) {
+      return res.status(403).json({ error: '该功能未开放', code: 'AI_ASSISTANT_DISABLED' });
+    }
     const data = await prisma.aiAssistant.findMany({
       where: { isActive: true },
       orderBy: [{ order: 'asc' }, { id: 'asc' }],

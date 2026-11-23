@@ -99,7 +99,7 @@ async function mediaAuth(req: Request, res: Response, next: NextFunction) {
   if (!token) return res.status(401).json({ error: 'Authentication required' });
   const session = await prisma.session.findFirst({ where: { token, expiresAt: { gt: new Date() } }, include: { student: true } });
   if (!session) return res.status(401).json({ error: 'Invalid or expired token' });
-  req.user = { id: session.student.id, studentId: session.student.studentId, name: session.student.name, role: session.student.role };
+  req.user = { id: session.student.id, studentId: session.student.studentId, name: session.student.name, role: session.student.role, aiAssistantEnabled: session.student.aiAssistantEnabled };
   next();
 }
 

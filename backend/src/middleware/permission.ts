@@ -17,6 +17,7 @@ declare global {
         studentId: string;
         name: string;
         role: string;
+        aiAssistantEnabled: boolean;
       };
     }
   }
@@ -53,7 +54,8 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
       id: session.student.id,
       studentId: session.student.studentId,
       name: session.student.name,
-      role: session.student.role
+      role: session.student.role,
+      aiAssistantEnabled: session.student.aiAssistantEnabled
     };
     
     next();
@@ -106,7 +108,8 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
       id: session.student.id,
       studentId: session.student.studentId,
       name: session.student.name,
-      role: session.student.role
+      role: session.student.role,
+      aiAssistantEnabled: session.student.aiAssistantEnabled
     };
     
     // Now check admin role
@@ -162,7 +165,8 @@ export function requireStudent(req: Request, res: Response, next: NextFunction) 
       id: session.student.id,
       studentId: session.student.studentId,
       name: session.student.name,
-      role: session.student.role
+      role: session.student.role,
+      aiAssistantEnabled: session.student.aiAssistantEnabled
     };
     
     if (req.user.role !== 'student' && req.user.role !== 'admin') {
@@ -224,7 +228,8 @@ export function requireOwnershipOrAdmin(getUserIdFromParams: (req: Request) => n
         id: session.student.id,
         studentId: session.student.studentId,
         name: session.student.name,
-        role: session.student.role
+        role: session.student.role,
+        aiAssistantEnabled: session.student.aiAssistantEnabled
       };
       
       // Admin can access any resource
@@ -275,7 +280,8 @@ export function optionalAuth(req: Request, res: Response, next: NextFunction) {
         id: session.student.id,
         studentId: session.student.studentId,
         name: session.student.name,
-        role: session.student.role
+        role: session.student.role,
+        aiAssistantEnabled: session.student.aiAssistantEnabled
       };
     }
     next();
