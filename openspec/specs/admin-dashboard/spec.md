@@ -32,13 +32,18 @@
 - **THEN** 显示分组：
   - 学习内容：章节学习（/learning）、章节管理（/chapters）、资源映射（/netdisk-index）、学习资源（/resources）
   - 学生管理：学生列表（/students）、学习分析（/analytics）
-  - 系统设置：网盘绑定（/settings/netdisk）
+  - 系统设置：网盘绑定（/settings/netdisk）、AI 助理（/ai-assistants）
 - **AND** 不显示试卷库、题库管理、题目列表、模拟考试、答题纸阅卷、学习激励、学科管理、模型管理
 
 #### Scenario: 学习分析入口
 
 - **WHEN** 管理员点击「学习分析」
 - **THEN** 进入 `/analytics` 页面，展示学生学习行为统计
+
+#### Scenario: 管理员 AI 助理入口
+
+- **WHEN** 管理员查看侧边栏的「系统设置」组
+- **THEN** 显示「AI 助理」，点击进入 `/ai-assistants`
 
 #### Scenario: 移动端抽屉
 
@@ -49,7 +54,8 @@
 #### Scenario: 学生侧边栏
 
 - **WHEN** 学生登录
-- **THEN** 侧边栏显示「工作台」「章节学习」「学习资源」「AI 助理」
+- **THEN** 侧边栏显示「工作台」「章节学习」「学习资源」
+- **AND** 仅当该学生已获 AI 助理授权时显示「AI 助理」
 - **AND** 顶部不显示学科切换器
 - **AND** 侧边栏不出现「学习分析」
 
