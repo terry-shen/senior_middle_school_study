@@ -34,6 +34,7 @@ model Student {
   updatedAt             DateTime                 @updatedAt @map("updated_at")
   class                 Class?                   @relation(fields: [classId], references: [id], onDelete: SetNull)
   sessions              Session[]
+  dailyUsage            DailyUsage[]
   learningProgress      StudentLearningProgress?
   learningEvents        LearningEvent[] @relation("StudentLearningEvents")
 
@@ -88,16 +89,39 @@ model Subject {
 // 学生答题纸（整卷/在线测验/模拟考试结束后上传，老师离线阅卷批注）
 
 model Session {
-  id        Int      @id @default(autoincrement())
-  studentId Int      @map("student_id")
-  token     String   @unique // JWT token
-  expiresAt DateTime @map("expires_at") // 过期时间
-  createdAt DateTime @default(now()) @map("created_at")
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  id           Int       @id @default(autoincrement())
+  studentId    Int       @map("student_id")
+  token        String    @unique // JWT token
+  expiresAt    DateTime  @map("expires_at") // 过期时间
+  createdAt    DateTime  @default(now()) @map("created_at")
+  lastActiveAt DateTime  @default(now()) @map("last_active_at")
+  lastSeenAt   DateTime  @default(now()) @map("last_seen_at")
+  endedAt      DateTime? @map("ended_at")
+  endReason    String?   @map("end_reason") // manual|idle|disconnected
+  activeSec    Int       @default(0) @map("active_sec")
+  student      Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([studentId])
   @@index([token])
+  @@index([endedAt])
+  @@index([lastSeenAt])
   @@map("sessions")
+}
+
+// 每日使用时长（按北京时间归属）
+model DailyUsage {
+  id           Int       @id @default(autoincrement())
+  studentId    Int       @map("student_id")
+  date         String // YYYY-MM-DD（北京时间）
+  activeSec    Int       @default(0) @map("active_sec")
+  loginCount   Int       @default(0) @map("login_count")
+  firstLoginAt DateTime? @map("first_login_at")
+  lastLogoutAt DateTime? @map("last_logout_at")
+  student      Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, date])
+  @@index([date])
+  @@map("daily_usage")
 }
 
 // Knowledge Point Management Models

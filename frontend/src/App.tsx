@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ActivityProvider } from './contexts/ActivityContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { SubjectProvider } from './contexts/SubjectContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -173,17 +174,19 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <SubjectProvider>
-          <ToastProvider>
-            <ErrorBoundary>
-              <div className="app">
-                <Suspense fallback={<LoadingSpinner />}>
-                  <AppContent />
-                </Suspense>
-              </div>
-            </ErrorBoundary>
-          </ToastProvider>
-        </SubjectProvider>
+        <ActivityProvider>
+          <SubjectProvider>
+            <ToastProvider>
+              <ErrorBoundary>
+                <div className="app">
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <AppContent />
+                  </Suspense>
+                </div>
+              </ErrorBoundary>
+            </ToastProvider>
+          </SubjectProvider>
+        </ActivityProvider>
       </AuthProvider>
     </BrowserRouter>
   );

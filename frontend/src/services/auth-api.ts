@@ -19,10 +19,13 @@ export interface User {
   };
 }
 
+export type LogoutReason = 'manual' | 'idle' | 'expired' | 'remote';
+
 export interface AuthResponse {
   success: boolean;
   user?: User;
   token?: string;
+  loginAt?: string;
   error?: string;
 }
 
@@ -101,15 +104,52 @@ export async function getCurrentUser(token: string): Promise<{ user?: User; erro
 }
 
 /**
- * Logout
+ * Logout. The reason is recorded for the usage report.
  */
-export async function logout(token: string): Promise<{ success: boolean }> {
+export async function logout(
+  token: string,
+  reason: LogoutReason = 'manual'
+): Promise<{ success: boolean }> {
   const response = await fetch(`${API_BASE}/auth/logout`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
     },
+    body: JSON.stringify({ reason }),
   });
+  return response.json();
+}
+
+export interface HeartbeatResponse {
+  success: boolean;
+  activeSec?: number;
+  countedSec?: number;
+  code?: string;
+  error?: string;
+}
+
+/**
+ * Presence/activity heartbeat. active=true is rate-limited by the caller.
+ * keepalive lets pagehide send one last presence signal.
+ */
+export async function heartbeat(
+  token: string,
+  active: boolean,
+  keepalive = false
+): Promise<HeartbeatResponse> {
+  const response = await fetch(`${API_BASE}/auth/heartbeat`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ active }),
+    keepalive,
+  });
+  if (!response.ok) {
+    return { success: false, code: String(response.status) };
+  }
   return response.json();
 }
 

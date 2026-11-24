@@ -227,7 +227,7 @@ export async function getResourceLibraryAssets(token: string, f: ResourceLibrary
 // ---------------- 学习行为统计 ----------------
 
 export interface LearningEventInput {
-  type: 'asset_open' | 'asset_session' | 'download' | 'login';
+  type: 'asset_open' | 'asset_session' | 'download' | 'login' | 'logout';
   sectionId?: number | null;
   assetId?: number | null;
   durationSec?: number;
@@ -253,6 +253,7 @@ export interface AnalyticsOverviewRow {
   className: string | null;
   contentSec: number;
   videoSec: number;
+  usageSec: number;
   coveredSections: number;
   revisitAssets: number;
   opens: number;
@@ -270,8 +271,8 @@ export async function getAnalyticsOverview(token: string, days = 30) {
 export interface AnalyticsDetail {
   success: boolean;
   student: { id: number; studentId: string; name: string; class: { name: string } | null };
-  totals: { contentSec: number; videoSec: number; opens: number; downloads: number; coveredSections: number; revisitAssets: number; events: number; videoCompletion: number | null };
-  daily: { date: string; sec: number; videoSec: number; opens: number }[];
+  totals: { contentSec: number; videoSec: number; usageSec: number; todayUsageSec: number; opens: number; downloads: number; coveredSections: number; revisitAssets: number; events: number; videoCompletion: number | null };
+  daily: { date: string; sec: number; videoSec: number; opens: number; usageSec: number }[];
   hours: number[];
   topSections: { sectionId: number; title: string; chapterTitle: string | null; textbookName: string | null; subjectName: string | null; sec: number }[];
   topAssets: {

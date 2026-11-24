@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import type { AssetLite } from '../services/learning-api';
 import { reportLearningEvent } from '../services/learning-api';
 import { useModalDialog } from '../hooks/useModalDialog';
+import { useActivity } from '../contexts/ActivityContext';
 import './ResourceViewer.css';
 
 const API_BASE = '/api';
@@ -30,6 +31,7 @@ export default function ResourceViewer({ asset, token, onClose, sectionId = null
   const modalRef = useModalDialog<HTMLDivElement>(!!asset, onClose);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastTimeRef = useRef(0);
+  const { markActive, setVideoPlaying } = useActivity();
 
   useEffect(() => {
     if (!asset) return;
@@ -57,11 +59,23 @@ export default function ResourceViewer({ asset, token, onClose, sectionId = null
         if (d > 0 && d < 2) session.play += d;
       }
       lastTimeRef.current = t;
+      if (!v.paused) markActive();
     };
+
+    const onPlay = () => {
+      setVideoPlaying(true);
+      markActive();
+    };
+    const onPause = () => setVideoPlaying(false);
+    const onEnded = () => setVideoPlaying(false);
 
     const id = window.setInterval(tick, 5000);
     const video = videoRef.current;
     video?.addEventListener('timeupdate', onTimeUpdate);
+    video?.addEventListener('play', onPlay);
+    video?.addEventListener('pause', onPause);
+    video?.addEventListener('ended', onEnded);
+    if (video) setVideoPlaying(!video.paused && !video.ended);
 
     const flush = () => {
       tick();
@@ -89,8 +103,12 @@ export default function ResourceViewer({ asset, token, onClose, sectionId = null
       flush();
       window.clearInterval(id);
       video?.removeEventListener('timeupdate', onTimeUpdate);
+      video?.removeEventListener('play', onPlay);
+      video?.removeEventListener('pause', onPause);
+      video?.removeEventListener('ended', onEnded);
+      setVideoPlaying(false);
     };
-  }, [asset, token, sectionId]);
+  }, [asset, token, sectionId, markActive, setVideoPlaying]);
 
   function reportDownload() {
     if (!asset) return;

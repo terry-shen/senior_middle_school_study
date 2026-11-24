@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { consumeAuthMessage } from '../services/auth-session';
 import './Auth.css';
 
 export default function Login() {
   const [studentId, setStudentId] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => consumeAuthMessage());
   const [loading, setLoading] = useState(false);
   
   const { login } = useAuth();

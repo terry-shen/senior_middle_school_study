@@ -4,6 +4,7 @@ import { listNetdiskFiles, getNetdiskPublicStatus } from '../services/netdisk-ap
 import type { NetdiskFile } from '../services/netdisk-api';
 import { reportLearningEvent } from '../services/learning-api';
 import { getCurrentSectionId } from '../services/study-context';
+import { useActivity } from '../contexts/ActivityContext';
 import './NetdiskBrowser.css';
 
 const API_BASE = '/api';
@@ -54,6 +55,7 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
   const [viewer, setViewer] = useState<Viewer | null>(null);
   const [inlineDoc, setInlineDoc] = useState<NetdiskFile | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const { markActive, setVideoPlaying } = useActivity();
 
   // 资源会话：打开→关闭记一条 asset_session（视频附实际播放秒数）
   useEffect(() => {
@@ -79,14 +81,30 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
         if (d > 0 && d < 2) session.play += d;
       }
       lastT = t;
+      if (!v.paused) markActive();
     };
+    const onPlay = () => {
+      setVideoPlaying(true);
+      markActive();
+    };
+    const onPause = () => setVideoPlaying(false);
+    const onEnded = () => setVideoPlaying(false);
+
     const id = window.setInterval(tick, 5000);
     const v = videoRef.current;
     v?.addEventListener('timeupdate', onTimeUpdate);
+    v?.addEventListener('play', onPlay);
+    v?.addEventListener('pause', onPause);
+    v?.addEventListener('ended', onEnded);
+    if (v) setVideoPlaying(!v.paused && !v.ended);
     return () => {
       tick();
       window.clearInterval(id);
       v?.removeEventListener('timeupdate', onTimeUpdate);
+      v?.removeEventListener('play', onPlay);
+      v?.removeEventListener('pause', onPause);
+      v?.removeEventListener('ended', onEnded);
+      setVideoPlaying(false);
       const dwellSec = Math.min(7200, Math.round(session.dwell));
       const playSec = Math.round(session.play);
       if (dwellSec > 0 || playSec > 0) {
@@ -105,7 +123,7 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
         });
       }
     };
-  }, [viewer, token]);
+  }, [viewer, token, markActive, setVideoPlaying]);
 
   const reportDownload = (f: NetdiskFile) => {
     if (!token) return;

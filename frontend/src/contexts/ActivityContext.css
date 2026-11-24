@@ -1,0 +1,81 @@
+.usage-idle-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(3px);
+}
+
+.usage-idle-card {
+  width: min(420px, 100%);
+  padding: 28px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24);
+  text-align: center;
+}
+
+.usage-idle-card h2 {
+  margin: 0 0 10px;
+  color: #0f172a;
+  font-size: 22px;
+}
+
+.usage-idle-card p {
+  margin: 0 0 22px;
+  color: #475569;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.usage-idle-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.usage-idle-actions button {
+  min-width: 118px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.usage-idle-primary {
+  border: 0;
+  background: #2563eb;
+  color: #fff;
+}
+
+.usage-idle-primary:hover {
+  background: #1d4ed8;
+}
+
+.usage-idle-secondary {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+}
+
+.usage-idle-secondary:hover {
+  background: #f8fafc;
+}
+
+@media (max-width: 480px) {
+  .usage-idle-card {
+    padding: 22px 18px;
+  }
+
+  .usage-idle-actions {
+    flex-direction: column;
+  }
+
+  .usage-idle-actions button {
+    width: 100%;
+  }
+}

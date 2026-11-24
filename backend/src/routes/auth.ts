@@ -10,8 +10,19 @@ import {
   logoutStudent,
   getStudentByToken
 } from '../services/auth-service';
+import {
+  recordHeartbeat,
+  type SessionEndReason,
+} from '../services/session-service';
 
 const router = Router();
+
+function extractBearerToken(req: Request): string | null {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.substring(7).trim();
+  return token || null;
+}
 
 /**
  * POST /api/auth/register
@@ -93,20 +104,59 @@ router.post('/login', async (req: Request, res: Response) => {
  */
 router.post('/logout', async (req: Request, res: Response) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const token = extractBearerToken(req);
+    if (!token) {
       return res.status(401).json({
         success: false,
         error: '未提供认证令牌'
       });
     }
-    
-    const token = authHeader.substring(7);
-    const success = await logoutStudent(token);
-    
+
+    const requestedReason = req.body?.reason;
+    const reason: SessionEndReason =
+      requestedReason === 'idle' ? 'idle' : 'manual';
+    const success = await logoutStudent(token, reason);
+
     return res.json({
       success,
       message: success ? '已退出登录' : '退出失败'
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/auth/heartbeat
+ * Presence and activity heartbeat. The server decides the chargeable seconds.
+ */
+router.post('/heartbeat', async (req: Request, res: Response) => {
+  try {
+    const token = extractBearerToken(req);
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        error: '未提供认证令牌',
+        code: 'missing'
+      });
+    }
+
+    const result = await recordHeartbeat(token, req.body?.active === true);
+    if (!result.ok) {
+      return res.status(401).json({
+        success: false,
+        error: '登录状态已失效，请重新登录',
+        code: result.code,
+      });
+    }
+
+    return res.json({
+      success: true,
+      activeSec: result.activeSec,
+      countedSec: result.countedSec,
     });
   } catch (error: any) {
     return res.status(500).json({

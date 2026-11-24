@@ -4,9 +4,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { validateSessionToken } from '../services/session-service';
 
 // Extend Request type to include user
 declare global {
@@ -23,273 +21,168 @@ declare global {
   }
 }
 
-/**
- * Middleware to require authentication
- * Verifies JWT token and attaches user to request
- */
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
+type AuthUser = NonNullable<Request['user']>;
+
+type AuthFailure = {
+  ok: false;
+  status: number;
+  error: string;
+  code: string;
+};
+
+type AuthSuccess = { ok: true; user: AuthUser };
+
+function extractToken(req: Request): string | null {
   const authHeader = req.headers.authorization;
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Authentication required' });
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.substring(7).trim();
+  return token || null;
+}
+
+async function authenticate(req: Request): Promise<AuthSuccess | AuthFailure> {
+  const token = extractToken(req);
+  if (!token) {
+    return { ok: false, status: 401, error: 'Authentication required', code: 'missing' };
   }
-  
-  const token = authHeader.substring(7);
-  
-  // Verify session
-  prisma.session.findFirst({
-    where: {
-      token,
-      expiresAt: { gt: new Date() }
-    },
-    include: { student: true }
-  })
-  .then(session => {
-    if (!session) {
-      return res.status(401).json({ error: 'Invalid or expired token' });
-    }
-    
-    // Attach user to request
-    req.user = {
-      id: session.student.id,
-      studentId: session.student.studentId,
-      name: session.student.name,
-      role: session.student.role,
-      aiAssistantEnabled: session.student.aiAssistantEnabled
+
+  const result = await validateSessionToken(token);
+  if (!result.ok) {
+    return {
+      ok: false,
+      status: 401,
+      error: '登录状态已失效，请重新登录',
+      code: result.code,
     };
-    
+  }
+
+  const student = result.session.student;
+  return {
+    ok: true,
+    user: {
+      id: student.id,
+      studentId: student.studentId,
+      name: student.name,
+      role: student.role,
+      aiAssistantEnabled: student.aiAssistantEnabled,
+    },
+  };
+}
+
+function sendAuthFailure(res: Response, failure: AuthFailure) {
+  return res.status(failure.status).json({ error: failure.error, code: failure.code });
+}
+
+async function attachUserOrFail(
+  req: Request,
+  res: Response
+): Promise<AuthUser | null> {
+  if (req.user) return req.user;
+  const auth = await authenticate(req);
+  if (!auth.ok) {
+    sendAuthFailure(res, auth);
+    return null;
+  }
+  req.user = auth.user;
+  return auth.user;
+}
+
+/**
+ * Middleware to require authentication.
+ * Validates the session (including idle/ended state) and attaches the user.
+ */
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  try {
+    const auth = await authenticate(req);
+    if (!auth.ok) return sendAuthFailure(res, auth);
+    req.user = auth.user;
     next();
-  })
-  .catch(err => {
+  } catch (err) {
     console.error('Auth error:', err);
     res.status(500).json({ error: 'Authentication failed' });
-  });
+  }
 }
 
 /**
- * Middleware to require admin role
- * Can be used after requireAuth, or standalone (will authenticate first)
+ * Middleware to require admin role.
+ * Can be used after requireAuth, or standalone (will authenticate first).
  */
-export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  // If user is already attached by requireAuth, just check role
-  if (req.user) {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ 
+export async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  try {
+    const user = await attachUserOrFail(req, res);
+    if (!user) return;
+    if (user.role !== 'admin') {
+      return res.status(403).json({
         error: 'Admin access required',
-        message: 'You do not have permission to perform this action'
+        message: 'You do not have permission to perform this action',
       });
     }
-    return next();
-  }
-
-  // If user not attached, run requireAuth logic first
-  const authHeader = req.headers.authorization;
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  
-  const token = authHeader.substring(7);
-  
-  prisma.session.findFirst({
-    where: {
-      token,
-      expiresAt: { gt: new Date() }
-    },
-    include: { student: true }
-  })
-  .then(session => {
-    if (!session) {
-      return res.status(401).json({ error: 'Invalid or expired token' });
-    }
-    
-    // Attach user to request
-    req.user = {
-      id: session.student.id,
-      studentId: session.student.studentId,
-      name: session.student.name,
-      role: session.student.role,
-      aiAssistantEnabled: session.student.aiAssistantEnabled
-    };
-    
-    // Now check admin role
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ 
-        error: 'Admin access required',
-        message: 'You do not have permission to perform this action'
-      });
-    }
-    
     next();
-  })
-  .catch(err => {
+  } catch (err) {
     console.error('Admin auth error:', err);
     res.status(500).json({ error: 'Authentication failed' });
-  });
+  }
 }
 
 /**
- * Middleware to require student role (or admin)
- * Can be used after requireAuth, or standalone (will authenticate first)
+ * Middleware to require student role (or admin).
  */
-export function requireStudent(req: Request, res: Response, next: NextFunction) {
-  if (req.user) {
-    if (req.user.role !== 'student' && req.user.role !== 'admin') {
-      return res.status(403).json({ 
+export async function requireStudent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const user = await attachUserOrFail(req, res);
+    if (!user) return;
+    if (user.role !== 'student' && user.role !== 'admin') {
+      return res.status(403).json({
         error: 'Student access required',
-        message: 'You do not have permission to perform this action'
+        message: 'You do not have permission to perform this action',
       });
     }
-    return next();
-  }
-
-  // If user not attached, run requireAuth logic first
-  const authHeader = req.headers.authorization;
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  
-  const token = authHeader.substring(7);
-  
-  prisma.session.findFirst({
-    where: { token, expiresAt: { gt: new Date() } },
-    include: { student: true }
-  })
-  .then(session => {
-    if (!session) {
-      return res.status(401).json({ error: 'Invalid or expired token' });
-    }
-    
-    req.user = {
-      id: session.student.id,
-      studentId: session.student.studentId,
-      name: session.student.name,
-      role: session.student.role,
-      aiAssistantEnabled: session.student.aiAssistantEnabled
-    };
-    
-    if (req.user.role !== 'student' && req.user.role !== 'admin') {
-      return res.status(403).json({ 
-        error: 'Student access required',
-        message: 'You do not have permission to perform this action'
-      });
-    }
-    
     next();
-  })
-  .catch(err => {
+  } catch (err) {
     console.error('Student auth error:', err);
     res.status(500).json({ error: 'Authentication failed' });
-  });
+  }
 }
 
 /**
- * Middleware to check if user owns the resource or is admin
- * Can be used after requireAuth, or standalone (will authenticate first)
- * Used for: students viewing/updating their own profile
+ * Middleware to check if user owns the resource or is admin.
  */
 export function requireOwnershipOrAdmin(getUserIdFromParams: (req: Request) => number) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    // If user already attached by requireAuth, just check ownership
-    if (req.user) {
-      if (req.user.role === 'admin') {
-        return next();
-      }
-      const resourceId = getUserIdFromParams(req);
-      if (req.user.id !== resourceId) {
-        return res.status(403).json({ 
-          error: 'Access denied',
-          message: 'You can only access your own resources'
-        });
-      }
-      return next();
-    }
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = await attachUserOrFail(req, res);
+      if (!user) return;
 
-    // If user not attached, run requireAuth logic first
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-    
-    const token = authHeader.substring(7);
-    
-    prisma.session.findFirst({
-      where: { token, expiresAt: { gt: new Date() } },
-      include: { student: true }
-    })
-    .then(session => {
-      if (!session) {
-        return res.status(401).json({ error: 'Invalid or expired token' });
-      }
-      
-      req.user = {
-        id: session.student.id,
-        studentId: session.student.studentId,
-        name: session.student.name,
-        role: session.student.role,
-        aiAssistantEnabled: session.student.aiAssistantEnabled
-      };
-      
-      // Admin can access any resource
-      if (req.user.role === 'admin') {
-        return next();
-      }
-      
-      // Check ownership
+      if (user.role === 'admin') return next();
+
       const resourceId = getUserIdFromParams(req);
-      if (req.user.id !== resourceId) {
-        return res.status(403).json({ 
+      if (user.id !== resourceId) {
+        return res.status(403).json({
           error: 'Access denied',
-          message: 'You can only access your own resources'
+          message: 'You can only access your own resources',
         });
       }
-      
+
       next();
-    })
-    .catch(err => {
+    } catch (err) {
       console.error('Ownership auth error:', err);
       res.status(500).json({ error: 'Authentication failed' });
-    });
+    }
   };
 }
 
 /**
- * Optional auth - attaches user if token present, but doesn't require it
+ * Optional auth - attaches user if token present and valid, but doesn't require it.
  */
-export function optionalAuth(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return next();
-  }
-  
-  const token = authHeader.substring(7);
-  
-  prisma.session.findFirst({
-    where: {
-      token,
-      expiresAt: { gt: new Date() }
-    },
-    include: { student: true }
-  })
-  .then(session => {
-    if (session) {
-      req.user = {
-        id: session.student.id,
-        studentId: session.student.studentId,
-        name: session.student.name,
-        role: session.student.role,
-        aiAssistantEnabled: session.student.aiAssistantEnabled
-      };
-    }
+export async function optionalAuth(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!extractToken(req)) return next();
+    const auth = await authenticate(req);
+    if (auth.ok) req.user = auth.user;
     next();
-  })
-  .catch(err => {
+  } catch (err) {
     console.error('Optional auth error:', err);
-    next(); // Continue without user
-  });
+    next();
+  }
 }
 
 /**
@@ -301,13 +194,13 @@ export const rolePermissions: Record<string, string[]> = {
   '/api/students/import': ['admin'],
   '/api/students/export': ['admin'],
   '/api/classes': ['admin'],
-  
+
   // Student accessible routes
   '/api/auth/me': ['student', 'admin'],
   '/api/students/:id': ['owner', 'admin'], // owner = student themselves
-  
+
   // Public routes
   '/api/auth/register': [],
   '/api/auth/login': [],
-  '/api/health': []
+  '/api/health': [],
 };

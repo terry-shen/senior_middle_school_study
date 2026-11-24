@@ -5,6 +5,12 @@
 
 import { PrismaClient } from '@prisma/client';
 import * as crypto from 'crypto';
+import {
+  createStudentSession,
+  endSessionByToken,
+  validateSessionToken,
+  type SessionEndReason,
+} from './session-service';
 
 const prisma = new PrismaClient();
 
@@ -35,6 +41,7 @@ export interface AuthResult {
     aiAssistantEnabled: boolean;
   };
   token?: string;
+  loginAt?: string;
   error?: string;
 }
 
@@ -134,14 +141,12 @@ export async function registerStudent(data: RegisterData): Promise<AuthResult> {
     // Generate token
     const token = generateToken(student.id);
     
-    // Create session
-    await prisma.session.create({
-      data: {
-        studentId: student.id,
-        token,
-        expiresAt: new Date(Date.now() + JWT_EXPIRES_IN)
-      }
-    });
+    // Create session and login bookkeeping
+    const { loginAt } = await createStudentSession(
+      student.id,
+      token,
+      new Date(Date.now() + JWT_EXPIRES_IN)
+    );
     
     return {
       success: true,
@@ -152,7 +157,8 @@ export async function registerStudent(data: RegisterData): Promise<AuthResult> {
         role: student.role,
         aiAssistantEnabled: student.aiAssistantEnabled
       },
-      token
+      token,
+      loginAt: loginAt.toISOString()
     };
   } catch (error: any) {
     return {
@@ -224,14 +230,12 @@ export async function loginStudent(data: LoginData): Promise<AuthResult> {
     // Generate token
     const token = generateToken(student.id);
     
-    // Create session
-    await prisma.session.create({
-      data: {
-        studentId: student.id,
-        token,
-        expiresAt: new Date(Date.now() + JWT_EXPIRES_IN)
-      }
-    });
+    // Create session and login bookkeeping
+    const { loginAt } = await createStudentSession(
+      student.id,
+      token,
+      new Date(Date.now() + JWT_EXPIRES_IN)
+    );
     
     return {
       success: true,
@@ -242,7 +246,8 @@ export async function loginStudent(data: LoginData): Promise<AuthResult> {
         role: student.role,
         aiAssistantEnabled: student.aiAssistantEnabled
       },
-      token
+      token,
+      loginAt: loginAt.toISOString()
     };
   } catch (error: any) {
     return {
@@ -253,36 +258,33 @@ export async function loginStudent(data: LoginData): Promise<AuthResult> {
 }
 
 /**
- * Logout student (delete session)
+ * Logout student. The session row is retained for history.
  */
-export async function logoutStudent(token: string): Promise<boolean> {
+export async function logoutStudent(
+  token: string,
+  reason: SessionEndReason = 'manual'
+): Promise<boolean> {
   try {
-    await prisma.session.delete({
-      where: { token }
-    });
-    return true;
+    const result = await endSessionByToken(token, reason);
+    return result.success;
   } catch {
     return false;
   }
 }
 
 /**
- * Get student by token
+ * Get student by token, including ended/idle/expired checks.
  */
 export async function getStudentByToken(token: string) {
   const decoded = verifyToken(token);
   if (!decoded) {
     return null;
   }
-  
-  const session = await prisma.session.findUnique({
-    where: { token },
-    include: { student: true }
-  });
-  
-  if (!session || session.expiresAt < new Date()) {
+
+  const result = await validateSessionToken(token, { touchSeen: false });
+  if (!result.ok) {
     return null;
   }
-  
-  return session.student;
+
+  return result.session.student;
 }

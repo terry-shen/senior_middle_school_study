@@ -11,6 +11,7 @@ import aiAssistantRoutes from './routes/ai-assistants';
 import chapterRoutes from './routes/chapters';
 import netdiskIndexRoutes from './routes/netdisk-index';
 import learningRoutes from './routes/learning';
+import { startSessionSweeper } from './services/session-service';
 
 // Load environment variables
 dotenv.config();
@@ -139,6 +140,7 @@ app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
   console.log(`API endpoints: http://localhost:${PORT}/api`);
+  if (process.env.NODE_ENV !== 'test') startSessionSweeper();
 });
 
 export default app;

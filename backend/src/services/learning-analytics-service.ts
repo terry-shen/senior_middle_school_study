@@ -2,8 +2,8 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-/** 只保留资源级事件：心跳与旧的视频/停留事件已废弃 */
-export const EVENT_TYPES = ['asset_open', 'asset_session', 'download', 'login'] as const;
+/** 只保留资源级事件与会话事件：心跳与旧的视频/停留事件已废弃 */
+export const EVENT_TYPES = ['asset_open', 'asset_session', 'download', 'login', 'logout'] as const;
 export type LearningEventType = (typeof EVENT_TYPES)[number];
 
 const TZ_OFFSET_MS = 8 * 3600 * 1000;
@@ -103,6 +103,21 @@ function rangeWhere(from?: Date, to?: Date) {
   return where;
 }
 
+function usageWhere(studentId?: number, from?: Date, to?: Date) {
+  const where: {
+    studentId?: number;
+    date?: { gte?: string; lte?: string };
+  } = {};
+  if (studentId != null) where.studentId = studentId;
+  if (from || to) {
+    where.date = {
+      ...(from ? { gte: localDate(from) } : {}),
+      ...(to ? { lte: localDate(to) } : {}),
+    };
+  }
+  return where;
+}
+
 function buildStreak(days: string[]): number {
   const set = new Set(days);
   const today = localDate(new Date());
@@ -144,6 +159,8 @@ type EventRow = {
 };
 
 function accumulate(a: Agg, e: EventRow) {
+  // 登录/退出只进入行为时间线，不计入内容学习、覆盖章节或活跃天。
+  if (e.type === 'login' || e.type === 'logout') return;
   const meta = parseMeta(e.meta);
   if (e.type === 'asset_session') {
     a.contentSec += e.durationSec;
@@ -192,6 +209,14 @@ export async function getOverview(from?: Date, to?: Date) {
     where: rangeWhere(from, to),
     select: { studentId: true, type: true, sectionId: true, assetId: true, durationSec: true, meta: true, createdAt: true },
   });
+  const usageRows = await prisma.dailyUsage.groupBy({
+    by: ['studentId'],
+    where: usageWhere(undefined, from, to),
+    _sum: { activeSec: true },
+  });
+  const usageByStudent = new Map(
+    usageRows.map((row) => [row.studentId, row._sum.activeSec ?? 0])
+  );
 
   const map = new Map<number, Agg>();
   for (const e of events) {
@@ -210,6 +235,7 @@ export async function getOverview(from?: Date, to?: Date) {
       className: s.class?.name ?? null,
       contentSec: a?.contentSec ?? 0,
       videoSec: a?.videoSec ?? 0,
+      usageSec: usageByStudent.get(s.id) ?? 0,
       coveredSections: a ? a.sections.size : 0,
       revisitAssets: a ? revisitOf(a) : 0,
       opens: a?.opens ?? 0,
@@ -240,14 +266,23 @@ export async function getStudentDetail(studentId: number, from?: Date, to?: Date
     select: { id: true, type: true, sectionId: true, assetId: true, durationSec: true, meta: true, createdAt: true },
   });
 
-  const daily = new Map<string, { sec: number; videoSec: number; opens: number }>();
+  const usageRows = await prisma.dailyUsage.findMany({
+    where: usageWhere(studentId, from, to),
+    select: { date: true, activeSec: true },
+  });
+  const todayUsage = await prisma.dailyUsage.findUnique({
+    where: { studentId_date: { studentId, date: localDate(new Date()) } },
+    select: { activeSec: true },
+  });
+
+  const daily = new Map<string, { sec: number; videoSec: number; opens: number; usageSec: number }>();
   const hours = new Array(24).fill(0) as number[];
   const bySection = new Map<number, number>();
 
   for (const e of events) {
     const meta = parseMeta(e.meta);
     const d = localDate(e.createdAt);
-    const slot = daily.get(d) ?? { sec: 0, videoSec: 0, opens: 0 };
+    const slot = daily.get(d) ?? { sec: 0, videoSec: 0, opens: 0, usageSec: 0 };
     if (e.type === 'asset_session') {
       slot.sec += e.durationSec;
       const play = Math.round(Number(meta?.playSec)) || 0;
@@ -260,6 +295,12 @@ export async function getStudentDetail(studentId: number, from?: Date, to?: Date
       const add = e.type === 'asset_session' ? (e.durationSec || (Math.round(Number(meta?.playSec)) || 0)) : 0;
       bySection.set(e.sectionId, (bySection.get(e.sectionId) ?? 0) + add);
     }
+  }
+
+  for (const row of usageRows) {
+    const slot = daily.get(row.date) ?? { sec: 0, videoSec: 0, opens: 0, usageSec: 0 };
+    slot.usageSec += row.activeSec;
+    daily.set(row.date, slot);
   }
 
   const topSectionIds = [...bySection.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([id]) => id);
@@ -394,11 +435,15 @@ export async function getStudentDetail(studentId: number, from?: Date, to?: Date
   const agg = emptyAgg();
   for (const e of events) accumulate(agg, e);
 
+  const usageSec = usageRows.reduce((sum, row) => sum + row.activeSec, 0);
+
   return {
     student,
     totals: {
       contentSec: agg.contentSec,
       videoSec: agg.videoSec,
+      usageSec,
+      todayUsageSec: todayUsage?.activeSec ?? 0,
       opens: agg.opens,
       downloads: agg.downloads,
       coveredSections: agg.sections.size,

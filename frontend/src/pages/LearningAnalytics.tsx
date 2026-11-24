@@ -31,7 +31,19 @@ const EVENT_LABEL: Record<string, string> = {
   asset_session: '学习资源',
   download: '下载资料',
   login: '登录',
+  logout: '退出',
 };
+
+const LOGOUT_REASON_LABEL: Record<string, string> = {
+  manual: '手动退出',
+  idle: '空闲超时',
+  disconnected: '离线退出',
+};
+
+function logoutReason(meta: Record<string, unknown> | null): string {
+  const reason = typeof meta?.reason === 'string' ? meta.reason : '';
+  return LOGOUT_REASON_LABEL[reason] ?? '';
+}
 
 export default function LearningAnalytics() {
   const { token } = useAuth();
@@ -70,7 +82,10 @@ export default function LearningAnalytics() {
     return () => { cancelled = true; };
   }, [token, selected, days]);
 
-  const maxDaily = Math.max(1, ...(detail?.daily.map((d) => d.sec + d.videoSec) ?? [1]));
+  const maxDaily = Math.max(
+    1,
+    ...(detail?.daily.map((d) => Math.max(d.usageSec, d.sec + d.videoSec)) ?? [1])
+  );
   const maxHour = Math.max(1, ...(detail?.hours ?? [1]));
   const maxSection = Math.max(1, ...(detail?.topSections.map((s) => s.sec) ?? [1]));
   const totalSubject = Math.max(1, (detail?.subjectShare ?? []).reduce((n, s) => n + s.sec, 0));
@@ -88,7 +103,7 @@ export default function LearningAnalytics() {
           <button className="la-refresh" onClick={loadOverview}>刷新</button>
         </div>
       </div>
-      <p className="la-sub">按「打开资源 → 关闭资源」的一次学习会话统计内容学习时长；视频以实际播放秒数计；只能下载的资料只记下载，不计时长。</p>
+      <p className="la-sub">按「打开资源 → 关闭资源」的一次学习会话统计内容学习时长；视频以实际播放秒数计；只能下载的资料只记下载，不计时长。系统使用时长只统计有操作或视频播放的活跃时间，空闲不计。</p>
 
       {error && <div className="la-error">{error}</div>}
 
@@ -103,7 +118,7 @@ export default function LearningAnalytics() {
                 <thead>
                   <tr>
                     <th className="la-col-name">学生</th>
-                    <th>内容学习</th><th>视频观看</th><th>覆盖章节</th><th>回访</th>
+                    <th>使用时长</th><th>内容学习</th><th>视频观看</th><th>覆盖章节</th><th>回访</th>
                     <th>打开 / 下载</th><th>完成率</th><th>活跃 / 连续</th><th>最后活跃</th>
                   </tr>
                 </thead>
@@ -121,6 +136,7 @@ export default function LearningAnalytics() {
                           <span className="la-meta">{r.studentNo} · {r.className ?? '未分班'}</span>
                           {silent && <span className="la-silent-tag">沉默</span>}
                         </td>
+                        <td>{fmtDuration(r.usageSec)}</td>
                         <td>{fmtDuration(r.contentSec)}</td>
                         <td>{fmtDuration(r.videoSec)}</td>
                         <td>{r.coveredSections}</td>
@@ -152,6 +168,7 @@ export default function LearningAnalytics() {
                       {silent && <span className="la-silent-tag">沉默</span>}
                     </div>
                     <dl className="la-scard-grid">
+                      <div><dt>使用时长</dt><dd>{fmtDuration(r.usageSec)}</dd></div>
                       <div><dt>内容学习</dt><dd>{fmtDuration(r.contentSec)}</dd></div>
                       <div><dt>视频观看</dt><dd>{fmtDuration(r.videoSec)}</dd></div>
                       <div><dt>覆盖章节</dt><dd>{r.coveredSections}</dd></div>
@@ -176,6 +193,8 @@ export default function LearningAnalytics() {
           {detail && (
             <>
               <div className="la-kpis">
+                <div className="la-kpi"><b>{fmtDuration(detail.totals.usageSec)}</b><span>系统使用时长</span></div>
+                <div className="la-kpi"><b>{fmtDuration(detail.totals.todayUsageSec)}</b><span>今日使用时长</span></div>
                 <div className="la-kpi"><b>{fmtDuration(detail.totals.contentSec)}</b><span>内容学习时长</span></div>
                 <div className="la-kpi"><b>{fmtDuration(detail.totals.videoSec)}</b><span>视频观看时长</span></div>
                 <div className="la-kpi"><b>{detail.totals.videoCompletion == null ? '—' : `${detail.totals.videoCompletion}%`}</b><span>视频完成率</span></div>
@@ -187,14 +206,27 @@ export default function LearningAnalytics() {
 
               <div className="la-grid">
                 <div className="la-block">
-                  <h3>每日学习时长</h3>
+                  <h3>每日使用 / 学习时长</h3>
+                  <div className="la-legend">
+                    <span><i className="la-legend-usage" />系统使用</span>
+                    <span><i className="la-legend-content" />内容学习</span>
+                  </div>
                   {detail.daily.length === 0 ? <p className="la-hint">区间内没有学习记录</p> : (
                     <div className="la-bars">
                       {detail.daily.map((d) => {
-                        const h = Math.round(((d.sec + d.videoSec) / maxDaily) * 100);
+                        const contentSec = d.sec + d.videoSec;
+                        const usageH = Math.round((d.usageSec / maxDaily) * 100);
+                        const contentH = Math.round((contentSec / maxDaily) * 100);
                         return (
-                          <div key={d.date} className="la-bar-col" title={`${d.date}：${fmtDuration(d.sec + d.videoSec)}`}>
-                            <div className="la-bar" style={{ height: `${Math.max(2, h)}%` }} />
+                          <div
+                            key={d.date}
+                            className="la-bar-col"
+                            title={`${d.date}：使用 ${fmtDuration(d.usageSec)}，内容学习 ${fmtDuration(contentSec)}`}
+                          >
+                            <div className="la-bar-pair">
+                              <div className="la-bar la-bar-usage" style={{ height: `${Math.max(2, usageH)}%` }} />
+                              <div className="la-bar la-bar-content" style={{ height: `${Math.max(2, contentH)}%` }} />
+                            </div>
                             <span className="la-bar-label">{d.date.slice(5)}</span>
                           </div>
                         );
@@ -355,25 +387,33 @@ export default function LearningAnalytics() {
                 <h3>最近行为</h3>
                 {detail.recent.length === 0 ? <p className="la-hint">暂无行为记录</p> : (
                   <ul className="la-events">
-                    {detail.recent.map((e) => (
-                      <li key={e.id}>
-                        <span className={`la-ev la-ev-${e.type}`}>{EVENT_LABEL[e.type] ?? e.type}</span>
-                        <span className="la-ev-what">
-                          {e.assetName
-                            ? e.assetName
-                            : typeof e.meta?.name === 'string'
-                              ? (e.meta.name as string)
-                              : e.sectionTitle ?? '—'}
-                        </span>
-                        {(e.subjectName || e.chapterTitle || e.sectionTitle) && (
-                          <span className="la-ev-sec">
-                            {[e.subjectName, e.chapterTitle, e.sectionTitle].filter(Boolean).join(' / ')}
+                    {detail.recent.map((e) => {
+                      const isSessionEvent = e.type === 'login' || e.type === 'logout';
+                      const reason = e.type === 'logout' ? logoutReason(e.meta) : '';
+                      return (
+                        <li key={e.id}>
+                          <span className={`la-ev la-ev-${e.type}`}>{EVENT_LABEL[e.type] ?? e.type}</span>
+                          <span className="la-ev-what">
+                            {e.type === 'login'
+                              ? '登录系统'
+                              : e.type === 'logout'
+                                ? `退出登录${reason ? `（${reason}）` : ''}`
+                                : e.assetName
+                                  ? e.assetName
+                                  : typeof e.meta?.name === 'string'
+                                    ? (e.meta.name as string)
+                                    : e.sectionTitle ?? '—'}
                           </span>
-                        )}
-                        {e.durationSec > 0 && <span className="la-ev-dur">{fmtDuration(e.durationSec)}</span>}
-                        <span className="la-ev-time">{fmtDate(e.createdAt)}</span>
-                      </li>
-                    ))}
+                          {!isSessionEvent && (e.subjectName || e.chapterTitle || e.sectionTitle) && (
+                            <span className="la-ev-sec">
+                              {[e.subjectName, e.chapterTitle, e.sectionTitle].filter(Boolean).join(' / ')}
+                            </span>
+                          )}
+                          {e.durationSec > 0 && <span className="la-ev-dur">{fmtDuration(e.durationSec)}</span>}
+                          <span className="la-ev-time">{fmtDate(e.createdAt)}</span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
