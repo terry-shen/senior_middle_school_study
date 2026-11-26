@@ -35,6 +35,7 @@ model Student {
   class                 Class?                   @relation(fields: [classId], references: [id], onDelete: SetNull)
   sessions              Session[]
   dailyUsage            DailyUsage[]
+  activityLogs          StudentActivityLog[]
   learningProgress      StudentLearningProgress?
   learningEvents        LearningEvent[] @relation("StudentLearningEvents")
 
@@ -122,6 +123,28 @@ model DailyUsage {
   @@unique([studentId, date])
   @@index([date])
   @@map("daily_usage")
+}
+
+// 学生访问流水（短周期，默认保留 7 天）
+model StudentActivityLog {
+  id        Int      @id @default(autoincrement())
+  studentId Int      @map("student_id")
+  sessionId Int?     @map("session_id")
+  type      String
+  pagePath  String   @map("page_path")
+  target    String?
+  label     String?
+  subjectId Int?     @map("subject_id")
+  sectionId Int?     @map("section_id")
+  assetId   Int?     @map("asset_id")
+  meta      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+  @@index([createdAt])
+  @@index([sessionId])
+  @@map("student_activity_logs")
 }
 
 // Knowledge Point Management Models

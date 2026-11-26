@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useActivityLog } from '../contexts/ActivityLogContext';
 import {
   getLearningSubjects,
   getProgress,
@@ -34,6 +35,7 @@ export default function ChapterMap() {
   const { code } = useParams<{ code: string }>();
   const { token } = useAuth();
   const navigate = useNavigate();
+  const { logActivity } = useActivityLog();
 
   const [subjects, setSubjects] = useState<LearningSubject[]>([]);
   const [subject, setSubject] = useState<LearningSubject | null>(null);
@@ -74,6 +76,17 @@ export default function ChapterMap() {
       cancelled = true;
     };
   }, [token, code]);
+
+  // 记录进入学科（直接访问或导航进入都算一次学科打开）
+  useEffect(() => {
+    if (!subject) return;
+    logActivity({
+      type: 'subject_open',
+      target: `/learning/${subject.code}`,
+      label: subject.name,
+      subjectId: subject.id,
+    });
+  }, [subject, logActivity]);
 
   // 2) 该学科的视频主线 + 学习进度
   const loadContent = useCallback(async () => {
@@ -122,6 +135,12 @@ export default function ChapterMap() {
   const toggleTag = (key: string) => setOpenTags((p) => ({ ...p, [key]: !p[key] }));
 
   const openVideo = (v: VideoSeriesItem) => {
+    logActivity({
+      type: 'asset_open',
+      target: `video:${v.id}`,
+      label: cleanVideoName(v.name),
+      assetId: v.id,
+    });
     setViewing({
       id: v.id,
       fsId: v.fsId,
@@ -137,6 +156,17 @@ export default function ChapterMap() {
       status: 'active',
       mapConfirmed: true,
     });
+  };
+
+  const openLibraryAsset = (asset: AssetLite) => {
+    logActivity({
+      type: 'asset_open',
+      target: `library:${asset.id}`,
+      label: asset.name,
+      assetId: asset.id,
+      subjectId: subject?.id ?? null,
+    });
+    setViewing(asset);
   };
 
   const showProgress = !!progress && !!subject && (!progress.subjectId || progress.subjectId === subject.id);
@@ -201,18 +231,37 @@ export default function ChapterMap() {
             </span>
             {progress.assetName && <span className="cmap-continue-asset">上次：{progress.assetName}</span>}
           </div>
-          <button className="cmap-continue-btn" onClick={() => navigate(`/learning/section/${progress.sectionId}`)}>
+          <button
+            className="cmap-continue-btn"
+            data-track="nav_click"
+            data-track-target={`/learning/section/${progress.sectionId}`}
+            data-track-label="继续学习"
+            data-track-section-id={progress.sectionId}
+            onClick={() => navigate(`/learning/section/${progress.sectionId}`)}
+          >
             继续 →
           </button>
         </div>
       )}
 
       <div className="cmap-cat-tabs">
-        <button className={`cmap-cat-tab ${category === 'video' ? 'active' : ''}`} onClick={() => setCategory('video')}>
+        <button
+          className={`cmap-cat-tab ${category === 'video' ? 'active' : ''}`}
+          data-track="filter"
+          data-track-target="category:video"
+          data-track-label="视频主线课程"
+          onClick={() => setCategory('video')}
+        >
           🎬 视频主线课程 <span className="cmap-cat-count">{videoTotal}</span>
         </button>
         {(subject?.resourceCount ?? 0) > 0 && (
-          <button className={`cmap-cat-tab ${category === 'library' ? 'active' : ''}`} onClick={() => setCategory('library')}>
+          <button
+            className={`cmap-cat-tab ${category === 'library' ? 'active' : ''}`}
+            data-track="filter"
+            data-track-target="category:library"
+            data-track-label="教辅资源"
+            onClick={() => setCategory('library')}
+          >
             📚 教辅资源 <span className="cmap-cat-count">{subject?.resourceCount}</span>
           </button>
         )}
@@ -259,7 +308,7 @@ export default function ChapterMap() {
                                 <ul className="cmap-videos-list">
                                   {g.videos.map((v) => (
                                     <li key={v.id}>
-                                      <button className="cmap-video-item" onClick={() => openVideo(v)}>
+                                      <button className="cmap-video-item" data-track-skip onClick={() => openVideo(v)}>
                                         <span className="cmap-video-play">▶</span>
                                         <span className="cmap-video-name">{cleanVideoName(v.name)}</span>
                                         {v.size && <span className="cmap-video-size">{formatSize(v.size)}</span>}
@@ -273,7 +322,7 @@ export default function ChapterMap() {
                                   <li className="cmap-sections-label">📚 关联教材小节</li>
                                   {g.sections.map((sec) => (
                                     <li key={sec.id}>
-                                      <button className="cmap-section-link" onClick={() => navigate(`/learning/section/${sec.id}`)}>
+                                      <button className="cmap-section-link" data-track-skip onClick={() => navigate(`/learning/section/${sec.id}`)}>
                                         <span className="cmap-section-title">{sec.title}</span>
                                         <span className="cmap-badges">
                                           <span className="cmap-badge">资源 {sec.resourceCount}</span>
@@ -297,7 +346,7 @@ export default function ChapterMap() {
       )}
 
       {!loading && !error && category === 'library' && subject && (
-        <ResourceLibrary subject={subject} token={token || ''} onOpen={(asset) => setViewing(asset)} />
+        <ResourceLibrary subject={subject} token={token || ''} onOpen={openLibraryAsset} />
       )}
 
       <ResourceViewer asset={viewing} token={token || ''} onClose={() => setViewing(null)} />
@@ -323,6 +372,7 @@ function ResourceLibrary({
   const [q, setQ] = useState('');
   const [openSeries, setOpenSeries] = useState<Record<string, boolean>>({});
   const [openBook, setOpenBook] = useState<Record<string, boolean>>({});
+  const { logActivity } = useActivityLog();
   const [files, setFiles] = useState<
     Record<string, { items: ResourceLibraryAsset[]; page: number; total: number; loading: boolean }>
   >({});
@@ -398,6 +448,18 @@ function ResourceLibrary({
     if (next && !files[key]) loadFiles(series, book, 1, false);
   };
 
+  const runSearch = () => {
+    const text = qInput.trim();
+    setQ(text);
+    logActivity({
+      type: 'search',
+      target: 'library-search',
+      label: '搜索教辅资源',
+      subjectId: subject.id,
+      meta: { queryLength: text.length },
+    });
+  };
+
   const iconOf = (a: ResourceLibraryAsset) => {
     const ext = (a.ext || a.name.split('.').pop() || '').toLowerCase();
     if (['mp4', 'mkv', 'mov', 'avi', 'flv', 'ts', 'webm', 'm4v'].includes(ext)) return '🎬';
@@ -416,13 +478,39 @@ function ResourceLibrary({
         </span>
       </div>
       <div className="cmap-lib-filters">
-        <select value={kind} onChange={(e) => setKind(e.target.value)}>
+        <select
+          value={kind}
+          data-track-skip
+          onChange={(e) => {
+            setKind(e.target.value);
+            logActivity({
+              type: 'filter',
+              target: 'library-kind',
+              label: '教辅类型',
+              subjectId: subject.id,
+              meta: { value: e.target.value || 'all' },
+            });
+          }}
+        >
           <option value="">全部类型</option>
           {summary?.byKind.filter((k) => k.count > 0).map((k) => (
             <option key={k.key} value={k.key}>{k.label}（{k.count}）</option>
           ))}
         </select>
-        <select value={year} onChange={(e) => setYear(e.target.value)}>
+        <select
+          value={year}
+          data-track-skip
+          onChange={(e) => {
+            setYear(e.target.value);
+            logActivity({
+              type: 'filter',
+              target: 'library-year',
+              label: '教辅年份',
+              subjectId: subject.id,
+              meta: { value: e.target.value || 'all' },
+            });
+          }}
+        >
           <option value="">全部年份</option>
           {summary?.byYear.filter((y) => y.year != null).map((y) => (
             <option key={String(y.year)} value={String(y.year)}>{y.year}（{y.count}）</option>
@@ -431,11 +519,12 @@ function ResourceLibrary({
         <input
           value={qInput}
           placeholder="搜索书名 / 系列 / 文件名"
+          data-track-skip
           onChange={(e) => setQInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') setQ(qInput.trim()); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') runSearch(); }}
         />
-        <button className="cmap-lib-search" onClick={() => setQ(qInput.trim())}>搜索</button>
-        {q && <button className="cmap-lib-clear" onClick={() => { setQ(''); setQInput(''); }}>清除</button>}
+        <button className="cmap-lib-search" data-track-skip onClick={runSearch}>搜索</button>
+        {q && <button className="cmap-lib-clear" data-track="filter" data-track-target="library-clear" data-track-label="清除教辅搜索" onClick={() => { setQ(''); setQInput(''); }}>清除</button>}
       </div>
       {loading && <p className="cmap-loading">加载教辅资源...</p>}
       {!loading && error && <p className="cmap-error">{error}</p>}
@@ -468,7 +557,7 @@ function ResourceLibrary({
                           <div className="cmap-lib-files">
                             {f?.loading && f.items.length === 0 && <p className="cmap-lib-hint">加载中...</p>}
                             {f?.items.map((a) => (
-                              <button key={a.id} className="cmap-lib-file" onClick={() => onOpen(a)} title={a.dir}>
+                              <button key={a.id} className="cmap-lib-file" data-track-skip onClick={() => onOpen(a)} title={a.dir}>
                                 <span className="cmap-lib-file-icon">{iconOf(a)}</span>
                                 <span className="cmap-lib-file-name">{a.name}</span>
                                 <span className="cmap-lib-file-meta">{a.ext?.toUpperCase()} {a.size ? formatSize(a.size) : ''}</span>

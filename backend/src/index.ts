@@ -11,7 +11,9 @@ import aiAssistantRoutes from './routes/ai-assistants';
 import chapterRoutes from './routes/chapters';
 import netdiskIndexRoutes from './routes/netdisk-index';
 import learningRoutes from './routes/learning';
+import activityRoutes from './routes/activity';
 import { startSessionSweeper } from './services/session-service';
+import { startActivityLogCleanup } from './services/activity-log-service';
 
 // Load environment variables
 dotenv.config();
@@ -59,6 +61,7 @@ app.get('/api', (_req: Request, res: Response) => {
       netdisk: '/api/netdisk',
       netdiskIndex: '/api/netdisk-index',
       aiAssistants: '/api/ai-assistants',
+      activity: '/api/activity',
     },
   });
 });
@@ -135,12 +138,23 @@ try {
   console.error('Failed to register AI assistant routes:', error);
 }
 
+// Student activity log routes
+try {
+  app.use('/api/activity', activityRoutes);
+  console.log('Activity routes registered at /api/activity');
+} catch (error) {
+  console.error('Failed to register activity routes:', error);
+}
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
   console.log(`API endpoints: http://localhost:${PORT}/api`);
-  if (process.env.NODE_ENV !== 'test') startSessionSweeper();
+  if (process.env.NODE_ENV !== 'test') {
+    startSessionSweeper();
+    startActivityLogCleanup();
+  }
 });
 
 export default app;

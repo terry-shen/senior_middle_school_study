@@ -5,6 +5,7 @@ import type { NetdiskFile } from '../services/netdisk-api';
 import { reportLearningEvent } from '../services/learning-api';
 import { getCurrentSectionId } from '../services/study-context';
 import { useActivity } from '../contexts/ActivityContext';
+import { useActivityLog } from '../contexts/ActivityLogContext';
 import './NetdiskBrowser.css';
 
 const API_BASE = '/api';
@@ -56,6 +57,7 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
   const [inlineDoc, setInlineDoc] = useState<NetdiskFile | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const { markActive, setVideoPlaying } = useActivity();
+  const { logActivity } = useActivityLog();
 
   // 资源会话：打开→关闭记一条 asset_session（视频附实际播放秒数）
   useEffect(() => {
@@ -86,9 +88,45 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
     const onPlay = () => {
       setVideoPlaying(true);
       markActive();
+      const v = videoRef.current;
+      logActivity({
+        type: 'video_play',
+        target: `netdisk:${f.fsId}`,
+        label: f.filename,
+        sectionId: getCurrentSectionId(),
+        meta: { position: Math.round(v?.currentTime || 0) },
+      });
     };
-    const onPause = () => setVideoPlaying(false);
-    const onEnded = () => setVideoPlaying(false);
+    const onPause = () => {
+      setVideoPlaying(false);
+      const v = videoRef.current;
+      logActivity({
+        type: 'video_pause',
+        target: `netdisk:${f.fsId}`,
+        label: f.filename,
+        sectionId: getCurrentSectionId(),
+        meta: { position: Math.round(v?.currentTime || 0) },
+      });
+    };
+    const onEnded = () => {
+      setVideoPlaying(false);
+      logActivity({
+        type: 'video_ended',
+        target: `netdisk:${f.fsId}`,
+        label: f.filename,
+        sectionId: getCurrentSectionId(),
+      });
+    };
+    const onSeeked = () => {
+      const v = videoRef.current;
+      logActivity({
+        type: 'video_seek',
+        target: `netdisk:${f.fsId}`,
+        label: f.filename,
+        sectionId: getCurrentSectionId(),
+        meta: { position: Math.round(v?.currentTime || 0) },
+      });
+    };
 
     const id = window.setInterval(tick, 5000);
     const v = videoRef.current;
@@ -96,6 +134,7 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
     v?.addEventListener('play', onPlay);
     v?.addEventListener('pause', onPause);
     v?.addEventListener('ended', onEnded);
+    v?.addEventListener('seeked', onSeeked);
     if (v) setVideoPlaying(!v.paused && !v.ended);
     return () => {
       tick();
@@ -104,6 +143,7 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
       v?.removeEventListener('play', onPlay);
       v?.removeEventListener('pause', onPause);
       v?.removeEventListener('ended', onEnded);
+      v?.removeEventListener('seeked', onSeeked);
       setVideoPlaying(false);
       const dwellSec = Math.min(7200, Math.round(session.dwell));
       const playSec = Math.round(session.play);
@@ -123,10 +163,16 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
         });
       }
     };
-  }, [viewer, token, markActive, setVideoPlaying]);
+  }, [viewer, token, markActive, setVideoPlaying, logActivity]);
 
   const reportDownload = (f: NetdiskFile) => {
     if (!token) return;
+    logActivity({
+      type: 'download',
+      target: `netdisk:${f.fsId}`,
+      label: f.filename,
+      sectionId: getCurrentSectionId(),
+    });
     reportLearningEvent(token, {
       type: 'download',
       sectionId: getCurrentSectionId(),
@@ -166,6 +212,12 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
 
   const openFile = (f: NetdiskFile) => {
     const ext = extOf(f);
+    logActivity({
+      type: 'asset_open',
+      target: `netdisk:${f.fsId}`,
+      label: f.filename,
+      sectionId: getCurrentSectionId(),
+    });
     if (token) {
       reportLearningEvent(token, {
         type: 'asset_open',
@@ -242,7 +294,7 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
                           {extIcon(f)} {f.filename}
                         </a>
                       ) : (
-                        <a className="nb-file-link" onClick={() => openFile(f)} title={`点击打开 ${f.filename}`}>
+                        <a className="nb-file-link" data-track-skip onClick={() => openFile(f)} title={`点击打开 ${f.filename}`}>
                           {extIcon(f)} {f.filename}
                         </a>
                       )}
@@ -276,7 +328,7 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
             />
             <div className="nb-modal-foot">
               <span className="nb-size-tag">{fmtSize(viewer.f.size)}</span>
-              <a className="nb-btn" href={fileUrl(viewer.f, 'attachment')} onClick={() => reportDownload(viewer.f)}>⬇ 下载到本地</a>
+              <a className="nb-btn" href={fileUrl(viewer.f, 'attachment')} data-track-skip onClick={() => reportDownload(viewer.f)}>⬇ 下载到本地</a>
             </div>
           </div>
         </div>
@@ -316,7 +368,7 @@ export default function NetdiskBrowser({ token, allSubjects }: Props) {
                     👁 在线查看
                   </button>
                 )}
-                <a className="nb-btn nb-btn-primary" href={fileUrl(viewer.f, 'attachment')} onClick={() => reportDownload(viewer.f)}>
+                <a className="nb-btn nb-btn-primary" href={fileUrl(viewer.f, 'attachment')} data-track-skip onClick={() => reportDownload(viewer.f)}>
                   ⬇ 下载文件
                 </a>
               </div>

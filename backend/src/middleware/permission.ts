@@ -16,6 +16,7 @@ declare global {
         name: string;
         role: string;
         aiAssistantEnabled: boolean;
+        sessionId: number;
       };
     }
   }
@@ -64,6 +65,7 @@ async function authenticate(req: Request): Promise<AuthSuccess | AuthFailure> {
       name: student.name,
       role: student.role,
       aiAssistantEnabled: student.aiAssistantEnabled,
+      sessionId: result.session.id,
     },
   };
 }

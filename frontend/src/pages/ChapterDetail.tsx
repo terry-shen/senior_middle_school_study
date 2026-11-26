@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import ResourceViewer from '../components/ResourceViewer';
 import { useAuth } from '../contexts/AuthContext';
+import { useActivityLog } from '../contexts/ActivityLogContext';
 import {
   getFeaturedResources,
   getMoreResources,
@@ -40,6 +41,7 @@ export default function ChapterDetail() {
   const sectionId = Number(id);
   const { token } = useAuth();
   const navigate = useNavigate();
+  const { logActivity } = useActivityLog();
 
   const [featured, setFeatured] = useState<SectionResourcesFeatured | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,6 +79,16 @@ export default function ChapterDetail() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (!featured) return;
+    logActivity({
+      type: 'chapter_open',
+      target: `/learning/section/${featured.section.id}`,
+      label: featured.section.title,
+      sectionId: featured.section.id,
+    });
+  }, [featured, logActivity]);
+
   const loadMore = useCallback(async (page: number) => {
     if (!token || !sectionId) return;
     setMoreLoading(true);
@@ -103,6 +115,13 @@ export default function ChapterDetail() {
   }, [featured, moreOpen, moreItems.length, loadMore]);
 
   const openAsset = async (asset: AssetLite) => {
+    logActivity({
+      type: 'asset_open',
+      target: `asset:${asset.id}`,
+      label: asset.name,
+      sectionId,
+      assetId: asset.id,
+    });
     setViewing(asset);
     if (!token) return;
     try {
@@ -124,7 +143,15 @@ export default function ChapterDetail() {
   return (
     <div className="cd-page">
       <div className="cd-breadcrumb">
-        <Link to="/learning" className="cd-crumb-link">章节学习</Link>
+        <Link
+          to="/learning"
+          className="cd-crumb-link"
+          data-track="nav_click"
+          data-track-target="/learning"
+          data-track-label="返回章节学习"
+        >
+          章节学习
+        </Link>
         <span className="cd-crumb-sep">/</span>
         <span>{section.textbookName}</span>
         <span className="cd-crumb-sep">/</span>
@@ -139,7 +166,7 @@ export default function ChapterDetail() {
             {hasMore ? ` · 更多资源 ${moreCount} 条` : ''}
           </p>
         </div>
-        <button className="cd-btn" onClick={() => navigate('/learning')}>← 返回章节</button>
+        <button className="cd-btn" data-track="nav_click" data-track-target="/learning" data-track-label="返回章节" onClick={() => navigate('/learning')}>← 返回章节</button>
       </div>
 
       {totalFeatured === 0 && !hasMore && (
@@ -161,7 +188,7 @@ export default function ChapterDetail() {
           ) : (
             <div className="cd-cards">
               {group.items.map((a) => (
-                <button key={a.id} className="cd-card" onClick={() => openAsset(a)}>
+                <button key={a.id} className="cd-card" data-track-skip onClick={() => openAsset(a)}>
                   <div className="cd-card-name" title={a.name}>{a.name}</div>
                   <div className="cd-card-meta">
                     <span className="cd-chip">{KIND_LABEL[a.assetKind] || a.assetKind}</span>
@@ -201,7 +228,7 @@ export default function ChapterDetail() {
               <ul className="cd-more-list">
                 {moreItems.map((a) => (
                   <li key={a.id} className="cd-more-item">
-                    <button className="cd-more-name" onClick={() => openAsset(a)} title={a.name}>
+                    <button className="cd-more-name" data-track-skip onClick={() => openAsset(a)} title={a.name}>
                       {a.name}
                     </button>
                     <span className="cd-chip">{KIND_LABEL[a.assetKind] || a.assetKind}</span>

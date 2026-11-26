@@ -6,6 +6,7 @@ import {
   type AnalyticsDetail,
   type AnalyticsOverviewRow,
 } from '../services/learning-api';
+import StudentActivityPanel from '../components/StudentActivityPanel';
 import './LearningAnalytics.css';
 
 const RANGES = [7, 30, 90];
@@ -382,6 +383,8 @@ export default function LearningAnalytics() {
                   )}
                 </div>
               </div>
+
+              {token && <StudentActivityPanel token={token} studentId={detail.student.id} />}
 
               <div className="la-block la-recent">
                 <h3>最近行为</h3>

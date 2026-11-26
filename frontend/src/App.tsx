@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ActivityProvider } from './contexts/ActivityContext';
+import { ActivityLogProvider } from './contexts/ActivityLogContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { SubjectProvider } from './contexts/SubjectContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -175,17 +176,19 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <ActivityProvider>
-          <SubjectProvider>
-            <ToastProvider>
-              <ErrorBoundary>
-                <div className="app">
-                  <Suspense fallback={<LoadingSpinner />}>
-                    <AppContent />
-                  </Suspense>
-                </div>
-              </ErrorBoundary>
-            </ToastProvider>
-          </SubjectProvider>
+          <ActivityLogProvider>
+            <SubjectProvider>
+              <ToastProvider>
+                <ErrorBoundary>
+                  <div className="app">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <AppContent />
+                    </Suspense>
+                  </div>
+                </ErrorBoundary>
+              </ToastProvider>
+            </SubjectProvider>
+          </ActivityLogProvider>
         </ActivityProvider>
       </AuthProvider>
     </BrowserRouter>

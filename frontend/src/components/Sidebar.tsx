@@ -95,6 +95,9 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
       key={item.to}
       to={item.to}
       className={`sidebar-item ${isActive(item.to) ? 'active' : ''}`}
+      data-track="nav_click"
+      data-track-target={item.to}
+      data-track-label={item.label}
       onClick={handleNavigate}
     >
       <span className="sidebar-item-icon">{item.icon}</span>
@@ -116,6 +119,9 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           <Link
             to="/"
             className={`sidebar-item ${isActive('/') ? 'active' : ''}`}
+            data-track="nav_click"
+            data-track-target="/"
+            data-track-label="工作台"
             onClick={handleNavigate}
           >
             🏠 工作台
@@ -141,6 +147,10 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
                     key={s.id}
                     to={to}
                     className={`sidebar-item ${isActive(to) ? 'active' : ''}`}
+                    data-track="nav_click"
+                    data-track-target={`/learning/${s.code}`}
+                    data-track-label={s.name}
+                    data-track-subject-id={s.id}
                     onClick={() => {
                       localStorage.setItem('learningSubjectCode', s.code);
                       localStorage.setItem('learningSubjectId', String(s.id));

@@ -175,7 +175,14 @@ export default function Workbench() {
               {progress.assetName ? `上次查看：${progress.assetName}` : '上次学习位置'}
               {progress.updatedAt ? ` · ${formatTime(progress.updatedAt)}` : ''}
             </div>
-            <Link className="wb-btn wb-btn-primary" to={`/learning/section/${progress.sectionId}`}>
+            <Link
+              className="wb-btn wb-btn-primary"
+              to={`/learning/section/${progress.sectionId}`}
+              data-track="nav_click"
+              data-track-target={`/learning/section/${progress.sectionId}`}
+              data-track-label="继续学习"
+              data-track-section-id={progress.sectionId}
+            >
               继续学习 →
             </Link>
           </div>
@@ -222,6 +229,10 @@ export default function Workbench() {
                 to={`/learning/${s.code}`}
                 className="wb-subject"
                 style={{ ['--subject-color' as string]: s.color || '#2563eb' }}
+                data-track="nav_click"
+                data-track-target={`/learning/${s.code}`}
+                data-track-label={s.name}
+                data-track-subject-id={s.id}
                 onClick={() => {
                   localStorage.setItem('learningSubjectId', String(s.id));
                   localStorage.setItem('learningSubjectCode', s.code);
@@ -243,7 +254,15 @@ export default function Workbench() {
           <ul className="wb-recent">
             {recent.map((r) => (
               <li key={`${r.sectionId}-${r.assetId ?? 0}`} className="wb-recent-item">
-                <Link to={`/learning/section/${r.sectionId}`} className="wb-recent-name" title={r.assetName || ''}>
+                <Link
+                  to={`/learning/section/${r.sectionId}`}
+                  className="wb-recent-name"
+                  title={r.assetName || ''}
+                  data-track="nav_click"
+                  data-track-target={`/learning/section/${r.sectionId}`}
+                  data-track-label={r.assetName || r.sectionTitle}
+                  data-track-section-id={r.sectionId}
+                >
                   {r.assetName || r.sectionTitle}
                 </Link>
                 <span className="wb-recent-section">{r.sectionTitle}</span>
@@ -288,7 +307,7 @@ function ApkDownloadBlock({ token }: { token: string | null }) {
           </div>
         </div>
         {info?.found && token ? (
-          <a className="wb-btn wb-btn-primary" href={apkDownloadUrl(token)}>⬇ 下载 APK</a>
+          <a className="wb-btn wb-btn-primary" href={apkDownloadUrl(token)} data-track="download" data-track-target="android-apk" data-track-label="下载 APK">⬇ 下载 APK</a>
         ) : (
           <button className="wb-btn" disabled>暂不可下载</button>
         )}

@@ -158,3 +158,35 @@
 @media (max-width: 1200px) {
   .la-heat { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 }
+
+/* ---- 7-day student activity trail ---- */
+.la-activity { margin-top: 16px; }
+.la-activity-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.la-activity-head h3 { margin: 0; }
+.la-activity-hint { font-size: 11px; color: #9ca3af; }
+.la-activity-filters { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.la-activity-filters select {
+  padding: 5px 9px; border: 1px solid #d0d7e2; border-radius: 6px; background: #fff; font-size: 12.5px;
+}
+.la-activity-count { font-size: 12px; color: #6b7280; }
+.la-activity-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; max-height: 420px; overflow-y: auto; }
+.la-activity-list li { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #475569; padding: 4px 0; border-bottom: 1px solid #f1f5f9; }
+.la-activity-what { flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #1f2937; }
+.la-activity-path { flex: 1 1 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #94a3b8; font-size: 11.5px; }
+.la-activity-more { margin-top: 8px; padding: 5px 12px; border: 1px solid #d0d7e2; background: #fff; border-radius: 6px; cursor: pointer; font-size: 12.5px; }
+.la-activity-more:hover { border-color: #2563eb; color: #2563eb; }
+.la-error-inline { color: #b91c1c; font-size: 12.5px; }
+.la-ev-page_view { background: #e0f2fe; color: #0369a1; }
+.la-ev-nav_click { background: #f1f5f9; color: #475569; }
+.la-ev-subject_open, .la-ev-chapter_open { background: #ede9fe; color: #6d28d9; }
+.la-ev-asset_open { background: #fef3c7; color: #b45309; }
+.la-ev-video_play, .la-ev-video_seek { background: #dcfce7; color: #15803d; }
+.la-ev-video_pause, .la-ev-video_ended { background: #f1f5f9; color: #475569; }
+.la-ev-search, .la-ev-filter { background: #e0f2fe; color: #0369a1; }
+.la-ev-download { background: #fef3c7; color: #92400e; }
+.la-ev-ui_click { background: #f1f5f9; color: #475569; }
+
+@media (max-width: 640px) {
+  .la-activity-list li { flex-wrap: wrap; }
+  .la-activity-what, .la-activity-path { flex: 1 1 100%; white-space: normal; }
+}

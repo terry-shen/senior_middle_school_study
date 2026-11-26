@@ -5,6 +5,7 @@ import { requireAuth, requireAdmin } from '../middleware/permission';
 import * as netdisk from '../services/netdisk-service';
 import { detectSubjectFromText } from '../services/netdisk-index-service';
 import { recordEvent } from '../services/learning-analytics-service';
+import { validateSessionToken } from '../services/session-service';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -97,9 +98,10 @@ async function mediaAuth(req: Request, res: Response, next: NextFunction) {
   const queryToken = typeof req.query.token === 'string' ? req.query.token : undefined;
   const token = headerToken ?? queryToken;
   if (!token) return res.status(401).json({ error: 'Authentication required' });
-  const session = await prisma.session.findFirst({ where: { token, expiresAt: { gt: new Date() } }, include: { student: true } });
-  if (!session) return res.status(401).json({ error: 'Invalid or expired token' });
-  req.user = { id: session.student.id, studentId: session.student.studentId, name: session.student.name, role: session.student.role, aiAssistantEnabled: session.student.aiAssistantEnabled };
+  const result = await validateSessionToken(token);
+  if (!result.ok) return res.status(401).json({ error: 'Invalid or expired token' });
+  const { student } = result.session;
+  req.user = { id: student.id, studentId: student.studentId, name: student.name, role: student.role, aiAssistantEnabled: student.aiAssistantEnabled, sessionId: result.session.id };
   next();
 }
 

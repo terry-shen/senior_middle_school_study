@@ -3,6 +3,7 @@ import type { AssetLite } from '../services/learning-api';
 import { reportLearningEvent } from '../services/learning-api';
 import { useModalDialog } from '../hooks/useModalDialog';
 import { useActivity } from '../contexts/ActivityContext';
+import { useActivityLog } from '../contexts/ActivityLogContext';
 import './ResourceViewer.css';
 
 const API_BASE = '/api';
@@ -32,6 +33,7 @@ export default function ResourceViewer({ asset, token, onClose, sectionId = null
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastTimeRef = useRef(0);
   const { markActive, setVideoPlaying } = useActivity();
+  const { logActivity } = useActivityLog();
 
   useEffect(() => {
     if (!asset) return;
@@ -65,9 +67,49 @@ export default function ResourceViewer({ asset, token, onClose, sectionId = null
     const onPlay = () => {
       setVideoPlaying(true);
       markActive();
+      const v = videoRef.current;
+      logActivity({
+        type: 'video_play',
+        target: `asset:${asset.id}`,
+        label: asset.name,
+        sectionId,
+        assetId: asset.id,
+        meta: { position: Math.round(v?.currentTime || 0) },
+      });
     };
-    const onPause = () => setVideoPlaying(false);
-    const onEnded = () => setVideoPlaying(false);
+    const onPause = () => {
+      setVideoPlaying(false);
+      const v = videoRef.current;
+      logActivity({
+        type: 'video_pause',
+        target: `asset:${asset.id}`,
+        label: asset.name,
+        sectionId,
+        assetId: asset.id,
+        meta: { position: Math.round(v?.currentTime || 0) },
+      });
+    };
+    const onEnded = () => {
+      setVideoPlaying(false);
+      logActivity({
+        type: 'video_ended',
+        target: `asset:${asset.id}`,
+        label: asset.name,
+        sectionId,
+        assetId: asset.id,
+      });
+    };
+    const onSeeked = () => {
+      const v = videoRef.current;
+      logActivity({
+        type: 'video_seek',
+        target: `asset:${asset.id}`,
+        label: asset.name,
+        sectionId,
+        assetId: asset.id,
+        meta: { position: Math.round(v?.currentTime || 0) },
+      });
+    };
 
     const id = window.setInterval(tick, 5000);
     const video = videoRef.current;
@@ -75,6 +117,7 @@ export default function ResourceViewer({ asset, token, onClose, sectionId = null
     video?.addEventListener('play', onPlay);
     video?.addEventListener('pause', onPause);
     video?.addEventListener('ended', onEnded);
+    video?.addEventListener('seeked', onSeeked);
     if (video) setVideoPlaying(!video.paused && !video.ended);
 
     const flush = () => {
@@ -106,12 +149,20 @@ export default function ResourceViewer({ asset, token, onClose, sectionId = null
       video?.removeEventListener('play', onPlay);
       video?.removeEventListener('pause', onPause);
       video?.removeEventListener('ended', onEnded);
+      video?.removeEventListener('seeked', onSeeked);
       setVideoPlaying(false);
     };
-  }, [asset, token, sectionId, markActive, setVideoPlaying]);
+  }, [asset, token, sectionId, markActive, setVideoPlaying, logActivity]);
 
   function reportDownload() {
     if (!asset) return;
+    logActivity({
+      type: 'download',
+      target: `asset:${asset.id}`,
+      label: asset.name,
+      sectionId,
+      assetId: asset.id,
+    });
     reportLearningEvent(token, { type: 'download', assetId: asset.id, sectionId, meta: { name: asset.name } });
   }
 
@@ -134,7 +185,7 @@ export default function ResourceViewer({ asset, token, onClose, sectionId = null
           </div>
           <div className="rv-actions">
             {fsId && (
-              <a className="rv-btn" href={attachUrl} download={asset.name} onClick={reportDownload}>
+              <a className="rv-btn" href={attachUrl} download={asset.name} data-track-skip onClick={reportDownload}>
                 ⬇ 下载
               </a>
             )}
@@ -163,7 +214,7 @@ export default function ResourceViewer({ asset, token, onClose, sectionId = null
             <div className="rv-download-panel">
               <div className="rv-download-icon">📄</div>
               <div className="rv-download-title">该格式（.{(asset.ext || '?').toLowerCase()}）无法在浏览器内直接预览</div>
-              <a className="rv-btn rv-btn-primary" href={attachUrl} download={asset.name} onClick={reportDownload}>
+              <a className="rv-btn rv-btn-primary" href={attachUrl} download={asset.name} data-track-skip onClick={reportDownload}>
                 ⬇ 下载文件
               </a>
             </div>
